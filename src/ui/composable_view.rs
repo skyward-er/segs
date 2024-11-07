@@ -56,7 +56,8 @@ impl eframe::App for ComposableView {
         if let Some((action, hovered_tile)) = pane_action.take() {
             match action {
                 PaneAction::SplitH => {
-                    let left_pane = self.tree.tiles.insert_pane(Pane::default());
+                    let hovered_tile_pane = self.tree.tiles.remove(hovered_tile).unwrap();
+                    let left_pane = self.tree.tiles.insert_new(hovered_tile_pane);
                     let right_pane = self.tree.tiles.insert_pane(Pane::default());
                     self.tree.tiles.insert(
                         hovered_tile,
@@ -68,13 +69,14 @@ impl eframe::App for ComposableView {
                     );
                 }
                 PaneAction::SplitV => {
-                    let upper_pane = self.tree.tiles.insert_pane(Pane::default());
+                    let hovered_tile_pane = self.tree.tiles.remove(hovered_tile).unwrap();
+                    let replaced = self.tree.tiles.insert_new(hovered_tile_pane);
                     let lower_pane = self.tree.tiles.insert_pane(Pane::default());
                     self.tree.tiles.insert(
                         hovered_tile,
                         Tile::Container(Container::Linear(Linear::new_binary(
                             LinearDir::Vertical,
-                            [upper_pane, lower_pane],
+                            [replaced, lower_pane],
                             0.5,
                         ))),
                     );
