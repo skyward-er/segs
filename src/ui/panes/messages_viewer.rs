@@ -22,10 +22,6 @@ impl PaneBehavior for MessagesViewerPane {
         response
     }
 
-    fn tab_title(&self) -> egui::WidgetText {
-        "Messages".into()
-    }
-
     fn contains_pointer(&self) -> bool {
         self.contains_pointer
     }

@@ -7,24 +7,52 @@ use serde::{Deserialize, Serialize};
 
 use super::composable_view::PaneResponse;
 
-#[enum_dispatch(Pane)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Pane {
+    pub pane: PaneKind,
+}
+
+impl Default for Pane {
+    fn default() -> Self {
+        Self {
+            pane: PaneKind::default(),
+        }
+    }
+}
+
+impl Pane {
+    pub fn boxed(pane: PaneKind) -> Box<Self> {
+        Box::new(Self { pane })
+    }
+}
+
+#[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse;
-    fn tab_title(&self) -> egui::WidgetText;
     fn contains_pointer(&self) -> bool;
 }
 
-// An enum to represent the different widgets available to the user.
+impl PaneBehavior for Pane {
+    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+        self.pane.ui(ui)
+    }
+
+    fn contains_pointer(&self) -> bool {
+        self.pane.contains_pointer()
+    }
+}
+
+// An enum to represent the diffent kinds of widget available to the user.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[enum_dispatch]
-pub enum Pane {
+pub enum PaneKind {
     Default(default::DefaultPane),
     MessagesViewer(messages_viewer::MessagesViewerPane),
     Plot2D(plot_2d::Plot2DPane),
 }
 
-impl Default for Pane {
+impl Default for PaneKind {
     fn default() -> Self {
-        Pane::Default(default::DefaultPane::default())
+        PaneKind::Default(default::DefaultPane::default())
     }
 }

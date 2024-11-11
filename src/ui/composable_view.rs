@@ -4,10 +4,10 @@ use super::{
 };
 
 use egui::{Key, Modifiers};
-use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, Tiles, Tree};
+use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 
 pub struct ComposableView {
-    tree: Tree<Pane>,
+    panes_tree: Tree<Pane>,
     behavior: ComposableBehavior,
 }
 
@@ -16,10 +16,10 @@ impl Default for ComposableView {
     fn default() -> Self {
         let mut tiles = Tiles::default();
         let root = tiles.insert_pane(Pane::default());
-        let tree = egui_tiles::Tree::new("my_tree", root, tiles);
+        let panes_tree = egui_tiles::Tree::new("my_tree", root, tiles);
 
         Self {
-            tree,
+            panes_tree,
             behavior: Default::default(),
         }
     }
@@ -31,7 +31,7 @@ impl eframe::App for ComposableView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // get the id of the hovered pane, in order to apply actions to it
         let hovered_pane = self
-            .tree
+            .panes_tree
             .tiles
             .iter()
             .find(|(_, tile)| matches!(tile, Tile::Pane(pane) if pane.contains_pointer()))
@@ -56,10 +56,10 @@ impl eframe::App for ComposableView {
         if let Some((action, hovered_tile)) = pane_action.take() {
             match action {
                 PaneAction::SplitH => {
-                    let hovered_tile_pane = self.tree.tiles.remove(hovered_tile).unwrap();
-                    let left_pane = self.tree.tiles.insert_new(hovered_tile_pane);
-                    let right_pane = self.tree.tiles.insert_pane(Pane::default());
-                    self.tree.tiles.insert(
+                    let hovered_tile_pane = self.panes_tree.tiles.remove(hovered_tile).unwrap();
+                    let left_pane = self.panes_tree.tiles.insert_new(hovered_tile_pane);
+                    let right_pane = self.panes_tree.tiles.insert_pane(Pane::default());
+                    self.panes_tree.tiles.insert(
                         hovered_tile,
                         Tile::Container(Container::Linear(Linear::new_binary(
                             LinearDir::Horizontal,
@@ -69,10 +69,10 @@ impl eframe::App for ComposableView {
                     );
                 }
                 PaneAction::SplitV => {
-                    let hovered_tile_pane = self.tree.tiles.remove(hovered_tile).unwrap();
-                    let replaced = self.tree.tiles.insert_new(hovered_tile_pane);
-                    let lower_pane = self.tree.tiles.insert_pane(Pane::default());
-                    self.tree.tiles.insert(
+                    let hovered_tile_pane = self.panes_tree.tiles.remove(hovered_tile).unwrap();
+                    let replaced = self.panes_tree.tiles.insert_new(hovered_tile_pane);
+                    let lower_pane = self.panes_tree.tiles.insert_pane(Pane::default());
+                    self.panes_tree.tiles.insert(
                         hovered_tile,
                         Tile::Container(Container::Linear(Linear::new_binary(
                             LinearDir::Vertical,
@@ -83,19 +83,26 @@ impl eframe::App for ComposableView {
                 }
                 PaneAction::Close => {
                     // Ignore if the root pane is the only one
-                    if self.tree.tiles.len() != 1 {
-                        self.tree.remove_recursively(hovered_tile);
+                    if self.panes_tree.tiles.len() != 1 {
+                        self.panes_tree.remove_recursively(hovered_tile);
                     }
                 }
                 PaneAction::Replace(new_pane) => {
-                    self.tree.tiles.insert(hovered_tile, Tile::Pane(*new_pane));
+                    self.panes_tree
+                        .tiles
+                        .insert(hovered_tile, Tile::Pane(*new_pane));
                 }
             }
         }
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.tree.ui(&mut self.behavior, ui);
+            self.panes_tree.ui(&mut self.behavior, ui);
+        });
+
+        // Show a panel at the bottom of the screen with few global controls
+        egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
+            egui::global_theme_preference_switch(ui);
         });
     }
 }
@@ -110,21 +117,22 @@ impl Behavior<Pane> for ComposableBehavior {
     fn pane_ui(
         &mut self,
         ui: &mut egui::Ui,
-        _tile_id: egui_tiles::TileId,
+        _tile_id: TileId,
         pane: &mut Pane,
     ) -> egui_tiles::UiResponse {
         let PaneResponse {
             action_called,
             drag_response,
         } = pane.ui(ui);
+        // Capture the action and store it to be consumed in the update function
         if let Some(action_called) = action_called {
             self.action = Some(action_called);
         }
         drag_response
     }
 
-    fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
-        pane.tab_title()
+    fn tab_title_for_pane(&mut self, _pane: &Pane) -> egui::WidgetText {
+        "Tab".into()
     }
 }
 

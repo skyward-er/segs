@@ -1,4 +1,4 @@
-use super::{plot_2d::Plot2DPane, Pane, PaneBehavior};
+use super::{plot_2d::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
 
 use crate::ui::composable_view::{PaneAction, PaneResponse};
@@ -45,7 +45,7 @@ impl PaneBehavior for DefaultPane {
             height_occupied += btn.rect.height();
             let btn = ui.button("Plot");
             if btn.clicked() {
-                response.set_action(PaneAction::Replace(Box::new(Pane::Plot2D(
+                response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
                     Plot2DPane::default(),
                 ))));
             }
@@ -73,10 +73,6 @@ impl PaneBehavior for DefaultPane {
         };
 
         response
-    }
-
-    fn tab_title(&self) -> egui::WidgetText {
-        "Default".into()
     }
 
     fn contains_pointer(&self) -> bool {
