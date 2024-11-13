@@ -1,7 +1,8 @@
 use super::{
     layout_manager::LayoutManager,
-    panes::{Pane, PaneBehavior},
+    panes::{Pane, PaneBehavior, PaneKind},
     shortcuts,
+    utils::maximized_pane_ui,
 };
 use std::{
     fs,
@@ -19,6 +20,7 @@ pub struct ComposableView {
 
     pub layout_manager: LayoutManager,
     behavior: ComposableBehavior,
+    maximized_pane: Option<TileId>,
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -44,6 +46,7 @@ impl eframe::App for ComposableView {
                 ((Modifiers::NONE, Key::V), PaneAction::SplitV),
                 ((Modifiers::NONE, Key::H), PaneAction::SplitH),
                 ((Modifiers::NONE, Key::C), PaneAction::Close),
+                ((Modifiers::SHIFT, Key::Escape), PaneAction::Maximize),
             ];
             pane_action = pane_action.or(shortcuts::map_to_action(ctx, &key_action_pairs[..])
                 .map(|action| (action, hovered_pane)));
@@ -87,6 +90,27 @@ impl eframe::App for ComposableView {
                 PaneAction::Replace(new_pane) => {
                     panes_tree.tiles.insert(hovered_tile, Tile::Pane(*new_pane));
                 }
+                PaneAction::Maximize => {
+                    // This is a toggle: if there is not currently a maximized pane,
+                    // maximize the hovered pane, otherwize remove the maximized pane.
+                    if self.maximized_pane.is_some() {
+                        self.maximized_pane = None;
+                    } else {
+                        let hovered_pane_is_default = panes_tree
+                            .tiles
+                            .get(hovered_tile)
+                            .map(|hovered_pane| match hovered_pane {
+                                Tile::Pane(Pane {
+                                    pane: PaneKind::Default(_),
+                                }) => true,
+                                _ => false,
+                            })
+                            .unwrap_or(false);
+                        if !hovered_pane_is_default {
+                            self.maximized_pane = Some(hovered_tile);
+                        }
+                    }
+                }
             }
         }
 
@@ -103,7 +127,15 @@ impl eframe::App for ComposableView {
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            panes_tree.ui(&mut self.behavior, ui);
+            if let Some(maximized_pane) = self.maximized_pane {
+                if let Some(Tile::Pane(pane)) = panes_tree.tiles.get_mut(maximized_pane) {
+                    maximized_pane_ui(ui, pane);
+                } else {
+                    panic!("Maximized pane not found in tree!");
+                }
+            } else {
+                panes_tree.ui(&mut self.behavior, ui);
+            }
         });
 
         LayoutManager::show(self, ctx);
@@ -246,4 +278,5 @@ pub enum PaneAction {
     SplitV,
     Close,
     Replace(Box<Pane>),
+    Maximize,
 }
