@@ -1,12 +1,11 @@
-<center>
-    <img src="./assets/logo.png" alt="Logo" width="200"/>
-    <h1>Skyward Enhanced Ground Station</h1>
-    <img src="https://img.shields.io/badge/version-v0.1.0-blue.svg?logo=rust">
-    <img src="https://img.shields.io/badge/development-alpha-red">
+<div align="center">
+  <img src="./assets/logo.png" alt="Logo" width="400"/>
+  <br>
+  <img src="https://img.shields.io/badge/version-v0.1.0-blue.svg?logo=rust">
+  <img src="https://img.shields.io/badge/development-alpha-red">
+</div>
 
-</center>
-
-<br>
+# Skyward Enhanced Ground Station
 
 Skyward Enhanced Ground Station (in short **SEGS**) is a team effort that aims to provide a renewed and enhanced ground station experience for our operators. It is currently in development and is not ready for production use, contributions are welcome.
 
