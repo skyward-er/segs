@@ -1,5 +1,6 @@
 use super::{plot_2d::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::ui::{
     composable_view::{PaneAction, PaneResponse},
@@ -39,11 +40,11 @@ impl PaneBehavior for DefaultPane {
             ui.vertical_centered(|ui| {
                 if ui.button("Vertical Split").clicked() {
                     response.set_action(PaneAction::SplitV);
-                    log::debug!("Vertical Split button clicked");
+                    debug!("Vertical Split button clicked");
                 }
                 if ui.button("Horizontal Split").clicked() {
                     response.set_action(PaneAction::SplitH);
-                    log::debug!("Horizontal Split button clicked");
+                    debug!("Horizontal Split button clicked");
                 }
                 if ui.button("Plot").clicked() {
                     response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
