@@ -43,10 +43,12 @@ If you want to contribute to the project, you can read the [CONTRIBUTING.md](./C
 
 ## Roadmap
 
-- [ ] **v0.1.0**: Alpha release, minimal features and layout to test the architecture in a real-world scenario.
+- [ ] **2024-11-23 - v0.1.0**: Alpha release, minimal features and layout to test the architecture in a real-world scenario.
   - [ ] All Modularity requirements (R01, R01.1, R01.2, R02, R03) should be met
   - [ ] Persistency R04 and R04.2 should be met
-  - [ ] ... (more to be defined)
+  - [ ] Data sources (R05 and R17) for mockup testing before real-world test
+  - [ ] Plotting widgets (R07) should be implemented
+  - [ ] Persistency (R18) to log all received messages and capture the working of SEGS
 
 
 ## Functional Requirements
