@@ -1,20 +1,22 @@
 use super::{plot_2d::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
 
-use crate::ui::composable_view::{PaneAction, PaneResponse};
+use crate::ui::{
+    composable_view::{PaneAction, PaneResponse},
+    utils::{vertically_centered, SizingMemo},
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DefaultPane {
-    occupied: f32,
-    fixed: bool,
+    #[serde(skip)]
+    centering_memo: SizingMemo,
     contains_pointer: bool,
 }
 
 impl Default for DefaultPane {
     fn default() -> Self {
         DefaultPane {
-            occupied: 0.0,
-            fixed: false,
+            centering_memo: SizingMemo::default(),
             contains_pointer: false,
         }
     }
@@ -23,48 +25,29 @@ impl Default for DefaultPane {
 impl PaneBehavior for DefaultPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
-        let pane_rect = ui.max_rect();
 
-        let parent = ui.vertical_centered(|ui| {
-            let hpad = (pane_rect.height() - self.occupied) / 2.0;
-            if self.fixed {
-                ui.add_space(hpad);
-            }
-            let mut height_occupied = 0.0;
-            let btn = ui.button("Vertical Split");
-            if btn.clicked() {
-                response.set_action(PaneAction::SplitV);
-                log::debug!("Vertical Split button clicked");
-            }
-            height_occupied += btn.rect.height();
-            let btn = ui.button("Horizontal Split");
-            if btn.clicked() {
-                response.set_action(PaneAction::SplitH);
-                log::debug!("Horizontal Split button clicked");
-            }
-            height_occupied += btn.rect.height();
-            let btn = ui.button("Plot");
-            if btn.clicked() {
-                response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
-                    Plot2DPane::default(),
-                ))));
-            }
-            height_occupied += btn.rect.height();
-            if !self.fixed {
-                self.occupied = height_occupied;
-                ui.ctx().request_discard("test");
-                self.fixed = true;
-            }
-            if self.fixed {
-                ui.add_space(hpad);
-            }
-            ui.set_min_height(pane_rect.height());
+        let parent = vertically_centered(ui, &mut self.centering_memo, |ui| {
+            ui.vertical_centered(|ui| {
+                if ui.button("Vertical Split").clicked() {
+                    response.set_action(PaneAction::SplitV);
+                    log::debug!("Vertical Split button clicked");
+                }
+                if ui.button("Horizontal Split").clicked() {
+                    response.set_action(PaneAction::SplitH);
+                    log::debug!("Horizontal Split button clicked");
+                }
+                if ui.button("Plot").clicked() {
+                    response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
+                        Plot2DPane::default(),
+                    ))));
+                }
+            })
+            .response
         });
 
-        self.contains_pointer = parent.response.contains_pointer();
+        self.contains_pointer = parent.contains_pointer();
 
         if parent
-            .response
             .interact(egui::Sense::click_and_drag())
             .on_hover_cursor(egui::CursorIcon::Grab)
             .dragged()
