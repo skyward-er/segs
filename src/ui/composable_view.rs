@@ -95,14 +95,14 @@ impl eframe::App for ComposableView {
             }
         }
 
-        // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.panes_tree.ui(&mut self.behavior, ui);
-        });
-
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
             egui::global_theme_preference_switch(ui);
+        });
+
+        // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.panes_tree.ui(&mut self.behavior, ui);
         });
     }
 }
