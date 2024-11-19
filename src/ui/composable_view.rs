@@ -1,3 +1,5 @@
+use crate::{mavlink, MSG_MANAGER};
+
 use super::{
     panes::{Pane, PaneBehavior},
     shortcuts,
@@ -9,6 +11,7 @@ use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tr
 pub struct ComposableView {
     panes_tree: Tree<Pane>,
     behavior: ComposableBehavior,
+    sources_window: SourceWindow,
 }
 
 // Implementing the default trait allows us to define a default configuration for our app
@@ -21,6 +24,7 @@ impl Default for ComposableView {
         Self {
             panes_tree,
             behavior: Default::default(),
+            sources_window: Default::default(),
         }
     }
 }
@@ -97,13 +101,73 @@ impl eframe::App for ComposableView {
 
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
-            egui::global_theme_preference_switch(ui);
+            // Window for the sources
+            self.sources_window.show_window(ui);
+
+            // Horizontal belt of controls
+            ui.horizontal(|ui| {
+                egui::global_theme_preference_switch(ui);
+
+                if ui.button("Sources").clicked() {
+                    self.sources_window.visible = !self.sources_window.visible;
+                }
+            })
         });
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
             self.panes_tree.ui(&mut self.behavior, ui);
         });
+    }
+}
+
+struct SourceWindow {
+    port: u16,
+    visible: bool,
+}
+
+impl Default for SourceWindow {
+    fn default() -> Self {
+        Self {
+            port: mavlink::DEFAULT_ETHERNET_PORT,
+            visible: false,
+        }
+    }
+}
+
+impl SourceWindow {
+    fn show_window(&mut self, ui: &mut egui::Ui) {
+        let mut window_is_open = self.visible;
+        let mut can_be_closed = false;
+        egui::Window::new("Sources")
+            .id(ui.id())
+            .auto_sized()
+            .collapsible(true)
+            .movable(true)
+            .open(&mut window_is_open)
+            .show(ui.ctx(), |ui| {
+                self.ui(ui, &mut can_be_closed);
+            });
+        self.visible = window_is_open && !can_be_closed;
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, can_be_closed: &mut bool) {
+        egui::Grid::new(ui.id())
+            .num_columns(2)
+            .spacing([10.0, 5.0])
+            .show(ui, |ui| {
+                ui.label("Ethernet Port:");
+                ui.add(egui::Slider::new(&mut self.port, 1024..=65535).text("Port"));
+                ui.end_row();
+            });
+        if ui.button("Connect").clicked() {
+            MSG_MANAGER
+                .get()
+                .unwrap()
+                .lock()
+                .listen_from_ethernet_port(self.port);
+            *can_be_closed = true;
+        }
     }
 }
 

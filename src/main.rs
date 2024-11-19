@@ -1,8 +1,15 @@
+mod mavlink;
+mod ui;
+
+use std::sync::OnceLock;
+
+use mavlink::MessageManager;
+use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use ui::ComposableView;
 
-mod ui;
+static MSG_MANAGER: OnceLock<Mutex<MessageManager>> = OnceLock::new();
 
 fn main() -> Result<(), eframe::Error> {
     // set up logging (USE RUST_LOG=debug to see logs)
@@ -30,6 +37,11 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "segs", // This is the app id, used for example by Wayland
         native_options,
-        Box::new(|_| Ok(Box::<ComposableView>::default())),
+        Box::new(|cc| {
+            MSG_MANAGER
+                .set(Mutex::new(MessageManager::new(50, cc.egui_ctx.clone())))
+                .expect("Unable to set MessageManager");
+            Ok(Box::<ComposableView>::default())
+        }),
     )
 }
