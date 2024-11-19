@@ -1,8 +1,15 @@
+mod mavlink;
+mod ui;
+
+use std::sync::OnceLock;
+
+use mavlink::MessageManager;
+use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use ui::ComposableView;
 
-mod ui;
+static MSG_MANAGER: OnceLock<Mutex<MessageManager>> = OnceLock::new();
 
 static APP_NAME: &str = "segs";
 
@@ -33,6 +40,9 @@ fn main() -> Result<(), eframe::Error> {
         APP_NAME, // This is the app id, used for example by Wayland
         native_options,
         Box::new(|ctx| {
+            MSG_MANAGER
+                .set(Mutex::new(MessageManager::new(50, ctc.egui_ctx.clone())))
+                .expect("Unable to set MessageManager");
             let app = ctx
                 .storage
                 .map(|storage| ComposableView::new(APP_NAME, storage))

@@ -1,3 +1,5 @@
+use crate::{mavlink, MSG_MANAGER};
+
 use super::{
     layout_manager::LayoutManager,
     panes::{Pane, PaneBehavior, PaneKind},
@@ -21,6 +23,23 @@ pub struct ComposableView {
     pub layout_manager: LayoutManager,
     behavior: ComposableBehavior,
     maximized_pane: Option<TileId>,
+    sources_window: SourceWindow,
+}
+
+// Implementing the default trait allows us to define a default configuration for our app
+impl Default for ComposableView {
+    fn default() -> Self {
+        let mut tiles = Tiles::default();
+        let root = tiles.insert_pane(Pane::default());
+        let panes_tree = egui_tiles::Tree::new("my_tree", root, tiles);
+
+        Self {
+            panes_tree,
+            behavior: Default::default(),
+            maximized_pane: None,
+            sources_window: Default::default(),
+        }
+    }
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -126,9 +145,16 @@ impl eframe::App for ComposableView {
 
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
+            // Horizontal belt of controls
             ui.horizontal(|ui| {
                 egui::global_theme_preference_switch(ui);
 
+                // Window for the sources
+                self.sources_window.show_window(ui);
+
+                if ui.button("Sources").clicked() {
+                    self.sources_window.visible = !self.sources_window.visible;
+                }
                 if ui.button("Layout Manager").clicked() {
                     self.layout_manager.toggle_open_state();
                 }
@@ -229,6 +255,56 @@ impl ComposableViewState {
             Err(e) => {
                 eprintln!("Error serializing layout: {}", e);
             }
+        }
+    }
+}
+
+struct SourceWindow {
+    port: u16,
+    visible: bool,
+}
+
+impl Default for SourceWindow {
+    fn default() -> Self {
+        Self {
+            port: mavlink::DEFAULT_ETHERNET_PORT,
+            visible: false,
+        }
+    }
+}
+
+impl SourceWindow {
+    fn show_window(&mut self, ui: &mut egui::Ui) {
+        let mut window_is_open = self.visible;
+        let mut can_be_closed = false;
+        egui::Window::new("Sources")
+            .id(ui.id())
+            .auto_sized()
+            .collapsible(true)
+            .movable(true)
+            .open(&mut window_is_open)
+            .show(ui.ctx(), |ui| {
+                self.ui(ui, &mut can_be_closed);
+            });
+        self.visible = window_is_open && !can_be_closed;
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, can_be_closed: &mut bool) {
+        egui::Grid::new(ui.id())
+            .num_columns(2)
+            .spacing([10.0, 5.0])
+            .show(ui, |ui| {
+                ui.label("Ethernet Port:");
+                ui.add(egui::Slider::new(&mut self.port, 1024..=65535).text("Port"));
+                ui.end_row();
+            });
+        if ui.button("Connect").clicked() {
+            MSG_MANAGER
+                .get()
+                .unwrap()
+                .lock()
+                .listen_from_ethernet_port(self.port);
+            *can_be_closed = true;
         }
     }
 }
