@@ -1,15 +1,16 @@
 mod mavlink;
 mod ui;
 
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
-use mavlink::MessageManager;
+use mavlink::{MessageManager, ReflectionContext};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use ui::ComposableView;
 
 static MSG_MANAGER: OnceLock<Mutex<MessageManager>> = OnceLock::new();
+static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(|| ReflectionContext::new());
 
 static APP_NAME: &str = "segs";
 

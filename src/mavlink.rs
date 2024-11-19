@@ -9,13 +9,13 @@ use std::{
 
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
+use mavlink_bindgen::parser::{MavProfile, MavType};
 use skyward_mavlink::{
     lyra::MavMessage,
     mavlink::{peek_reader::PeekReader, read_v1_msg, MavHeader, Message},
 };
-use strum::VariantNames;
 use tokio::{net::UdpSocket, task::JoinHandle};
-use tracing::{debug, info};
+use tracing::debug;
 
 pub const DEFAULT_ETHERNET_PORT: u16 = 42069;
 const UDP_BUFFER_SIZE: usize = 65527;
@@ -45,7 +45,6 @@ impl MessageManager {
 
     pub fn get_message(&mut self, message_id: u32) -> Option<&[TimedMessage]> {
         while let Ok(message) = self.rx.try_recv() {
-            info!("Received message: {:?}", message);
             self.add_message(message);
         }
         self.messages.get(&message_id).map(|v| v.as_slice())
@@ -108,8 +107,8 @@ impl MessageManager {
 
 #[derive(Debug, Clone)]
 pub struct TimedMessage {
-    message: MavMessage,
-    time: Instant,
+    pub message: MavMessage,
+    pub time: Instant,
 }
 
 impl TimedMessage {
@@ -125,4 +124,93 @@ impl TimedMessage {
 fn iter_messages(buf: &[u8]) -> impl Iterator<Item = (MavHeader, MavMessage)> + '_ {
     let mut reader = PeekReader::new(buf);
     std::iter::from_fn(move || read_v1_msg(&mut reader).ok())
+}
+
+pub struct ReflectionContext {
+    mavlink_profile: MavProfile,
+    id_name_map: HashMap<u32, String>,
+}
+
+impl ReflectionContext {
+    pub fn new() -> Self {
+        let profile: MavProfile =
+            serde_json::from_str(skyward_mavlink::reflection::LYRA_MAVLINK_PROFILE_SERIALIZED)
+                .expect("Failed to deserialize MavProfile");
+        let id_name_map = profile
+            .messages
+            .iter()
+            .map(|(name, m)| (m.id, name.clone()))
+            .collect();
+        Self {
+            mavlink_profile: profile,
+            id_name_map,
+        }
+    }
+
+    pub fn get_name_from_id(&self, message_id: u32) -> Option<&str> {
+        self.id_name_map.get(&message_id).map(|s| s.as_str())
+    }
+
+    pub fn messages(&self) -> Vec<&str> {
+        self.mavlink_profile
+            .messages
+            .keys()
+            .map(|s| s.as_str())
+            .collect()
+    }
+
+    pub fn get_fields_by_id(&self, message_id: u32) -> Vec<&str> {
+        self.mavlink_profile
+            .messages
+            .iter()
+            .find(|(_, m)| m.id == message_id)
+            .map(|(_, m)| &m.fields)
+            .unwrap_or_else(|| {
+                panic!("Message ID {} not found in profile", message_id);
+            })
+            .into_iter()
+            .map(|f| f.name.as_str())
+            .collect()
+    }
+
+    pub fn get_plottable_fields_by_id(&self, message_id: u32) -> Vec<&str> {
+        self.mavlink_profile
+            .messages
+            .iter()
+            .find(|(_, m)| m.id == message_id)
+            .map(|(_, m)| &m.fields)
+            .unwrap_or_else(|| {
+                panic!("Message ID {} not found in profile", message_id);
+            })
+            .into_iter()
+            .filter(|f| match f.mavtype {
+                MavType::UInt8
+                | MavType::UInt16
+                | MavType::UInt32
+                | MavType::UInt64
+                | MavType::Int8
+                | MavType::Int16
+                | MavType::Int32
+                | MavType::Int64
+                | MavType::Float
+                | MavType::Double => true,
+                _ => false,
+            })
+            .map(|f| f.name.as_str())
+            .collect()
+    }
+
+    pub fn get_fields_by_name(&self, message_name: &str) -> Vec<&str> {
+        self.mavlink_profile
+            .messages
+            .iter()
+            .find(|(_, m)| m.name == message_name)
+            .map(|(_, m)| &m.fields)
+            .unwrap_or_else(|| {
+                panic!("Message {} not found in profile", message_name);
+            })
+            .into_iter()
+            .map(|f| f.name.as_str())
+            .collect()
+    }
 }
