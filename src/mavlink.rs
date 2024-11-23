@@ -52,7 +52,9 @@ impl MessageManager {
 
     pub fn stop_listening(&mut self) {
         self.running_flag.store(false, Ordering::Relaxed);
-        self.task.take().map(|t| t.abort());
+        if let Some(t) = self.task.take() {
+            t.abort()
+        }
     }
 
     pub fn listen_from_ethernet_port(&mut self, port: u16) {
@@ -168,7 +170,7 @@ impl ReflectionContext {
             .unwrap_or_else(|| {
                 panic!("Message ID {} not found in profile", message_id);
             })
-            .into_iter()
+            .iter()
             .map(|f| f.name.as_str())
             .collect()
     }
@@ -182,19 +184,21 @@ impl ReflectionContext {
             .unwrap_or_else(|| {
                 panic!("Message ID {} not found in profile", message_id);
             })
-            .into_iter()
-            .filter(|f| match f.mavtype {
-                MavType::UInt8
-                | MavType::UInt16
-                | MavType::UInt32
-                | MavType::UInt64
-                | MavType::Int8
-                | MavType::Int16
-                | MavType::Int32
-                | MavType::Int64
-                | MavType::Float
-                | MavType::Double => true,
-                _ => false,
+            .iter()
+            .filter(|f| {
+                matches!(
+                    f.mavtype,
+                    MavType::UInt8
+                        | MavType::UInt16
+                        | MavType::UInt32
+                        | MavType::UInt64
+                        | MavType::Int8
+                        | MavType::Int16
+                        | MavType::Int32
+                        | MavType::Int64
+                        | MavType::Float
+                        | MavType::Double
+                )
             })
             .map(|f| f.name.as_str())
             .collect()
@@ -209,7 +213,7 @@ impl ReflectionContext {
             .unwrap_or_else(|| {
                 panic!("Message {} not found in profile", message_name);
             })
-            .into_iter()
+            .iter()
             .map(|f| f.name.as_str())
             .collect()
     }
