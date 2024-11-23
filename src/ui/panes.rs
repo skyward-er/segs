@@ -7,17 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use super::composable_view::PaneResponse;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Pane {
     pub pane: PaneKind,
-}
-
-impl Default for Pane {
-    fn default() -> Self {
-        Self {
-            pane: PaneKind::default(),
-        }
-    }
 }
 
 impl Pane {

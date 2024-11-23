@@ -7,20 +7,11 @@ use crate::ui::{
     utils::{vertically_centered, SizingMemo},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DefaultPane {
     #[serde(skip)]
     centering_memo: SizingMemo,
     contains_pointer: bool,
-}
-
-impl Default for DefaultPane {
-    fn default() -> Self {
-        DefaultPane {
-            centering_memo: SizingMemo::default(),
-            contains_pointer: false,
-        }
-    }
 }
 
 impl PaneBehavior for DefaultPane {
