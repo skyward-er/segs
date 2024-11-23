@@ -10,7 +10,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use ui::ComposableView;
 
 static MSG_MANAGER: OnceLock<Mutex<MessageManager>> = OnceLock::new();
-static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(|| ReflectionContext::new());
+static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
 
 static APP_NAME: &str = "segs";
 

@@ -88,7 +88,7 @@ impl PaneBehavior for Plot2DPane {
                 .lock()
                 .get_message(self.msg_id)
                 .map(|msg| {
-                    msg.into_iter()
+                    msg.iter()
                         .map(|msg| {
                             let value: serde_json::Value =
                                 serde_json::to_value(msg.message.clone()).unwrap();
@@ -110,7 +110,7 @@ impl PaneBehavior for Plot2DPane {
                 for i in 0..self.fields_y.len() {
                     let plot_line: Vec<[f64; 2]> = acc_points
                         .iter()
-                        .map(|(timestamp, acc)| [*timestamp as f64, acc[i] as f64])
+                        .map(|(timestamp, acc)| [{ *timestamp }, acc[i]])
                         .collect();
                     plot_lines.push(plot_line);
                 }
@@ -200,13 +200,12 @@ impl Plot2DPane {
         let mut field_x = fields
             .contains(&self.field_x.as_str())
             .then(|| self.field_x.clone())
-            .or(fields.get(0).map(|s| s.to_string()));
+            .or(fields.first().map(|s| s.to_string()));
         // get the second field that is in the list of fields or the previous if valid
         let mut field_y = self
             .fields_y
-            .get(0)
-            .map(|s| fields.contains(&s.as_str()).then_some(s.to_owned()))
-            .flatten()
+            .first()
+            .and_then(|s| fields.contains(&s.as_str()).then_some(s.to_owned()))
             .or(fields.get(1).map(|s| s.to_string()));
 
         // if fields are valid, show the combo boxes for the x_axis
@@ -254,20 +253,19 @@ impl Plot2DPane {
 
         // if we have fields left, show the add button
         let fields_left_to_draw = fields.len().saturating_sub(fields_selected);
-        if fields_left_to_draw > 0 {
-            if ui
+        if fields_left_to_draw > 0
+            && ui
                 .button("Add Y Axis")
                 .on_hover_text("Add another Y axis")
                 .clicked()
-            {
-                self.fields_y.push(fields[fields_selected].to_string());
-            }
+        {
+            self.fields_y.push(fields[fields_selected].to_string());
         }
 
         // update fields and flag for active plot
         self.field_x = field_x.unwrap_or_default();
         if field_y.is_some() {
-            if self.fields_y.get(0).is_none() {
+            if self.fields_y.first().is_none() {
                 self.fields_y.push(field_y.unwrap());
             } else {
                 self.fields_y[0] = field_y.unwrap();

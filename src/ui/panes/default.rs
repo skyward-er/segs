@@ -7,7 +7,7 @@ use crate::ui::{
     utils::{vertically_centered, SizingMemo},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DefaultPane {
     occupied: f32,
     fixed: bool,
