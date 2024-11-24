@@ -11,6 +11,32 @@ use skyward_mavlink::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct PlotLineSettings {
+    field_y: String,
+    width: f32,
+    color: Color32,
+}
+
+impl Default for PlotLineSettings {
+    fn default() -> Self {
+        Self {
+            field_y: "".to_owned(),
+            width: 1.0,
+            color: Color32::BLUE,
+        }
+    }
+}
+
+impl PlotLineSettings {
+    fn new(field_y: String) -> Self {
+        Self {
+            field_y,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
     // UI settings
     #[serde(skip)]
@@ -20,11 +46,8 @@ pub struct Plot2DPane {
     // Mavlink settings
     msg_id: u32,
     field_x: String,
-    fields_y: Vec<String>,
+    plot_lines: Vec<PlotLineSettings>,
     plot_active: bool,
-    // Plot specific settings
-    width: f32,
-    color: Color32,
 }
 
 impl Default for Plot2DPane {
@@ -35,10 +58,8 @@ impl Default for Plot2DPane {
             sources_visible: false,
             msg_id: ROCKET_FLIGHT_TM_DATA::ID,
             field_x: "timestamp".to_owned(),
-            fields_y: vec![],
+            plot_lines: vec![],
             plot_active: false,
-            width: 1.0,
-            color: Color32::from_rgb(0, 120, 240),
         }
     }
 }
@@ -86,8 +107,8 @@ impl PaneBehavior for Plot2DPane {
                             let x = value.get(&self.field_x).unwrap();
                             let x = serde_json::from_value::<f64>(x.clone()).unwrap();
                             let mut ys = Vec::new();
-                            for field in self.fields_y.iter() {
-                                let y = value.get(field).unwrap();
+                            for field in self.plot_lines.iter() {
+                                let y = value.get(field.field_y.as_str()).unwrap();
                                 ys.push(serde_json::from_value::<f64>(y.clone()).unwrap());
                             }
                             (x, ys)
@@ -97,12 +118,12 @@ impl PaneBehavior for Plot2DPane {
                 .unwrap_or_default();
 
             if !acc_points.is_empty() {
-                for i in 0..self.fields_y.len() {
-                    let plot_line: Vec<[f64; 2]> = acc_points
+                for (i, plot_line) in self.plot_lines.iter().enumerate() {
+                    let points: Vec<[f64; 2]> = acc_points
                         .iter()
                         .map(|(timestamp, acc)| [{ *timestamp }, acc[i]])
                         .collect();
-                    plot_lines.push(plot_line);
+                    plot_lines.push((plot_line.clone(), points));
                 }
             }
         }
@@ -114,11 +135,11 @@ impl PaneBehavior for Plot2DPane {
                 println!("ctrl + drag");
                 response.set_drag_started();
             }
-            for plot_line in plot_lines {
+            for (plot_settings, data_points) in plot_lines {
                 plot_ui.line(
-                    Line::new(PlotPoints::from(plot_line))
-                        .color(self.color)
-                        .width(self.width),
+                    Line::new(PlotPoints::from(data_points))
+                        .color(plot_settings.color)
+                        .width(plot_settings.width),
                 );
             }
             plot_ui.response().context_menu(|ui| self.menu(ui));
@@ -149,16 +170,16 @@ impl Plot2DPane {
 
     fn settings_window(&mut self, ui: &mut egui::Ui) {
         egui::Grid::new(ui.id())
-            .num_columns(2)
+            .num_columns(4)
             .spacing([10.0, 5.0])
             .show(ui, |ui| {
-                ui.label("Color:");
-                ui.color_edit_button_srgba(&mut self.color);
-                ui.end_row();
-
-                ui.label("Width:");
-                ui.add(egui::Slider::new(&mut self.width, 0.1..=10.0).text("pt"));
-                ui.end_row();
+                for plot_line in self.plot_lines.iter_mut() {
+                    ui.label(&plot_line.field_y);
+                    ui.color_edit_button_srgba(&mut plot_line.color);
+                    ui.label("Width:");
+                    ui.add(egui::Slider::new(&mut plot_line.width, 0.1..=10.0).text("pt"));
+                    ui.end_row();
+                }
             });
     }
 
@@ -181,7 +202,7 @@ impl Plot2DPane {
 
         // reset fields if the message is changed
         if self.msg_id != old_msg_id {
-            self.fields_y.truncate(1);
+            self.plot_lines.truncate(1);
         }
 
         // check fields and assing a default field_x and field_y once the msg is changed
@@ -193,9 +214,13 @@ impl Plot2DPane {
             .or(fields.first().map(|s| s.to_string()));
         // get the second field that is in the list of fields or the previous if valid
         let mut field_y = self
-            .fields_y
+            .plot_lines
             .first()
-            .and_then(|s| fields.contains(&s.as_str()).then_some(s.to_owned()))
+            .and_then(|s| {
+                fields
+                    .contains(&s.field_y.as_str())
+                    .then_some(s.field_y.to_owned())
+            })
             .or(fields.get(1).map(|s| s.to_string()));
 
         // if fields are valid, show the combo boxes for the x_axis
@@ -212,7 +237,7 @@ impl Plot2DPane {
         // if fields are more than 1, show the combo boxes for the y_axis
         if field_y.is_some() {
             let field_y = field_y.as_mut().unwrap();
-            let widget_label = if self.fields_y.len() > 1 {
+            let widget_label = if self.plot_lines.len() > 1 {
                 "Y Axis 1"
             } else {
                 "Y Axis"
@@ -226,10 +251,10 @@ impl Plot2DPane {
                 });
         }
         // check how many fields are left and how many are selected
-        let fields_selected = self.fields_y.len() + 1;
+        let fields_selected = self.plot_lines.len() + 1;
         let fields_left_to_draw = fields.len().saturating_sub(2);
         for i in 0..fields_left_to_draw.min(fields_selected.saturating_sub(2)) {
-            let field = self.fields_y.get_mut(1 + i).unwrap();
+            let field = &mut self.plot_lines.get_mut(1 + i).unwrap().field_y;
             let widget_label = format!("Y Axis {}", i + 2);
             egui::ComboBox::from_label(widget_label)
                 .selected_text(field.as_str())
@@ -238,7 +263,7 @@ impl Plot2DPane {
                         ui.selectable_value(field, (*msg).to_owned(), *msg);
                     }
                 });
-            self.fields_y[1 + i] = field.clone();
+            self.plot_lines[1 + i].field_y = field.clone();
         }
 
         // if we have fields left, show the add button
@@ -249,16 +274,18 @@ impl Plot2DPane {
                 .on_hover_text("Add another Y axis")
                 .clicked()
         {
-            self.fields_y.push(fields[fields_selected].to_string());
+            self.plot_lines
+                .push(PlotLineSettings::new(fields[fields_selected].to_string()));
         }
 
         // update fields and flag for active plot
         self.field_x = field_x.unwrap_or_default();
         if field_y.is_some() {
-            if self.fields_y.first().is_none() {
-                self.fields_y.push(field_y.unwrap());
+            if self.plot_lines.first().is_none() {
+                self.plot_lines
+                    .push(PlotLineSettings::new(field_y.unwrap()));
             } else {
-                self.fields_y[0] = field_y.unwrap();
+                self.plot_lines[0].field_y = field_y.unwrap();
             }
             self.plot_active = true;
         } else {
