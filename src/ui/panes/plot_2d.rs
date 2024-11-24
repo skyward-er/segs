@@ -105,14 +105,14 @@ impl PaneBehavior for Plot2DPane {
                 .get()
                 .unwrap()
                 .lock()
-                .get_message(self.msg_id)
+                .get_message(*msg_id)
                 .map(|msg| {
                     msg.iter()
                         .map(|msg| {
                             let value: serde_json::Value =
                                 serde_json::to_value(msg.message.clone()).unwrap();
 
-                            let x = value.get(&self.field_x).unwrap();
+                            let x = value.get(&*field_x).unwrap();
                             let x = serde_json::from_value::<f64>(x.clone()).unwrap();
                             let mut ys = Vec::new();
                             for field in self.plot_lines.iter() {
@@ -127,10 +127,14 @@ impl PaneBehavior for Plot2DPane {
 
             if !acc_points.is_empty() {
                 for (i, plot_line) in self.plot_lines.iter().enumerate() {
-                    let points: Vec<[f64; 2]> = acc_points
-                        .iter()
-                        .map(|(timestamp, acc)| [{ *timestamp }, acc[i]])
-                        .collect();
+                    let points: Vec<[f64; 2]> = {
+                        let iter = acc_points.iter();
+                        if field_x == "timestamp" {
+                            iter.map(|(x, ys)| [x / 1e6, ys[i]]).collect()
+                        } else {
+                            iter.map(|(x, ys)| [*x, ys[i]]).collect()
+                        }
+                    };
                     plot_lines.push((plot_line.clone(), points));
                 }
             }
@@ -253,7 +257,7 @@ fn sources_window(
     let plot_lines_len = plot_lines.len();
     egui::Grid::new(ui.auto_id_with("y_axis"))
         .num_columns(3)
-        .spacing([10.0, 5.0])
+        .spacing([10.0, 2.5])
         .show(ui, |ui| {
             for (i, line_settings) in plot_lines.iter_mut().enumerate() {
                 // let line_settings = &mut plot_lines.get_mut(1 + i).unwrap();
