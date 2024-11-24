@@ -153,12 +153,15 @@ impl ReflectionContext {
         self.id_name_map.get(&message_id).map(|s| s.as_str())
     }
 
-    pub fn messages(&self) -> Vec<&str> {
-        self.mavlink_profile
+    pub fn sorted_messages(&self) -> Vec<&str> {
+        let mut msgs: Vec<&str> = self
+            .mavlink_profile
             .messages
             .keys()
             .map(|s| s.as_str())
-            .collect()
+            .collect();
+        msgs.sort();
+        msgs
     }
 
     pub fn get_fields_by_id(&self, message_id: u32) -> Vec<&str> {
