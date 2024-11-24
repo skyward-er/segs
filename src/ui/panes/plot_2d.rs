@@ -138,7 +138,8 @@ impl PaneBehavior for Plot2DPane {
 
         let plot = egui_plot::Plot::new("plot")
             .auto_bounds(Vec2b::TRUE)
-            .legend(Legend::default());
+            .legend(Legend::default())
+            .label_formatter(|name, value| format!("{} - x:{:.2} y:{:.2}", name, value.x, value.y));
         plot.show(ui, |plot_ui| {
             self.contains_pointer = plot_ui.response().contains_pointer();
             if plot_ui.response().dragged() && ctrl_pressed {
@@ -149,7 +150,8 @@ impl PaneBehavior for Plot2DPane {
                 plot_ui.line(
                     Line::new(PlotPoints::from(data_points))
                         .color(plot_settings.color)
-                        .width(plot_settings.width),
+                        .width(plot_settings.width)
+                        .name(&plot_settings.field),
                 );
             }
             plot_ui
