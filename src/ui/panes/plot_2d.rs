@@ -2,8 +2,8 @@ use crate::{ui::composable_view::PaneResponse, MAVLINK_PROFILE, MSG_MANAGER};
 
 use super::PaneBehavior;
 
-use egui::Color32;
-use egui_plot::{Line, PlotPoints};
+use egui::{Color32, Vec2b};
+use egui_plot::{Legend, Line, PlotPoints};
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
     lyra::{MavMessage, ROCKET_FLIGHT_TM_DATA},
@@ -12,7 +12,7 @@ use skyward_mavlink::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PlotLineSettings {
-    field_y: String,
+    field: String,
     width: f32,
     color: Color32,
 }
@@ -20,7 +20,7 @@ struct PlotLineSettings {
 impl Default for PlotLineSettings {
     fn default() -> Self {
         Self {
-            field_y: "".to_owned(),
+            field: "".to_owned(),
             width: 1.0,
             color: Color32::BLUE,
         }
@@ -30,7 +30,7 @@ impl Default for PlotLineSettings {
 impl PlotLineSettings {
     fn new(field_y: String) -> Self {
         Self {
-            field_y,
+            field: field_y,
             ..Default::default()
         }
     }
@@ -78,26 +78,34 @@ impl PaneBehavior for Plot2DPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
 
+        let Self {
+            settings_visible,
+            sources_visible,
+            plot_lines,
+            msg_id,
+            field_x,
+            plot_active,
+            ..
+        } = self;
+
         // Spawn windows
-        let mut settings_window_visible = self.settings_visible;
         egui::Window::new("Plot Settings")
             .id(ui.make_persistent_id("plot_settings"))
             .auto_sized()
             .collapsible(true)
             .movable(true)
-            .open(&mut settings_window_visible)
-            .show(ui.ctx(), |ui| self.settings_window(ui));
-        self.settings_visible = settings_window_visible;
+            .open(settings_visible)
+            .show(ui.ctx(), |ui| settings_window(ui, plot_lines));
 
-        let mut sources_window_visible = self.sources_visible;
         egui::Window::new("Plot Sources")
             .id(ui.make_persistent_id("plot_sources"))
             .auto_sized()
             .collapsible(true)
             .movable(true)
-            .open(&mut sources_window_visible)
-            .show(ui.ctx(), |ui| self.sources_window(ui));
-        self.sources_visible = sources_window_visible;
+            .open(sources_visible)
+            .show(ui.ctx(), |ui| {
+                sources_window(ui, msg_id, field_x, plot_lines, plot_active)
+            });
 
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
@@ -118,7 +126,7 @@ impl PaneBehavior for Plot2DPane {
                             let x = serde_json::from_value::<f64>(x.clone()).unwrap();
                             let mut ys = Vec::new();
                             for field in self.plot_lines.iter() {
-                                let y = value.get(field.field_y.as_str()).unwrap();
+                                let y = value.get(field.field.as_str()).unwrap();
                                 ys.push(serde_json::from_value::<f64>(y.clone()).unwrap());
                             }
                             (x, ys)
@@ -138,7 +146,9 @@ impl PaneBehavior for Plot2DPane {
             }
         }
 
-        let plot = egui_plot::Plot::new("plot").auto_bounds([true, true].into());
+        let plot = egui_plot::Plot::new("plot")
+            .auto_bounds(Vec2b::TRUE)
+            .legend(Legend::default());
         plot.show(ui, |plot_ui| {
             self.contains_pointer = plot_ui.response().contains_pointer();
             if plot_ui.response().dragged() && ctrl_pressed {
@@ -152,7 +162,9 @@ impl PaneBehavior for Plot2DPane {
                         .width(plot_settings.width),
                 );
             }
-            plot_ui.response().context_menu(|ui| self.menu(ui));
+            plot_ui
+                .response()
+                .context_menu(|ui| show_menu(ui, settings_visible, sources_visible));
         });
 
         response
@@ -163,143 +175,148 @@ impl PaneBehavior for Plot2DPane {
     }
 }
 
-impl Plot2DPane {
-    fn menu(&mut self, ui: &mut egui::Ui) {
-        ui.set_max_width(200.0); // To make sure we wrap long text
-
-        if ui.button("Settings…").clicked() {
-            self.settings_visible = true;
-            ui.close_menu();
-        }
-
-        if ui.button("Sources…").clicked() {
-            self.sources_visible = true;
-            ui.close_menu();
-        }
-    }
-
-    fn settings_window(&mut self, ui: &mut egui::Ui) {
-        egui::Grid::new(ui.id())
-            .num_columns(4)
-            .spacing([10.0, 5.0])
-            .show(ui, |ui| {
-                for plot_line in self.plot_lines.iter_mut() {
-                    ui.label(&plot_line.field_y);
-                    ui.color_edit_button_srgba(&mut plot_line.color);
-                    ui.label("Width:");
-                    ui.add(egui::Slider::new(&mut plot_line.width, 0.1..=10.0).text("pt"));
-                    ui.end_row();
-                }
-            });
-    }
-
-    fn sources_window(&mut self, ui: &mut egui::Ui) {
-        let old_msg_id = self.msg_id;
-        let msg_name = MAVLINK_PROFILE
-            .get_name_from_id(self.msg_id)
-            .unwrap_or_default();
-        egui::ComboBox::from_label("Message Kind")
-            .selected_text(msg_name)
-            .show_ui(ui, |ui| {
-                for msg in MAVLINK_PROFILE.messages() {
-                    ui.selectable_value(
-                        &mut self.msg_id,
-                        MavMessage::message_id_from_name(msg).unwrap(),
-                        msg,
-                    );
-                }
-            });
-
-        // reset fields if the message is changed
-        if self.msg_id != old_msg_id {
-            self.plot_lines.truncate(1);
-        }
-
-        // check fields and assing a default field_x and field_y once the msg is changed
-        let fields = MAVLINK_PROFILE.get_plottable_fields_by_id(self.msg_id);
-        // get the first field that is in the list of fields or the previous if valid
-        let mut field_x = fields
-            .contains(&self.field_x.as_str())
-            .then(|| self.field_x.clone())
-            .or(fields.first().map(|s| s.to_string()));
-        // get the second field that is in the list of fields or the previous if valid
-        let mut field_y = self
-            .plot_lines
-            .first()
-            .and_then(|s| {
-                fields
-                    .contains(&s.field_y.as_str())
-                    .then_some(s.field_y.to_owned())
-            })
-            .or(fields.get(1).map(|s| s.to_string()));
-
-        // if fields are valid, show the combo boxes for the x_axis
-        if field_x.is_some() {
-            let field_x = field_x.as_mut().unwrap();
-            egui::ComboBox::from_label("X Axis")
-                .selected_text(field_x.as_str())
-                .show_ui(ui, |ui| {
-                    for msg in fields.iter() {
-                        ui.selectable_value(field_x, (*msg).to_owned(), *msg);
-                    }
-                });
-        }
-        // if fields are more than 1, show the combo boxes for the y_axis
-        if field_y.is_some() {
-            let field_y = field_y.as_mut().unwrap();
-            let widget_label = if self.plot_lines.len() > 1 {
-                "Y Axis 1"
-            } else {
-                "Y Axis"
-            };
-            egui::ComboBox::from_label(widget_label)
-                .selected_text(field_y.as_str())
-                .show_ui(ui, |ui| {
-                    for msg in fields.iter() {
-                        ui.selectable_value(field_y, (*msg).to_owned(), *msg);
-                    }
-                });
-        }
-        // check how many fields are left and how many are selected
-        let fields_selected = self.plot_lines.len() + 1;
-        let fields_left_to_draw = fields.len().saturating_sub(2);
-        for i in 0..fields_left_to_draw.min(fields_selected.saturating_sub(2)) {
-            let field = &mut self.plot_lines.get_mut(1 + i).unwrap().field_y;
-            let widget_label = format!("Y Axis {}", i + 2);
-            egui::ComboBox::from_label(widget_label)
-                .selected_text(field.as_str())
-                .show_ui(ui, |ui| {
-                    for msg in fields.iter() {
-                        ui.selectable_value(field, (*msg).to_owned(), *msg);
-                    }
-                });
-            self.plot_lines[1 + i].field_y = field.clone();
-        }
-
-        // if we have fields left, show the add button
-        let fields_left_to_draw = fields.len().saturating_sub(fields_selected);
-        if fields_left_to_draw > 0
-            && ui
-                .button("Add Y Axis")
-                .on_hover_text("Add another Y axis")
-                .clicked()
-        {
-            self.plot_lines
-                .push(PlotLineSettings::new(fields[fields_selected].to_string()));
-        }
-
-        // update fields and flag for active plot
-        self.field_x = field_x.unwrap_or_default();
-        if field_y.is_some() {
-            if self.plot_lines.first().is_none() {
-                self.plot_lines
-                    .push(PlotLineSettings::new(field_y.unwrap()));
-            } else {
-                self.plot_lines[0].field_y = field_y.unwrap();
+fn settings_window(ui: &mut egui::Ui, plot_lines: &mut [PlotLineSettings]) {
+    egui::Grid::new(ui.id())
+        .num_columns(4)
+        .spacing([10.0, 5.0])
+        .show(ui, |ui| {
+            for plot_line in plot_lines.iter_mut() {
+                ui.label(&plot_line.field);
+                ui.color_edit_button_srgba(&mut plot_line.color);
+                ui.add(
+                    egui::DragValue::new(&mut plot_line.width)
+                        .speed(0.1)
+                        .suffix(" pt"),
+                )
+                .on_hover_text("Width of the line in points");
+                ui.end_row();
             }
-            self.plot_active = true;
-        } else {
-            self.plot_active = false;
-        }
+        });
+}
+
+fn sources_window(
+    ui: &mut egui::Ui,
+    msg_id: &mut u32,
+    field_x: &mut String,
+    plot_lines: &mut Vec<PlotLineSettings>,
+    plot_active: &mut bool,
+) {
+    // record msg id to check if it has changed
+    let old_msg_id = *msg_id;
+    // extract the msg name from the id to show it in the combo box
+    let msg_name = MAVLINK_PROFILE
+        .get_name_from_id(*msg_id)
+        .unwrap_or_default();
+
+    // show the first combo box with the message name selection
+    egui::ComboBox::from_label("Message Kind")
+        .selected_text(msg_name)
+        .show_ui(ui, |ui| {
+            for msg in MAVLINK_PROFILE.sorted_messages() {
+                ui.selectable_value(msg_id, MavMessage::message_id_from_name(msg).unwrap(), msg);
+            }
+        });
+
+    // reset fields if the message is changed
+    if *msg_id != old_msg_id {
+        plot_lines.truncate(1);
+    }
+
+    // check fields and assing a default field_x and field_y once the msg is changed
+    let fields = MAVLINK_PROFILE.get_plottable_fields_by_id(*msg_id);
+    // get the first field that is in the list of fields or the previous if valid
+    let new_field_x = fields
+        .contains(&field_x.as_str())
+        .then(|| field_x.to_owned())
+        .or(fields.first().map(|s| s.to_string()));
+
+    // if there are no fields, reset the field_x and plot_lines
+    let Some(new_field_x) = new_field_x else {
+        *field_x = "".to_owned();
+        plot_lines.clear();
+        *plot_active = false;
+        return;
+    };
+    // update the field_x
+    *field_x = new_field_x;
+
+    // if fields are valid, show the combo boxes for the x_axis
+    egui::ComboBox::from_label("X Axis")
+        .selected_text(field_x.as_str())
+        .show_ui(ui, |ui| {
+            for msg in fields.iter() {
+                ui.selectable_value(field_x, (*msg).to_owned(), *msg);
+            }
+        });
+
+    // populate the plot_lines with the first field if it is empty and there are more than 1 fields
+    if plot_lines.is_empty() && fields.len() > 1 {
+        plot_lines.push(PlotLineSettings::new(fields[1].to_string()));
+    }
+
+    // check how many fields are left and how many are selected
+    // let fields_selected = plot_lines.len() + 1;
+    // let fields_left_to_draw = fields.len().saturating_sub(2);
+    // fields_left_to_draw.min(fields_selected.saturating_sub(2)) {
+    let plot_lines_len = plot_lines.len();
+    egui::Grid::new(ui.auto_id_with("y_axis"))
+        .num_columns(3)
+        .spacing([10.0, 5.0])
+        .show(ui, |ui| {
+            for (i, line_settings) in plot_lines.iter_mut().enumerate() {
+                // let line_settings = &mut plot_lines.get_mut(1 + i).unwrap();
+                let PlotLineSettings {
+                    field,
+                    width,
+                    color,
+                } = line_settings;
+                let widget_label = if plot_lines_len > 1 {
+                    format!("Y Axis {}", i + 1)
+                } else {
+                    "Y Axis".to_owned()
+                };
+                egui::ComboBox::from_label(widget_label)
+                    .selected_text(field.as_str())
+                    .show_ui(ui, |ui| {
+                        for msg in fields.iter() {
+                            ui.selectable_value(field, (*msg).to_owned(), *msg);
+                        }
+                    });
+                ui.color_edit_button_srgba(color);
+                ui.add(egui::DragValue::new(width).speed(0.1).suffix(" pt"))
+                    .on_hover_text("Width of the line in points");
+                ui.end_row();
+            }
+        });
+
+    // if we have fields left, show the add button
+    if fields.len().saturating_sub(plot_lines_len + 1) > 0
+        && ui
+            .button("Add Y Axis")
+            .on_hover_text("Add another Y axis")
+            .clicked()
+    {
+        let next_field = fields
+            .iter()
+            .find(|f| !plot_lines.iter().any(|l| l.field == **f))
+            .unwrap();
+        plot_lines.push(PlotLineSettings::new(next_field.to_string()));
+    }
+
+    // update fields and flag for active plot
+    *plot_active = !plot_lines.is_empty();
+}
+
+fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool, sources_visible: &mut bool) {
+    ui.set_max_width(200.0); // To make sure we wrap long text
+
+    if ui.button("Settings…").clicked() {
+        *settings_visible = true;
+        ui.close_menu();
+    }
+
+    if ui.button("Sources…").clicked() {
+        *sources_visible = true;
+        ui.close_menu();
     }
 }
