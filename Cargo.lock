@@ -2860,6 +2860,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 [[package]]
 name = "skyward_mavlink"
 version = "0.1.0"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=rust-strum#a766c38ea2dada7450cd2531b8610cbabcb6a449"
 dependencies = [
  "bitflags 2.6.0",
  "mavlink-bindgen",

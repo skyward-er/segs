@@ -48,6 +48,7 @@ pub struct Plot2DPane {
     field_x: String,
     plot_lines: Vec<PlotLineSettings>,
     plot_active: bool,
+    reverse_data: bool
 }
 
 impl Default for Plot2DPane {
@@ -60,6 +61,7 @@ impl Default for Plot2DPane {
             field_x: "timestamp".to_owned(),
             plot_lines: vec![],
             plot_active: false,
+            reverse_data: false
         }
     }
 }
@@ -75,8 +77,10 @@ impl PaneBehavior for Plot2DPane {
             msg_id,
             field_x,
             plot_active,
+            reverse_data,
             ..
         } = self;
+
 
         // Spawn windows
         egui::Window::new("Plot Settings")
@@ -94,7 +98,7 @@ impl PaneBehavior for Plot2DPane {
             .movable(true)
             .open(sources_visible)
             .show(ui.ctx(), |ui| {
-                sources_window(ui, msg_id, field_x, plot_lines, plot_active)
+                sources_window(ui, msg_id, field_x, plot_lines, plot_active, reverse_data)
             });
 
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
@@ -117,7 +121,11 @@ impl PaneBehavior for Plot2DPane {
                             let mut ys = Vec::new();
                             for field in self.plot_lines.iter() {
                                 let y = value.get(field.field.as_str()).unwrap();
-                                ys.push(serde_json::from_value::<f64>(y.clone()).unwrap());
+                                if self.reverse_data {
+                                    ys.push(serde_json::from_value::<f64>(y.clone()).unwrap() * -1.0);
+                                } else {
+                                    ys.push(serde_json::from_value::<f64>(y.clone()).unwrap());
+                                }
                             }
                             (x, ys)
                         })
@@ -196,6 +204,7 @@ fn sources_window(
     field_x: &mut String,
     plot_lines: &mut Vec<PlotLineSettings>,
     plot_active: &mut bool,
+    reverse_data: &mut bool,
 ) {
     // record msg id to check if it has changed
     let old_msg_id = *msg_id;
@@ -280,7 +289,10 @@ fn sources_window(
                     });
                 ui.color_edit_button_srgba(color);
                 ui.add(egui::DragValue::new(width).speed(0.1).suffix(" pt"))
-                    .on_hover_text("Width of the line in points");
+                .on_hover_text("Width of the line in points");
+                ui.checkbox( reverse_data, "Reverse Data")
+                .on_hover_text("Check to reverse the data");
+                
                 ui.end_row();
             }
         });
