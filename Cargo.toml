@@ -22,17 +22,12 @@ tokio = { version = "1.41", features = [
     "sync",
 ] }
 # =========== Mavlink ===========
-# skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
-#     "reflection",
-#     "lyra",
-#     "serde",
-# ] }
-mavlink-bindgen = { version = "0.13.1", features = ["serde"] }
-skyward_mavlink = { path = "../mavlink-skyward-lib/mavlink_rust", features = [
+skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
     "reflection",
     "lyra",
     "serde",
 ] }
+mavlink-bindgen = { version = "0.13.1", features = ["serde"] }
 # ========= Persistency =========
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
