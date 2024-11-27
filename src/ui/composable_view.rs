@@ -7,6 +7,11 @@ use super::{
 
 use egui::{Key, Modifiers};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
+//the following to display a small top bar
+use chrono::Local; 
+use std::path::Path;
+use git2::Repository;
+
 
 pub struct ComposableView {
     panes_tree: Tree<Pane>,
@@ -33,6 +38,30 @@ impl Default for ComposableView {
 impl eframe::App for ComposableView {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Add a top panel to display the time and latest commit
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            let now = Local::now();
+            let time_str = format!("{}", now.format("%H:%M:%S"));
+
+            let mut branch_name = String::from("Unknown branch");
+            let mut commit_info = String::from("No commit information");
+
+            // Get the latest commit information
+            if let Ok(repo) = Repository::open(Path::new(".")) {
+                if let Ok(head) = repo.head() {
+                    if let Some(name) = head.shorthand() {
+                        branch_name = name.to_string();
+                    }
+                    if let Some(commit) = head.peel_to_commit().ok() {
+                        let commit_id = commit.id();
+                        let short_commit_id = format!("{:.7}", commit_id);
+                        commit_info = format!("{}", short_commit_id);
+                    }
+                }
+            }
+
+            ui.label(format!("SkywardEnhancedGroundStation SEGS v. {} - {} | {} ", commit_info, branch_name, time_str ));
+        });
         // get the id of the hovered pane, in order to apply actions to it
         let hovered_pane = self
             .panes_tree

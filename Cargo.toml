@@ -42,3 +42,5 @@ crossbeam-channel = "0.5"
 # for dynamic dispatch
 enum_dispatch = "0.3"
 anyhow = "1.0"
+chrono = "0.4"
+git2 = "0.13"
