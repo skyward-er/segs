@@ -47,6 +47,7 @@ impl eframe::App for ComposableView {
                 ((Modifiers::NONE, Key::H), PaneAction::SplitH),
                 ((Modifiers::NONE, Key::C), PaneAction::Close),
                 ((Modifiers::SHIFT, Key::Escape), PaneAction::Maximize),
+                ((Modifiers::NONE, Key::Escape), PaneAction::Exit),
             ];
             pane_action = pane_action.or(shortcuts::map_to_action(ctx, &key_action_pairs[..])
                 .map(|action| (action, hovered_pane)));
@@ -56,34 +57,38 @@ impl eframe::App for ComposableView {
         if let Some((action, hovered_tile)) = pane_action.take() {
             match action {
                 PaneAction::SplitH => {
-                    let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
-                    let left_pane = panes_tree.tiles.insert_new(hovered_tile_pane);
-                    let right_pane = panes_tree.tiles.insert_pane(Pane::default());
-                    panes_tree.tiles.insert(
-                        hovered_tile,
-                        Tile::Container(Container::Linear(Linear::new_binary(
-                            LinearDir::Horizontal,
-                            [left_pane, right_pane],
-                            0.5,
-                        ))),
-                    );
+                    if self.maximized_pane.is_none() {
+                        let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
+                        let left_pane = panes_tree.tiles.insert_new(hovered_tile_pane);
+                        let right_pane = panes_tree.tiles.insert_pane(Pane::default());
+                        panes_tree.tiles.insert(
+                            hovered_tile,
+                            Tile::Container(Container::Linear(Linear::new_binary(
+                                LinearDir::Horizontal,
+                                [left_pane, right_pane],
+                                0.5,
+                            ))),
+                        );
+                    }
                 }
                 PaneAction::SplitV => {
-                    let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
-                    let replaced = panes_tree.tiles.insert_new(hovered_tile_pane);
-                    let lower_pane = panes_tree.tiles.insert_pane(Pane::default());
-                    panes_tree.tiles.insert(
-                        hovered_tile,
-                        Tile::Container(Container::Linear(Linear::new_binary(
-                            LinearDir::Vertical,
-                            [replaced, lower_pane],
-                            0.5,
-                        ))),
-                    );
+                    if self.maximized_pane.is_none() {
+                        let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
+                        let replaced = panes_tree.tiles.insert_new(hovered_tile_pane);
+                        let lower_pane = panes_tree.tiles.insert_pane(Pane::default());
+                        panes_tree.tiles.insert(
+                            hovered_tile,
+                            Tile::Container(Container::Linear(Linear::new_binary(
+                                LinearDir::Vertical,
+                                [replaced, lower_pane],
+                                0.5,
+                            ))),
+                        );
+                    }
                 }
                 PaneAction::Close => {
                     // Ignore if the root pane is the only one
-                    if panes_tree.tiles.len() != 1 {
+                    if panes_tree.tiles.len() != 1 && self.maximized_pane.is_none() {
                         panes_tree.remove_recursively(hovered_tile);
                     }
                 }
@@ -109,6 +114,11 @@ impl eframe::App for ComposableView {
                         if !hovered_pane_is_default {
                             self.maximized_pane = Some(hovered_tile);
                         }
+                    }
+                }
+                PaneAction::Exit => {
+                    if self.maximized_pane.is_some() {
+                        self.maximized_pane = None;
                     }
                 }
             }
@@ -279,4 +289,5 @@ pub enum PaneAction {
     Close,
     Replace(Box<Pane>),
     Maximize,
+    Exit,
 }
