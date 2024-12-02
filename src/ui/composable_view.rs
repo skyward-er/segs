@@ -295,7 +295,11 @@ impl SourceWindow {
             .spacing([10.0, 5.0])
             .show(ui, |ui| {
                 ui.label("Ethernet Port:");
-                ui.add(egui::Slider::new(&mut self.port, 1024..=65535).text("Port"));
+                ui.add(
+                    egui::DragValue::new(&mut self.port)
+                        .range(0..=65535)
+                        .speed(10),
+                );
                 ui.end_row();
             });
         if ui.button("Connect").clicked() {
