@@ -43,7 +43,6 @@ pub struct Plot2DPane {
     pub contains_pointer: bool,
     #[serde(skip)]
     settings_visible: bool,
-    sources_visible: bool,
     // Mavlink settings
     msg_id: u32,
     field_x: String,
@@ -56,7 +55,6 @@ impl Default for Plot2DPane {
         Self {
             contains_pointer: false,
             settings_visible: false,
-            sources_visible: false,
             msg_id: ROCKET_FLIGHT_TM_DATA::ID,
             field_x: "timestamp".to_owned(),
             plot_lines: vec![],
@@ -80,7 +78,6 @@ impl PaneBehavior for Plot2DPane {
 
         let Self {
             settings_visible,
-            sources_visible,
             plot_lines,
             msg_id,
             field_x,
@@ -95,14 +92,6 @@ impl PaneBehavior for Plot2DPane {
             .collapsible(true)
             .movable(true)
             .open(settings_visible)
-            .show(ui.ctx(), |ui| settings_window(ui, plot_lines));
-
-        egui::Window::new("Plot Sources")
-            .id(ui.make_persistent_id("plot_sources"))
-            .auto_sized()
-            .collapsible(true)
-            .movable(true)
-            .open(sources_visible)
             .show(ui.ctx(), |ui| {
                 sources_window(ui, msg_id, field_x, plot_lines, plot_active)
             });
@@ -170,7 +159,7 @@ impl PaneBehavior for Plot2DPane {
             }
             plot_ui
                 .response()
-                .context_menu(|ui| show_menu(ui, settings_visible, sources_visible));
+                .context_menu(|ui| show_menu(ui, settings_visible));
         });
 
         response
@@ -179,25 +168,6 @@ impl PaneBehavior for Plot2DPane {
     fn contains_pointer(&self) -> bool {
         self.contains_pointer
     }
-}
-
-fn settings_window(ui: &mut egui::Ui, plot_lines: &mut [PlotLineSettings]) {
-    egui::Grid::new(ui.id())
-        .num_columns(4)
-        .spacing([10.0, 5.0])
-        .show(ui, |ui| {
-            for plot_line in plot_lines.iter_mut() {
-                ui.label(&plot_line.field);
-                ui.color_edit_button_srgba(&mut plot_line.color);
-                ui.add(
-                    egui::DragValue::new(&mut plot_line.width)
-                        .speed(0.1)
-                        .suffix(" pt"),
-                )
-                .on_hover_text("Width of the line in points");
-                ui.end_row();
-            }
-        });
 }
 
 fn sources_window(
@@ -313,16 +283,11 @@ fn sources_window(
     *plot_active = !plot_lines.is_empty();
 }
 
-fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool, sources_visible: &mut bool) {
+fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool) {
     ui.set_max_width(200.0); // To make sure we wrap long text
 
     if ui.button("Settings…").clicked() {
         *settings_visible = true;
-        ui.close_menu();
-    }
-
-    if ui.button("Sources…").clicked() {
-        *sources_visible = true;
         ui.close_menu();
     }
 }
