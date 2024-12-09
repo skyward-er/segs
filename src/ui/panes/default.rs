@@ -1,4 +1,4 @@
-use super::{plot_2d::Plot2DPane, Pane, PaneBehavior, PaneKind};
+use super::{plot::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -48,7 +48,7 @@ impl PaneBehavior for DefaultPane {
                 }
                 if ui.button("Plot").clicked() {
                     response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
-                        Plot2DPane::default(),
+                        Plot2DPane::new(ui.auto_id_with("plot_2d")),
                     ))));
                 }
             })

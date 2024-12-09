@@ -24,7 +24,7 @@ tokio = { version = "1.41", features = [
 # =========== Mavlink ===========
 skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
     "reflection",
-    "lyra",
+    "orion",
     "serde",
 ] }
 mavlink-bindgen = { version = "0.13.1", features = ["serde"] }
@@ -45,3 +45,4 @@ enum_dispatch = "0.3"
 egui_extras = "0.29.1"
 strum = "0.26"
 anyhow = "1.0"
+ring-channel = "0.12.0"
