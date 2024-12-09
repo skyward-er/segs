@@ -7,14 +7,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
-    #[serde(skip)]
-    pub contains_pointer: bool,
-    settings_visible: bool,
     n_points: u32,
     frequency: f64,
     width: f32,
     color: egui::Color32,
-    open: bool,
+
+    #[serde(skip)]
+    pub contains_pointer: bool,
+
+    #[serde(skip)]
+    settings_visible: bool,
 }
 
 impl Default for Plot2DPane {
@@ -26,8 +28,16 @@ impl Default for Plot2DPane {
             frequency: 1.0,
             width: 1.0,
             color: egui::Color32::from_rgb(0, 120, 240),
-            open: false,
         }
+    }
+}
+
+impl PartialEq for Plot2DPane {
+    fn eq(&self, other: &Self) -> bool {
+        self.n_points == other.n_points
+            && self.frequency == other.frequency
+            && self.width == other.width
+            && self.color == other.color
     }
 }
 

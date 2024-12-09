@@ -7,6 +7,8 @@ use crate::ui::composable_view::{PaneAction, PaneResponse};
 pub struct DefaultPane {
     occupied: f32,
     fixed: bool,
+
+    #[serde(skip)]
     contains_pointer: bool,
 }
 
@@ -17,6 +19,12 @@ impl Default for DefaultPane {
             fixed: false,
             contains_pointer: false,
         }
+    }
+}
+
+impl PartialEq for DefaultPane {
+    fn eq(&self, other: &Self) -> bool {
+        self.occupied == other.occupied && self.fixed == other.fixed
     }
 }
 

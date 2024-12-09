@@ -1,37 +1,34 @@
 use super::{
+    layout_manager::LayoutManager,
     panes::{Pane, PaneBehavior},
     shortcuts,
+};
+use std::{
+    fs,
+    path::{Path, PathBuf},
 };
 
 use egui::{Key, Modifiers};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
+use serde::{Deserialize, Serialize};
 
+#[derive(Default)]
 pub struct ComposableView {
-    panes_tree: Tree<Pane>,
+    /// Persistent state of the app
+    pub state: ComposableViewState,
+
+    pub layout_manager: LayoutManager,
     behavior: ComposableBehavior,
-}
-
-// Implementing the default trait allows us to define a default configuration for our app
-impl Default for ComposableView {
-    fn default() -> Self {
-        let mut tiles = Tiles::default();
-        let root = tiles.insert_pane(Pane::default());
-        let panes_tree = egui_tiles::Tree::new("my_tree", root, tiles);
-
-        Self {
-            panes_tree,
-            behavior: Default::default(),
-        }
-    }
 }
 
 // An app must implement the `App` trait to define how the ui is built
 impl eframe::App for ComposableView {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // get the id of the hovered pane, in order to apply actions to it
-        let hovered_pane = self
-            .panes_tree
+        let panes_tree = &mut self.state.panes_tree;
+
+        // Get the id of the hovered pane, in order to apply actions to it
+        let hovered_pane = panes_tree
             .tiles
             .iter()
             .find(|(_, tile)| matches!(tile, Tile::Pane(pane) if pane.contains_pointer()))
@@ -56,10 +53,10 @@ impl eframe::App for ComposableView {
         if let Some((action, hovered_tile)) = pane_action.take() {
             match action {
                 PaneAction::SplitH => {
-                    let hovered_tile_pane = self.panes_tree.tiles.remove(hovered_tile).unwrap();
-                    let left_pane = self.panes_tree.tiles.insert_new(hovered_tile_pane);
-                    let right_pane = self.panes_tree.tiles.insert_pane(Pane::default());
-                    self.panes_tree.tiles.insert(
+                    let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
+                    let left_pane = panes_tree.tiles.insert_new(hovered_tile_pane);
+                    let right_pane = panes_tree.tiles.insert_pane(Pane::default());
+                    panes_tree.tiles.insert(
                         hovered_tile,
                         Tile::Container(Container::Linear(Linear::new_binary(
                             LinearDir::Horizontal,
@@ -69,10 +66,10 @@ impl eframe::App for ComposableView {
                     );
                 }
                 PaneAction::SplitV => {
-                    let hovered_tile_pane = self.panes_tree.tiles.remove(hovered_tile).unwrap();
-                    let replaced = self.panes_tree.tiles.insert_new(hovered_tile_pane);
-                    let lower_pane = self.panes_tree.tiles.insert_pane(Pane::default());
-                    self.panes_tree.tiles.insert(
+                    let hovered_tile_pane = panes_tree.tiles.remove(hovered_tile).unwrap();
+                    let replaced = panes_tree.tiles.insert_new(hovered_tile_pane);
+                    let lower_pane = panes_tree.tiles.insert_pane(Pane::default());
+                    panes_tree.tiles.insert(
                         hovered_tile,
                         Tile::Container(Container::Linear(Linear::new_binary(
                             LinearDir::Vertical,
@@ -83,27 +80,109 @@ impl eframe::App for ComposableView {
                 }
                 PaneAction::Close => {
                     // Ignore if the root pane is the only one
-                    if self.panes_tree.tiles.len() != 1 {
-                        self.panes_tree.remove_recursively(hovered_tile);
+                    if panes_tree.tiles.len() != 1 {
+                        panes_tree.remove_recursively(hovered_tile);
                     }
                 }
                 PaneAction::Replace(new_pane) => {
-                    self.panes_tree
-                        .tiles
-                        .insert(hovered_tile, Tile::Pane(*new_pane));
+                    panes_tree.tiles.insert(hovered_tile, Tile::Pane(*new_pane));
                 }
             }
         }
 
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
-            egui::global_theme_preference_switch(ui);
+            ui.horizontal(|ui| {
+                egui::global_theme_preference_switch(ui);
+
+                if ui.button("Layout Manager").clicked() {
+                    self.layout_manager.toggle_open_state();
+                }
+            })
         });
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.panes_tree.ui(&mut self.behavior, ui);
+            panes_tree.ui(&mut self.behavior, ui);
         });
+
+        LayoutManager::show(self, ctx);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.layout_manager.save_displayed(storage);
+    }
+}
+
+impl ComposableView {
+    pub fn new(app_name: &str, storage: &dyn eframe::Storage) -> Self {
+        let layout_manager = LayoutManager::new(app_name, storage);
+        let mut composable_view = Self {
+            layout_manager,
+            ..Self::default()
+        };
+        LayoutManager::try_display_selected_layout(&mut composable_view);
+        composable_view
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ComposableViewState {
+    pub panes_tree: Tree<Pane>,
+}
+
+impl Default for ComposableViewState {
+    fn default() -> Self {
+        let mut tiles = Tiles::default();
+        let root = tiles.insert_pane(Pane::default());
+        let panes_tree = egui_tiles::Tree::new("main_tree", root, tiles);
+
+        Self { panes_tree }
+    }
+}
+
+impl ComposableViewState {
+    pub fn from_file(path: &PathBuf) -> Option<Self> {
+        match fs::read_to_string(path) {
+            Ok(json) => match serde_json::from_str::<ComposableViewState>(&json) {
+                Ok(layout) => Some(layout),
+                Err(e) => {
+                    eprintln!("Error deserializing layout: {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                eprintln!("Error reading file: {}", e);
+                None
+            }
+        }
+    }
+
+    pub fn to_file(&self, path: &Path) {
+        // Check if the parent path exists, if not create it
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                match fs::create_dir_all(parent) {
+                    Ok(_) => {
+                        println!("Created directory {:?}", parent);
+                    }
+                    Err(e) => {
+                        eprintln!("Error creating directory: {}", e);
+                        return;
+                    }
+                }
+            }
+        }
+
+        match serde_json::to_string_pretty(self) {
+            Ok(serialized_layout) => {
+                println!("Saving layout into {:?}", path);
+                fs::write(path, serialized_layout).unwrap();
+            }
+            Err(e) => {
+                eprintln!("Error serializing layout: {}", e);
+            }
+        }
     }
 }
 

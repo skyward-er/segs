@@ -11,6 +11,12 @@ pub struct MessagesViewerPane {
     contains_pointer: bool,
 }
 
+impl PartialEq for MessagesViewerPane {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 impl PaneBehavior for MessagesViewerPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
