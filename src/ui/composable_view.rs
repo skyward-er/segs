@@ -26,22 +26,6 @@ pub struct ComposableView {
     sources_window: SourceWindow,
 }
 
-// Implementing the default trait allows us to define a default configuration for our app
-impl Default for ComposableView {
-    fn default() -> Self {
-        let mut tiles = Tiles::default();
-        let root = tiles.insert_pane(Pane::default());
-        let panes_tree = egui_tiles::Tree::new("my_tree", root, tiles);
-
-        Self {
-            panes_tree,
-            behavior: Default::default(),
-            maximized_pane: None,
-            sources_window: Default::default(),
-        }
-    }
-}
-
 // An app must implement the `App` trait to define how the ui is built
 impl eframe::App for ComposableView {
     // The update function is called each time the UI needs repainting!

@@ -47,7 +47,7 @@ fn main() -> Result<(), eframe::Error> {
             MSG_MANAGER
                 .set(Mutex::new(MessageBroker::new(
                     NonZeroUsize::new(50).unwrap(),
-                    cc.egui_ctx.clone(),
+                    ctx.egui_ctx.clone(),
                 )))
                 .expect("Unable to set MessageManager");
             let app = ctx
