@@ -20,6 +20,7 @@ pub struct Plot2DPane {
     // UI settings
     #[serde(skip)]
     pub contains_pointer: bool,
+    #[serde(skip)]
     settings_visible: bool,
     line_settings: Vec<LineSettings>,
     plot_active: bool,
@@ -35,6 +36,14 @@ impl Plot2DPane {
             plot_active: false,
             view: PlotMessageView::new(id),
         }
+    }
+}
+
+impl PartialEq for Plot2DPane {
+    fn eq(&self, other: &Self) -> bool {
+        self.view.settings == other.view.settings
+            && self.line_settings == other.line_settings
+            && self.plot_active == other.plot_active
     }
 }
 
@@ -203,7 +212,7 @@ impl PartialEq for MsgSources {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct LineSettings {
     field: String,
     width: f32,

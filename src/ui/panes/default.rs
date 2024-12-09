@@ -7,10 +7,8 @@ use crate::ui::{
     utils::{vertically_centered, SizingMemo},
 };
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DefaultPane {
-    occupied: f32,
-    fixed: bool,
     #[serde(skip)]
     centering_memo: SizingMemo,
     #[serde(skip)]
@@ -28,7 +26,7 @@ impl Default for DefaultPane {
 
 impl PartialEq for DefaultPane {
     fn eq(&self, other: &Self) -> bool {
-        self.occupied == other.occupied && self.fixed == other.fixed
+        true
     }
 }
 
