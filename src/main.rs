@@ -1,15 +1,18 @@
 mod mavlink;
 mod ui;
 
-use std::sync::{LazyLock, OnceLock};
+use std::{
+    num::NonZeroUsize,
+    sync::{LazyLock, OnceLock},
+};
 
-use mavlink::{MessageManager, ReflectionContext};
+use mavlink::{MessageBroker, ReflectionContext};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use ui::ComposableView;
 
-static MSG_MANAGER: OnceLock<Mutex<MessageManager>> = OnceLock::new();
+static MSG_MANAGER: OnceLock<Mutex<MessageBroker>> = OnceLock::new();
 static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
 
 static APP_NAME: &str = "segs";
@@ -42,7 +45,10 @@ fn main() -> Result<(), eframe::Error> {
         native_options,
         Box::new(|ctx| {
             MSG_MANAGER
-                .set(Mutex::new(MessageManager::new(50, ctc.egui_ctx.clone())))
+                .set(Mutex::new(MessageBroker::new(
+                    NonZeroUsize::new(50).unwrap(),
+                    cc.egui_ctx.clone(),
+                )))
                 .expect("Unable to set MessageManager");
             let app = ctx
                 .storage

@@ -1,6 +1,6 @@
 mod default;
 mod messages_viewer;
-mod plot_2d;
+mod plot;
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ impl PaneBehavior for Pane {
 pub enum PaneKind {
     Default(default::DefaultPane),
     MessagesViewer(messages_viewer::MessagesViewerPane),
-    Plot2D(plot_2d::Plot2DPane),
+    Plot2D(plot::Plot2DPane),
 }
 
 impl Default for PaneKind {
