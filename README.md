@@ -5,9 +5,9 @@
   <img src="https://img.shields.io/badge/development-alpha-red">
 </div>
 
-# Skyward Enhanced Ground Station
+# Skyward Enhanced Ground Software
 
-Skyward Enhanced Ground Station (in short **SEGS**) is a team effort that aims to provide a renewed and enhanced ground station experience for our operators. It is currently in development and is not ready for production use, contributions are welcome.
+Skyward Enhanced Ground Software (in short **SEGS**) is a team effort that aims to provide a renewed and enhanced ground software experience for our operators. It is currently in development and is not ready for production use, contributions are welcome.
 
 
 ---

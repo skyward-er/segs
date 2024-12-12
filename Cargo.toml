@@ -4,7 +4,7 @@ version = "0.1.0"
 # if you're a contributor, you should add your name here
 authors = ["Federico Lolli <federico.lolli@skywarder.eu>"]
 edition = "2021"
-description = "Skyward Enhanced Ground Station"
+description = "Skyward Enhanced Ground Software"
 license = "MIT"
 
 [dependencies]
