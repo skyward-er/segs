@@ -1,0 +1,45 @@
+default:
+  image: joseluisq/rust-linux-darwin-builder:1.83.0
+
+stages:
+  - build
+
+linux-x86_64:
+  stage: build
+  script:
+    - cargo build --release --target=x86_64-unknown-linux-gnu
+  artifacts:
+    paths:
+      - target/x86_64-unknown-linux-gnu/release/segs
+
+linux-aarch64:
+  stage: build
+  script:
+    - cargo build --release --target=aarch64-unknown-linux-gnu
+  artifacts:
+    paths:
+      - target/aarch64-unknown-linux-gnu/release/segs
+
+# windows-x86_64:
+#   stage: build
+#   script:
+#     - cargo build --release --target=x86_64-pc-windows-gnu
+#   artifacts:
+#     paths:
+#       - target/x86_64-pc-windows-gnu/release/segs.exe
+
+darwin-x86_64:
+  stage: build
+  script:
+    - cargo build --release --target=x86_64-apple-darwin
+  artifacts:
+    paths:
+      - target/x86_64-apple-darwin/release/segs.exe
+
+darwin-aarch64:
+  stage: build
+  script:
+    - cargo build --release --target=aarch64-apple-darwin
+  artifacts:
+    paths:
+      - target/aarch64-apple-darwin/release/segs.exe
