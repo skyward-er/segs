@@ -63,7 +63,7 @@ impl MessageBroker {
 
     pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) {
         self.process_incoming_msgs();
-        if !view.is_valid() {
+        if !view.is_valid() || !self.update_queues.contains_key(view.widget_id()) {
             self.init_view(view);
         } else {
             self.update_view(view);
