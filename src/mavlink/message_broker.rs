@@ -1,3 +1,10 @@
+//! Message broker module, responsible for managing the messages received from
+//! the Mavlink listener.
+//!
+//! The `MessageBroker` struct is the main entry point for this module, and it
+//! is responsible for listening to incoming messages from the Mavlink listener,
+//! storing them in a map, and updating the views that are interested in them.
+
 use std::{
     collections::{HashMap, VecDeque},
     num::NonZeroUsize,
@@ -17,16 +24,35 @@ use crate::mavlink::byte_parser;
 
 use super::{Message, TimedMessage};
 
+/// Maximum size of the UDP buffer
 const UDP_BUFFER_SIZE: usize = 65527;
 
+/// Trait for a view that fetch Mavlink messages.
+///
+/// This trait should be implemented by any view that wants to interact with the
+/// `MessageBroker` and get updates on the messages it is interested in.
 pub trait MessageView {
+    /// Returns the widget ID of the view
     fn widget_id(&self) -> &egui::Id;
+    /// Returns the message ID of interest for the view
     fn id_of_interest(&self) -> u32;
+    /// Returns whether the view is cache valid or not, i.e. if it can be
+    /// updated or needs to be re-populated from scratch
     fn is_valid(&self) -> bool;
+    /// Populates the view with the initial messages. This method is called when
+    /// the cache is invalid and the view needs to be populated from the stored
+    /// map of messages
     fn populate_view(&mut self, msg_slice: &[TimedMessage]);
+    /// Updates the view with new messages. This method is called when the cache
+    /// is valid, hence the view only needs to be updated with the new messages
     fn update_view(&mut self, msg_slice: &[TimedMessage]);
 }
 
+/// Responsible for storing & dispatching the Mavlink message received.
+///
+/// It listens to incoming messages, stores them in a map, and updates the views
+/// that are interested in them. It should be used as a singleton in the
+/// application.
 #[derive(Debug)]
 pub struct MessageBroker {
     // == Messages ==
@@ -48,6 +74,7 @@ pub struct MessageBroker {
 }
 
 impl MessageBroker {
+    /// Creates a new `MessageBroker` with the given channel size and Egui context.
     pub fn new(channel_size: NonZeroUsize, ctx: egui::Context) -> Self {
         let (tx, rx) = ring_channel(channel_size);
         Self {
@@ -61,6 +88,8 @@ impl MessageBroker {
         }
     }
 
+    /// Refreshes the view given as argument. It handles automatically the cache
+    /// validity based on `is_valid` method of the view.
     pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) {
         self.process_incoming_msgs();
         if !view.is_valid() || !self.update_queues.contains_key(view.widget_id()) {
@@ -70,6 +99,8 @@ impl MessageBroker {
         }
     }
 
+    /// Stop the listener task from listening to incoming messages, if it is
+    /// running.
     pub fn stop_listening(&mut self) {
         self.running_flag.store(false, Ordering::Relaxed);
         if let Some(t) = self.task.take() {
@@ -77,6 +108,9 @@ impl MessageBroker {
         }
     }
 
+    /// Start a listener task that listens to incoming messages from the given
+    /// Ethernet port, and accumulates them in a ring buffer, read only when
+    /// views request a refresh.
     pub fn listen_from_ethernet_port(&mut self, port: u16) {
         // Stop the current listener if it exists
         self.stop_listening();
@@ -112,10 +146,13 @@ impl MessageBroker {
         self.task = Some(handle);
     }
 
+    /// Clears all the messages stored in the broker. Useful in message replay
+    /// scenarios.
     pub fn clear(&mut self) {
         self.messages.clear();
     }
 
+    /// Init a view in case of cache invalidation or first time initialization.
     fn init_view<V: MessageView>(&mut self, view: &mut V) {
         if let Some(messages) = self.messages.get(&view.id_of_interest()) {
             view.populate_view(messages);
@@ -124,6 +161,7 @@ impl MessageBroker {
             .insert(*view.widget_id(), (view.id_of_interest(), VecDeque::new()));
     }
 
+    /// Update a view with new messages, used when the cache is valid.
     fn update_view<V: MessageView>(&mut self, view: &mut V) {
         if let Some((_, queue)) = self.update_queues.get_mut(view.widget_id()) {
             while let Some(msg) = queue.pop_front() {
@@ -132,6 +170,8 @@ impl MessageBroker {
         }
     }
 
+    /// Process the incoming messages from the Mavlink listener, storing them in
+    /// the messages map and updating the update queues.
     fn process_incoming_msgs(&mut self) {
         while let Ok(message) = self.rx.try_recv() {
             // first update the update queues

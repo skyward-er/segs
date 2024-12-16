@@ -1,5 +1,6 @@
-//! This module is a wrapper around the `skyward_mavlink` crate, facilitates
-//! rapid switching between different mavlink versions and profiles.
+//! Wrapper around the `skyward_mavlink` crate
+//!
+//! This facilitates rapid switching between different mavlink versions and profiles.
 //!
 //! In addition, it provides few utility functions to work with mavlink messages.
 
@@ -23,6 +24,7 @@ pub struct TimedMessage {
 }
 
 impl TimedMessage {
+    /// Create a new `TimedMessage` instance with the given message and the current time
     pub fn just_received(message: MavMessage) -> Self {
         Self {
             message,
@@ -31,6 +33,7 @@ impl TimedMessage {
     }
 }
 
+/// Extract fields from a MavLink message using string keys
 pub fn extract_from_message<K, T>(
     message: &MavMessage,
     fields: impl IntoIterator<Item = K>,
@@ -50,7 +53,7 @@ where
         .collect()
 }
 
-/// Helper function to read a stream of bytes and return an iterator of MavLink messages
+/// Read a stream of bytes and return an iterator of MavLink messages
 pub fn byte_parser(buf: &[u8]) -> impl Iterator<Item = (MavHeader, MavMessage)> + '_ {
     let mut reader = PeekReader::new(buf);
     std::iter::from_fn(move || read_v1_msg(&mut reader).ok())

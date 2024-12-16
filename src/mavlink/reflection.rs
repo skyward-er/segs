@@ -1,15 +1,25 @@
+//! Reflection utilities for MAVLink messages.
+//!
+//! This module provides a reflection context that allows to query information about MAVLink messages
+//! and their fields. This is useful for dynamically generating UI elements based on the available
+//! messages and fields.
+
 use std::collections::HashMap;
 
 use mavlink_bindgen::parser::{MavProfile, MavType};
 
 use super::MAVLINK_PROFILE_SERIALIZED;
 
+/// Reflection context for MAVLink messages.
+///
+/// This struct provides methods to query information about MAVLink messages and their fields.
 pub struct ReflectionContext {
     mavlink_profile: MavProfile,
     id_name_map: HashMap<u32, String>,
 }
 
 impl ReflectionContext {
+    /// Create a new reflection context.
     pub fn new() -> Self {
         let profile: MavProfile = serde_json::from_str(MAVLINK_PROFILE_SERIALIZED)
             .expect("Failed to deserialize MavProfile");
@@ -24,10 +34,12 @@ impl ReflectionContext {
         }
     }
 
+    /// Get the name of a message by its ID.
     pub fn get_name_from_id(&self, message_id: u32) -> Option<&str> {
         self.id_name_map.get(&message_id).map(|s| s.as_str())
     }
 
+    /// Get all message names in a sorted vector.
     pub fn sorted_messages(&self) -> Vec<&str> {
         let mut msgs: Vec<&str> = self
             .mavlink_profile
@@ -39,6 +51,7 @@ impl ReflectionContext {
         msgs
     }
 
+    /// Get all field names for a message by its ID.
     pub fn get_fields_by_id(&self, message_id: u32) -> Vec<&str> {
         self.mavlink_profile
             .messages
@@ -53,6 +66,7 @@ impl ReflectionContext {
             .collect()
     }
 
+    /// Get all plottable field names for a message by its ID.
     pub fn get_plottable_fields_by_id(&self, message_id: u32) -> Vec<&str> {
         self.mavlink_profile
             .messages
@@ -82,6 +96,7 @@ impl ReflectionContext {
             .collect()
     }
 
+    /// Get all field names for a message by its name.
     pub fn get_fields_by_name(&self, message_name: &str) -> Vec<&str> {
         self.mavlink_profile
             .messages
