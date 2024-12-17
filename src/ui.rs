@@ -1,6 +1,6 @@
 mod composable_view;
-mod layout_manager;
 mod panes;
+mod persistency;
 mod shortcuts;
 mod utils;
 

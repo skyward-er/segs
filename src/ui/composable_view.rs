@@ -1,8 +1,8 @@
 use crate::{error::ErrInstrument, mavlink, MSG_MANAGER};
 
 use super::{
-    layout_manager::LayoutManager,
     panes::{Pane, PaneBehavior},
+    persistency::{LayoutManager, LayoutManagerWindow},
     shortcuts,
 };
 use std::{
@@ -13,7 +13,7 @@ use std::{
 use egui::{Key, Modifiers};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, trace};
+use tracing::{debug, error, trace, warn};
 
 #[derive(Default)]
 pub struct ComposableView {
@@ -21,7 +21,10 @@ pub struct ComposableView {
     state: ComposableViewState,
     layout_manager: LayoutManager,
     behavior: ComposableBehavior,
+
+    // == Windows ==
     sources_window: SourceWindow,
+    layout_manager_window: LayoutManagerWindow,
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -121,7 +124,8 @@ impl eframe::App for ComposableView {
                     self.sources_window.visible = !self.sources_window.visible;
                 }
                 if ui.button("Layout Manager").clicked() {
-                    self.layout_manager.toggle_open_state();
+                    self.layout_manager_window
+                        .toggle_open_state(&self.layout_manager);
                 }
             })
         });
@@ -131,23 +135,31 @@ impl eframe::App for ComposableView {
             panes_tree.ui(&mut self.behavior, ui);
         });
 
-        LayoutManager::show(self, ctx);
+        self.layout_manager_window
+            .show(ctx, &mut self.layout_manager, &mut self.state);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        self.layout_manager.save_displayed(storage);
+        self.layout_manager.save_current_layout(storage);
     }
 }
 
 impl ComposableView {
     pub fn new(app_name: &str, storage: &dyn eframe::Storage) -> Self {
         let layout_manager = LayoutManager::new(app_name, storage);
-        let mut composable_view = Self {
+        let mut s = Self {
             layout_manager,
             ..Self::default()
         };
-        LayoutManager::try_display_selected_layout(&mut composable_view);
-        composable_view
+        // Load the selected layout if valid and existing
+        if let Some(layout) = s.layout_manager.current_layout().cloned() {
+            s.layout_manager
+                .load_layout(layout, &mut s.state)
+                .unwrap_or_else(|e| {
+                    error!("Error loading layout: {}", e);
+                });
+        }
+        s
     }
 }
 
