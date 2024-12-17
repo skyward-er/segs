@@ -4,11 +4,13 @@
 //! rapid switching between different mavlink versions and profiles (_dialects_).
 
 mod base;
+mod error;
 mod message_broker;
 mod reflection;
 
 // Export all the types from the base module as if they were defined in this module
 pub use base::*;
+pub use error::{MavlinkError, Result as MavlinkResult};
 pub use message_broker::{MessageBroker, MessageView};
 pub use reflection::ReflectionContext;
 

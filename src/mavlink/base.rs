@@ -14,6 +14,10 @@ pub use skyward_mavlink::{
     reflection::ORION_MAVLINK_PROFILE_SERIALIZED as MAVLINK_PROFILE_SERIALIZED,
 };
 
+use crate::error::ErrInstrument;
+
+use super::error::{MavlinkError, Result};
+
 /// A wrapper around the `MavMessage` struct, adding a received time field.
 #[derive(Debug, Clone)]
 pub struct TimedMessage {
@@ -37,20 +41,23 @@ impl TimedMessage {
 pub fn extract_from_message<K, T>(
     message: &MavMessage,
     fields: impl IntoIterator<Item = K>,
-) -> Vec<T>
+) -> Result<Vec<T>>
 where
     K: AsRef<str>,
     T: serde::de::DeserializeOwned + Default,
 {
-    let value: serde_json::Value = serde_json::to_value(message).unwrap();
-    fields
+    let value: serde_json::Value =
+        serde_json::to_value(message).log_expect("MavMessage should be serializable");
+    Ok(fields
         .into_iter()
-        .map(|field| {
+        .flat_map(|field| {
             let field = field.as_ref();
-            let value = value.get(field).unwrap();
-            serde_json::from_value::<T>(value.clone()).unwrap_or_default()
+            let value = value
+                .get(field)
+                .ok_or(MavlinkError::UnknownField(field.to_string()))?;
+            serde_json::from_value::<T>(value.clone()).map_err(MavlinkError::from)
         })
-        .collect()
+        .collect())
 }
 
 /// Read a stream of bytes and return an iterator of MavLink messages

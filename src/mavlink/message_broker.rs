@@ -18,11 +18,11 @@ use anyhow::{Context, Result};
 use egui::{ahash::HashMapExt, IdMap};
 use ring_channel::{ring_channel, RingReceiver, RingSender};
 use tokio::{net::UdpSocket, task::JoinHandle};
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::mavlink::byte_parser;
 
-use super::{Message, TimedMessage};
+use super::{MavlinkResult, Message, TimedMessage};
 
 /// Maximum size of the UDP buffer
 const UDP_BUFFER_SIZE: usize = 65527;
@@ -42,10 +42,10 @@ pub trait MessageView {
     /// Populates the view with the initial messages. This method is called when
     /// the cache is invalid and the view needs to be populated from the stored
     /// map of messages
-    fn populate_view(&mut self, msg_slice: &[TimedMessage]);
+    fn populate_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()>;
     /// Updates the view with new messages. This method is called when the cache
     /// is valid, hence the view only needs to be updated with the new messages
-    fn update_view(&mut self, msg_slice: &[TimedMessage]);
+    fn update_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()>;
 }
 
 /// Responsible for storing & dispatching the Mavlink message received.
@@ -90,13 +90,14 @@ impl MessageBroker {
 
     /// Refreshes the view given as argument. It handles automatically the cache
     /// validity based on `is_valid` method of the view.
-    pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) {
+    pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
         self.process_incoming_msgs();
         if !view.is_valid() || !self.update_queues.contains_key(view.widget_id()) {
-            self.init_view(view);
+            self.init_view(view)?;
         } else {
-            self.update_view(view);
+            self.update_view(view)?;
         }
+        Ok(())
     }
 
     /// Stop the listener task from listening to incoming messages, if it is
@@ -123,6 +124,7 @@ impl MessageBroker {
         let mut buf = Box::new([0; UDP_BUFFER_SIZE]);
         let running_flag = self.running_flag.clone();
 
+        debug!("Spawning listener task at {}", bind_address);
         let handle = tokio::spawn(async move {
             let socket = UdpSocket::bind(bind_address)
                 .await
@@ -135,6 +137,7 @@ impl MessageBroker {
                     .await
                     .context("Failed to receive message")?;
                 for (_, mav_message) in byte_parser(&buf[..len]) {
+                    debug!("Received message: {:?}", mav_message);
                     tx.send(TimedMessage::just_received(mav_message))
                         .context("Failed to send message")?;
                     ctx.request_repaint();
@@ -153,27 +156,35 @@ impl MessageBroker {
     }
 
     /// Init a view in case of cache invalidation or first time initialization.
-    fn init_view<V: MessageView>(&mut self, view: &mut V) {
+    fn init_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
+        trace!("initializing view: {:?}", view.widget_id());
         if let Some(messages) = self.messages.get(&view.id_of_interest()) {
-            view.populate_view(messages);
+            view.populate_view(messages)?;
         }
         self.update_queues
             .insert(*view.widget_id(), (view.id_of_interest(), VecDeque::new()));
+        Ok(())
     }
 
     /// Update a view with new messages, used when the cache is valid.
-    fn update_view<V: MessageView>(&mut self, view: &mut V) {
+    fn update_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
+        trace!("updating view: {:?}", view.widget_id());
         if let Some((_, queue)) = self.update_queues.get_mut(view.widget_id()) {
             while let Some(msg) = queue.pop_front() {
-                view.update_view(&[msg]);
+                view.update_view(&[msg])?;
             }
         }
+        Ok(())
     }
 
     /// Process the incoming messages from the Mavlink listener, storing them in
     /// the messages map and updating the update queues.
     fn process_incoming_msgs(&mut self) {
         while let Ok(message) = self.rx.try_recv() {
+            debug!(
+                "processing received message: {:?}",
+                message.message.message_name()
+            );
             // first update the update queues
             for (_, (id, queue)) in self.update_queues.iter_mut() {
                 if *id == message.message.message_id() {
