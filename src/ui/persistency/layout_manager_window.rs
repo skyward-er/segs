@@ -6,8 +6,9 @@ use egui::{
 };
 use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_file::FileDialog;
+use tracing::{debug, error};
 
-use crate::ui::composable_view::ComposableViewState;
+use crate::{error::ErrInstrument, ui::composable_view::ComposableViewState};
 
 use super::LayoutManager;
 
@@ -107,7 +108,7 @@ fn show_layouts_table(
             let mut to_delete: Option<PathBuf> = None;
 
             for key in layout_manager.layouts().keys() {
-                let name = key.to_str().unwrap();
+                let name = key.to_str().log_expect("Unable to convert path to string");
                 let is_selected = selection
                     .as_ref()
                     .map_or_else(|| false, |selected_key| selected_key == key);
@@ -153,11 +154,17 @@ fn show_layouts_table(
                 selection.replace(to_select);
             }
             if let Some(to_open) = to_open {
-                layout_manager.load_layout(&to_open, state);
-                selection.replace(to_open.clone());
+                // FIXME when error dialog will be implemented this will be changed
+                if layout_manager.load_layout(&to_open, state).is_ok() {
+                    selection.replace(to_open.clone());
+                } else {
+                    error!("Error opening layout: {:?}", to_open);
+                }
             }
             if let Some(to_delete) = to_delete {
-                layout_manager.delete(&to_delete);
+                if let Err(e) = layout_manager.delete(&to_delete) {
+                    error!("Error deleting layout: {:?}", e);
+                }
             }
         });
 }
@@ -195,25 +202,23 @@ fn show_action_buttons(
             if let Some(file_dialog) = file_dialog {
                 if file_dialog.show(ui.ctx()).selected() {
                     if let Some(file) = file_dialog.path() {
-                        println!("Selected layout to import: {:?}", file);
+                        debug!("Selected layout to import: {:?}", file);
 
-                        let file_name: &std::ffi::OsStr = file.file_name().unwrap();
+                        let file_name: &std::ffi::OsStr =
+                            file.file_name().log_expect("Unable to get file name");
                         let layout_path = layout_manager.layouts_path();
                         let destination = layout_path.join(file_name);
 
                         // First check if the layouts folder exists
                         if !layout_path.exists() {
-                            match fs::create_dir_all(&layout_manager.layouts_path()) {
-                                Ok(_) => println!("Created layouts folder"),
-                                Err(e) => {
-                                    println!("Error creating layouts folder: {:?}", e)
-                                }
-                            }
+                            fs::create_dir_all(layout_manager.layouts_path())
+                                .log_expect("Unable to create layouts folder");
+                            debug!("Created layouts folder");
                         }
 
                         match fs::copy(file, destination.clone()) {
                             Ok(_) => {
-                                println!("Layout imported in {}", destination.to_str().unwrap());
+                                debug!("Layout imported in {}", destination.to_str().unwrap());
                                 selection.replace(file_name.into());
                                 layout_manager.reload_layouts();
                                 layout_manager.load_layout(&file_name, state);
