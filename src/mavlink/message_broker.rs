@@ -92,7 +92,7 @@ impl MessageBroker {
     /// validity based on `is_valid` method of the view.
     pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
         self.process_incoming_msgs();
-        if !view.is_valid() || !self.update_queues.contains_key(view.widget_id()) {
+        if !view.is_valid() || !self.is_view_subscribed(view.widget_id()) {
             self.init_view(view)?;
         } else {
             self.update_view(view)?;
@@ -149,10 +149,18 @@ impl MessageBroker {
         self.task = Some(handle);
     }
 
+    pub fn unsubscribe_all_views(&mut self) {
+        self.update_queues.clear();
+    }
+
     /// Clears all the messages stored in the broker. Useful in message replay
     /// scenarios.
     pub fn clear(&mut self) {
         self.messages.clear();
+    }
+
+    fn is_view_subscribed(&self, widget_id: &egui::Id) -> bool {
+        self.update_queues.contains_key(widget_id)
     }
 
     /// Init a view in case of cache invalidation or first time initialization.
