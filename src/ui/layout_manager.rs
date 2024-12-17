@@ -6,6 +6,9 @@ use egui::{
 };
 use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_file::FileDialog;
+use tracing::{debug, info, trace, warn};
+
+use crate::error::ErrInstrument;
 
 use super::{composable_view::ComposableViewState, ComposableView};
 
@@ -32,10 +35,12 @@ impl LayoutManager {
     /// Chooses the layouts path and gets the previously selected layout from storage
     pub fn new(app_name: &str, storage: &dyn eframe::Storage) -> Self {
         let mut layout_manager = Self {
-            layouts_path: eframe::storage_dir(app_name).unwrap().join(LAYOUTS_DIR),
+            layouts_path: eframe::storage_dir(app_name)
+                .log_expect("Unable to get storage dir")
+                .join(LAYOUTS_DIR),
             selection: storage
                 .get_string(SELECTED_LAYOUT_KEY)
-                .map(|path| PathBuf::from_str(path.as_str()).unwrap()),
+                .map(|path| PathBuf::from_str(&path).log_expect("Path is not valid")),
             ..Self::default()
         };
         layout_manager.reload_layouts();
@@ -44,27 +49,35 @@ impl LayoutManager {
 
     /// Saves in permanent storage the file name of the currently displayed layout
     pub fn save_displayed(&self, storage: &mut dyn eframe::Storage) {
-        if let Some(displayed) = self.displayed.as_ref().map(|s| s.to_str()).flatten() {
+        if let Some(displayed) = self.displayed.as_ref().and_then(|s| s.to_str()) {
             storage.set_string(SELECTED_LAYOUT_KEY, displayed.to_string());
-            println!("Layout \"{}\" will be displayed next time", displayed)
+            trace!(
+                "Next time the app is opened, the layout {} will be displayed",
+                displayed
+            );
         }
     }
 
     /// Scans the layout directory and reloads the layouts
     pub fn reload_layouts(&mut self) {
         if let Ok(files) = self.layouts_path.read_dir() {
+            trace!("Reloading layouts from {:?}", self.layouts_path);
             self.layouts = files
-                .flat_map(|x| x)
+                .flatten()
                 .map(|path| path.path())
-                .map(|path| {
-                    if let Some(layout) = ComposableViewState::from_file(&path) {
-                        let path: PathBuf = path.file_stem().unwrap().into();
+                .flat_map(|path| match ComposableViewState::from_file(&path) {
+                    Ok(layout) => {
+                        let path: PathBuf = path
+                            .file_stem()
+                            .log_expect("Unable to get file stem")
+                            .into();
                         Some((path, layout))
-                    } else {
+                    }
+                    Err(e) => {
+                        warn!("Error loading layout at {:?}: {:?}", path, e);
                         None
                     }
                 })
-                .flatten()
                 .collect();
         }
     }
@@ -72,14 +85,15 @@ impl LayoutManager {
     pub fn get_selected(&self) -> Option<&ComposableViewState> {
         self.selection
             .as_ref()
-            .map(|selection| self.layouts.get(selection))
-            .flatten()
+            .and_then(|selection| self.layouts.get(selection))
     }
 
-    pub fn delete(&mut self, key: &PathBuf) {
+    pub fn delete(&mut self, key: &PathBuf) -> anyhow::Result<()> {
         if self.layouts.contains_key(key) {
-            let _ = fs::remove_file(self.layouts_path.join(key).with_extension("json"));
+            info!("Deleting layout {:?}", key);
+            fs::remove_file(self.layouts_path.join(key).with_extension("json"))?;
         }
+        Ok(())
     }
 
     pub fn try_display_selected_layout(cv: &mut ComposableView) {

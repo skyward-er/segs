@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 use mavlink_bindgen::parser::{MavProfile, MavType};
 
+use crate::error::ErrInstrument;
+
 use super::MAVLINK_PROFILE_SERIALIZED;
 
 /// Reflection context for MAVLink messages.
@@ -22,7 +24,7 @@ impl ReflectionContext {
     /// Create a new reflection context.
     pub fn new() -> Self {
         let profile: MavProfile = serde_json::from_str(MAVLINK_PROFILE_SERIALIZED)
-            .expect("Failed to deserialize MavProfile");
+            .log_expect("Failed to deserialize MavProfile");
         let id_name_map = profile
             .messages
             .iter()

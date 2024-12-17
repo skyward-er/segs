@@ -1,4 +1,6 @@
 #![warn(clippy::expect_used)]
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::panic)]
 
 mod error;
 mod mavlink;
@@ -53,7 +55,7 @@ fn main() -> Result<(), eframe::Error> {
             MSG_MANAGER
                 .set(Mutex::new(MessageBroker::new(
                     // FIXME: Choose where to put the channel size of the MessageBroker
-                    NonZeroUsize::new(50).unwrap(),
+                    NonZeroUsize::new(50).log_unwrap(),
                     ctx.egui_ctx.clone(),
                 )))
                 .log_expect("Unable to set MessageManager");

@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 use source_window::{sources_window, SourceSettings};
 
 use crate::{
+    error::ErrInstrument,
     mavlink::{
-        extract_from_message, MessageData, MessageView, TimedMessage, ROCKET_FLIGHT_TM_DATA,
+        extract_from_message, MavlinkResult, MessageData, MessageView, TimedMessage,
+        ROCKET_FLIGHT_TM_DATA,
     },
     ui::composable_view::PaneResponse,
     MSG_MANAGER,
@@ -76,7 +78,12 @@ impl PaneBehavior for Plot2DPane {
 
         let mut plot_lines = Vec::new();
         if self.plot_active {
-            MSG_MANAGER.get().unwrap().lock().refresh_view(view);
+            MSG_MANAGER
+                .get()
+                .unwrap()
+                .lock()
+                .refresh_view(view)
+                .log_expect("MessageView may be invalid");
             let acc_points = &view.points;
 
             let field_x = &view.settings.x_field;
@@ -163,27 +170,29 @@ impl MessageView for PlotMessageView {
         self.cache_valid
     }
 
-    fn populate_view(&mut self, msg_slice: &[TimedMessage]) {
+    fn populate_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()> {
         self.points.clear();
         let MsgSources {
             x_field, y_fields, ..
         } = &self.settings;
         for msg in msg_slice {
-            let x: f64 = extract_from_message(&msg.message, [x_field])[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields);
+            let x: f64 = extract_from_message(&msg.message, [x_field])?[0];
+            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields)?;
             self.points.push((x, ys));
         }
+        Ok(())
     }
 
-    fn update_view(&mut self, msg_slice: &[TimedMessage]) {
+    fn update_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()> {
         let MsgSources {
             x_field, y_fields, ..
         } = &self.settings;
         for msg in msg_slice {
-            let x: f64 = extract_from_message(&msg.message, [x_field])[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields);
+            let x: f64 = extract_from_message(&msg.message, [x_field])?[0];
+            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields)?;
             self.points.push((x, ys));
         }
+        Ok(())
     }
 }
 
