@@ -1,4 +1,4 @@
-use crate::{error::ErrInstrument, mavlink, MSG_MANAGER};
+use crate::{error::ErrInstrument, mavlink, msg_broker};
 
 use super::{
     panes::{Pane, PaneBehavior},
@@ -13,7 +13,7 @@ use std::{
 use egui::{Key, Modifiers};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, trace};
 
 #[derive(Default)]
 pub struct ComposableView {
@@ -249,11 +249,7 @@ impl SourceWindow {
                 ui.end_row();
             });
         if ui.button("Connect").clicked() {
-            MSG_MANAGER
-                .get()
-                .unwrap()
-                .lock()
-                .listen_from_ethernet_port(self.port);
+            msg_broker!().listen_from_ethernet_port(self.port);
             *can_be_closed = true;
         }
     }

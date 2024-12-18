@@ -7,7 +7,7 @@ use std::{
 
 use tracing::{info, trace, warn};
 
-use crate::{error::ErrInstrument, MSG_MANAGER};
+use crate::{error::ErrInstrument, msg_broker};
 
 use super::super::composable_view::ComposableViewState;
 
@@ -103,7 +103,7 @@ impl LayoutManager {
             .ok_or(anyhow::anyhow!("Layout not found"))?;
         *state = layout.clone();
         self.current_layout = Some(path.as_ref().into());
-        MSG_MANAGER.get().unwrap().lock().unsubscribe_all_views();
+        msg_broker!().unsubscribe_all_views();
         Ok(())
     }
 

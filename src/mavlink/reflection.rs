@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use anyhow::anyhow;
 use mavlink_bindgen::parser::{MavProfile, MavType};
 
 use crate::error::ErrInstrument;
@@ -54,30 +55,28 @@ impl ReflectionContext {
     }
 
     /// Get all field names for a message by its ID.
-    pub fn get_fields_by_id(&self, message_id: u32) -> Vec<&str> {
-        self.mavlink_profile
+    pub fn get_fields_by_id(&self, message_id: u32) -> anyhow::Result<Vec<&str>> {
+        Ok(self
+            .mavlink_profile
             .messages
             .iter()
             .find(|(_, m)| m.id == message_id)
             .map(|(_, m)| &m.fields)
-            .unwrap_or_else(|| {
-                panic!("Message ID {} not found in profile", message_id);
-            })
+            .ok_or(anyhow!("Message ID {} not found in profile", message_id))?
             .iter()
             .map(|f| f.name.as_str())
-            .collect()
+            .collect())
     }
 
     /// Get all plottable field names for a message by its ID.
-    pub fn get_plottable_fields_by_id(&self, message_id: u32) -> Vec<&str> {
-        self.mavlink_profile
+    pub fn get_plottable_fields_by_id(&self, message_id: u32) -> anyhow::Result<Vec<&str>> {
+        Ok(self
+            .mavlink_profile
             .messages
             .iter()
             .find(|(_, m)| m.id == message_id)
             .map(|(_, m)| &m.fields)
-            .unwrap_or_else(|| {
-                panic!("Message ID {} not found in profile", message_id);
-            })
+            .ok_or(anyhow!("Message ID {} not found in profile", message_id))?
             .iter()
             .filter(|f| {
                 matches!(
@@ -95,21 +94,20 @@ impl ReflectionContext {
                 )
             })
             .map(|f| f.name.as_str())
-            .collect()
+            .collect())
     }
 
     /// Get all field names for a message by its name.
-    pub fn get_fields_by_name(&self, message_name: &str) -> Vec<&str> {
-        self.mavlink_profile
+    pub fn get_fields_by_name(&self, message_name: &str) -> anyhow::Result<Vec<&str>> {
+        Ok(self
+            .mavlink_profile
             .messages
             .iter()
             .find(|(_, m)| m.name == message_name)
             .map(|(_, m)| &m.fields)
-            .unwrap_or_else(|| {
-                panic!("Message {} not found in profile", message_name);
-            })
+            .ok_or(anyhow!("Message {} not found in profile", message_name))?
             .iter()
             .map(|f| f.name.as_str())
-            .collect()
+            .collect())
     }
 }

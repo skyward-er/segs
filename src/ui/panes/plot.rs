@@ -11,8 +11,8 @@ use crate::{
         extract_from_message, MavlinkResult, MessageData, MessageView, TimedMessage,
         ROCKET_FLIGHT_TM_DATA,
     },
+    msg_broker,
     ui::composable_view::PaneResponse,
-    MSG_MANAGER,
 };
 
 use super::PaneBehavior;
@@ -78,10 +78,7 @@ impl PaneBehavior for Plot2DPane {
 
         let mut plot_lines = Vec::new();
         if self.plot_active {
-            MSG_MANAGER
-                .get()
-                .unwrap()
-                .lock()
+            msg_broker!()
                 .refresh_view(view)
                 .log_expect("MessageView may be invalid");
             let acc_points = &view.points;
