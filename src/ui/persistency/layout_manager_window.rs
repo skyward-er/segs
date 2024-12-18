@@ -216,14 +216,17 @@ fn show_action_buttons(
                             debug!("Created layouts folder");
                         }
 
-                        match fs::copy(file, destination.clone()) {
-                            Ok(_) => {
-                                debug!("Layout imported in {}", destination.to_str().unwrap());
-                                selection.replace(file_name.into());
-                                layout_manager.reload_layouts();
-                                layout_manager.load_layout(&file_name, state);
-                            }
-                            Err(e) => println!("Error importing layout: {:?}", e),
+                        if let Err(e) = fs::copy(file, destination.clone()) {
+                            // FIXME when error dialog will be implemented this will be changed
+                            error!("Error importing layout: {:?}", e);
+                        }
+
+                        debug!("Layout imported in {}", destination.to_str().log_unwrap());
+                        selection.replace(file_name.into());
+                        layout_manager.reload_layouts();
+                        if let Err(e) = layout_manager.load_layout(file_name, state) {
+                            // FIXME when error dialog will be implemented this will be changed
+                            error!("Error loading imported layout: {:?}", e);
                         }
                     }
                 }
@@ -251,14 +254,20 @@ fn show_action_buttons(
 
                 let to_save =
                     text_edit_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                let to_save = to_save || save_button_resp.clicked();
-                to_save
+
+                to_save || save_button_resp.clicked()
             });
 
             if to_save {
                 let name = text_input.clone();
-                layout_manager.save_layout(&name, &state);
-                *selection = Some(name.clone().into());
+                if let Err(e) = layout_manager.save_layout(&name, state) {
+                    // FIXME when error dialog will be implemented this will be changed
+                    error!("Error saving layout: {:?}", e);
+                } else {
+                    layout_manager.reload_layouts();
+                    selection.replace(name.clone().into());
+                }
+                *selection = Some(name.into());
             }
         });
     });

@@ -3,6 +3,8 @@ use crate::{
     MAVLINK_PROFILE,
 };
 
+use crate::error::ErrInstrument;
+
 use super::{LineSettings, MsgSources};
 
 pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut SourceSettings) {
@@ -18,7 +20,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut SourceSettings) {
             for msg in MAVLINK_PROFILE.sorted_messages() {
                 ui.selectable_value(
                     plot_settings.get_mut_msg_id(),
-                    MavMessage::message_id_from_name(msg).unwrap(),
+                    MavMessage::message_id_from_name(msg).log_expect("Invalid message name"),
                     msg,
                 );
             }
@@ -30,7 +32,9 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut SourceSettings) {
     }
 
     // check fields and assign a default field_x and field_y once the msg is changed
-    let fields = MAVLINK_PROFILE.get_plottable_fields_by_id(*plot_settings.get_msg_id());
+    let fields = MAVLINK_PROFILE
+        .get_plottable_fields_by_id(*plot_settings.get_msg_id())
+        .log_expect("Invalid message id");
     // get the first field that is in the list of fields or the previous if valid
     let x_field = plot_settings.get_x_field();
     let new_field_x = fields
@@ -104,7 +108,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut SourceSettings) {
         let next_field = fields
             .iter()
             .find(|f| !plot_settings.contains_field(f))
-            .unwrap();
+            .log_unwrap();
         plot_settings.add_field(next_field.to_string());
     }
 }

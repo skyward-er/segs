@@ -26,6 +26,16 @@ static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionCo
 
 static APP_NAME: &str = "segs";
 
+#[macro_export]
+macro_rules! msg_broker {
+    () => {
+        $crate::MSG_MANAGER
+            .get()
+            .log_expect("Unable to get MessageBroker")
+            .lock()
+    };
+}
+
 fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
     let env_filter = EnvFilter::builder().from_env_lossy();
