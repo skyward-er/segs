@@ -1,4 +1,4 @@
-use super::{plot_2d::Plot2DPane, Pane, PaneBehavior, PaneKind};
+use super::PaneBehavior;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::composable_view::{PaneAction, PaneResponse};
@@ -29,7 +29,7 @@ impl PartialEq for DefaultPane {
 }
 
 impl PaneBehavior for DefaultPane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui, tile_id: egui_tiles::TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
         let pane_rect = ui.max_rect();
 
@@ -51,11 +51,9 @@ impl PaneBehavior for DefaultPane {
                 log::debug!("Horizontal Split button clicked");
             }
             height_occupied += btn.rect.height();
-            let btn = ui.button("Plot");
+            let btn = ui.button("widget Gallery");
             if btn.clicked() {
-                response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
-                    Plot2DPane::default(),
-                ))));
+                response.set_action(PaneAction::ReplaceThroughGallery(tile_id));
             }
             height_occupied += btn.rect.height();
             if !self.fixed {

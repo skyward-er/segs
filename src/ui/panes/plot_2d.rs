@@ -42,7 +42,7 @@ impl PartialEq for Plot2DPane {
 }
 
 impl PaneBehavior for Plot2DPane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui, _tile_id: egui_tiles::TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let mut window_visible = self.settings_visible;

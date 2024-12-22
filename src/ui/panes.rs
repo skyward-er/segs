@@ -1,7 +1,8 @@
 mod default;
 mod messages_viewer;
-mod plot_2d;
+pub mod plot_2d;
 
+use egui_tiles::TileId;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
@@ -28,13 +29,13 @@ impl Pane {
 
 #[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse;
+    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse;
     fn contains_pointer(&self) -> bool;
 }
 
 impl PaneBehavior for Pane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
-        self.pane.ui(ui)
+    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse {
+        self.pane.ui(ui, tile_id)
     }
 
     fn contains_pointer(&self) -> bool {

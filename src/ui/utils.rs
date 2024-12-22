@@ -1,14 +1,15 @@
 use egui::containers::Frame;
 use egui::{Shadow, Stroke, Style, Ui};
+use egui_tiles::TileId;
 
 use super::panes::{Pane, PaneBehavior};
 
 /// This function wraps a ui into a popup frame intended for the pane that needs
 /// to be maximized on screen.
-pub fn maximized_pane_ui(ui: &mut Ui, pane: &mut Pane) {
+pub fn maximized_pane_ui(ui: &mut Ui, tile_id: TileId, pane: &mut Pane) {
     Frame::popup(&Style::default())
         .fill(egui::Color32::TRANSPARENT)
         .shadow(Shadow::NONE)
         .stroke(Stroke::NONE)
-        .show(ui, |ui| pane.ui(ui));
+        .show(ui, |ui| pane.ui(ui, tile_id));
 }
