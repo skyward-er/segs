@@ -132,6 +132,11 @@ impl eframe::App for ComposableView {
                 if ui.button("Layout Manager").clicked() {
                     self.layout_manager.toggle_open_state();
                 }
+
+                // If a pane is maximized show a visual clue
+                if self.maximized_pane.is_some() {
+                    ui.label("Pane Maximized!");
+                }
             })
         });
 
