@@ -2,6 +2,7 @@ mod source_window;
 
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoints};
+use egui_tiles::TileId;
 use serde::{Deserialize, Serialize};
 use source_window::{sources_window, SourceSettings};
 
@@ -50,7 +51,7 @@ impl PartialEq for Plot2DPane {
 }
 
 impl PaneBehavior for Plot2DPane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let Self {

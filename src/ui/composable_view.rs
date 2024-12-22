@@ -5,6 +5,7 @@ use super::{
     persistency::{LayoutManager, LayoutManagerWindow},
     shortcuts,
     utils::maximized_pane_ui,
+    widget_gallery::WidgetGallery,
 };
 use std::{
     fs,
@@ -21,6 +22,7 @@ pub struct ComposableView {
     /// Persistent state of the app
     state: ComposableViewState,
     layout_manager: LayoutManager,
+    widget_gallery: WidgetGallery,
     behavior: ComposableBehavior,
     maximized_pane: Option<TileId>,
 
@@ -109,19 +111,23 @@ impl eframe::App for ComposableView {
                         panes_tree.remove_recursively(hovered_tile);
                     }
                 }
-                PaneAction::Replace(new_pane) => {
+                PaneAction::Replace(tile_id, new_pane) => {
                     debug!(
                         "Called Replace on tile {:?} with pane {:?}",
                         hovered_tile, new_pane
                     );
-                    panes_tree.tiles.insert(hovered_tile, Tile::Pane(*new_pane));
+                    panes_tree.tiles.insert(tile_id, Tile::Pane(*new_pane));
+                }
+                PaneAction::ReplaceThroughGallery(source_tile) => {
+                    println!("Handling replace_through_gallery action");
+                    self.widget_gallery.replace_tile(source_tile);
                 }
                 PaneAction::Maximize => {
                     // This is a toggle: if there is not currently a maximized pane,
                     // maximize the hovered pane, otherwize remove the maximized pane.
                     if self.maximized_pane.is_some() {
                         self.maximized_pane = None;
-                    } else {
+                    } else if let Some(hovered_tile) = hovered_pane {
                         let hovered_pane_is_default = panes_tree
                             .tiles
                             .get(hovered_tile)
@@ -175,7 +181,7 @@ impl eframe::App for ComposableView {
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(maximized_pane) = self.maximized_pane {
                 if let Some(Tile::Pane(pane)) = panes_tree.tiles.get_mut(maximized_pane) {
-                    maximized_pane_ui(ui, pane);
+                    maximized_pane_ui(ui, maximized_pane, pane);
                 } else {
                     panic!("Maximized pane not found in tree!");
                 }
@@ -314,13 +320,13 @@ impl Behavior<Pane> for ComposableBehavior {
     fn pane_ui(
         &mut self,
         ui: &mut egui::Ui,
-        _tile_id: TileId,
+        tile_id: TileId,
         pane: &mut Pane,
     ) -> egui_tiles::UiResponse {
         let PaneResponse {
             action_called,
             drag_response,
-        } = pane.ui(ui);
+        } = pane.ui(ui, tile_id);
         // Capture the action and store it to be consumed in the update function
         if let Some(action_called) = action_called {
             self.action = Some(action_called);
@@ -363,7 +369,8 @@ pub enum PaneAction {
     SplitH,
     SplitV,
     Close,
-    Replace(Box<Pane>),
+    Replace(TileId, Box<Pane>),
+    ReplaceThroughGallery(TileId),
     Maximize,
     Exit,
 }
