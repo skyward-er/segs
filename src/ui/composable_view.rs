@@ -49,6 +49,10 @@ impl eframe::App for ComposableView {
             ((Modifiers::CTRL, Key::V), PaneAction::SplitV),
             ((Modifiers::CTRL, Key::H), PaneAction::SplitH),
             ((Modifiers::CTRL, Key::W), PaneAction::Close),
+            (
+                (Modifiers::CTRL, Key::R),
+                PaneAction::ReplaceThroughGallery(hovered_pane),
+            ),
             ((Modifiers::SHIFT, Key::Escape), PaneAction::Maximize),
             ((Modifiers::NONE, Key::Escape), PaneAction::Exit),
         ];
@@ -105,7 +109,7 @@ impl eframe::App for ComposableView {
                     println!("Handling replace action");
                     panes_tree.tiles.insert(source_tile, Tile::Pane(*new_pane));
                 }
-                PaneAction::ReplaceThroughGallery(source_tile) => {
+                PaneAction::ReplaceThroughGallery(Some(source_tile)) => {
                     println!("Handling replace_through_gallery action");
                     self.widget_gallery.replace_tile(source_tile);
                 }
@@ -135,6 +139,7 @@ impl eframe::App for ComposableView {
                         self.maximized_pane = None;
                     }
                 }
+                _ => panic!("Unable to handle action"),
             }
         }
 
@@ -372,7 +377,7 @@ pub enum PaneAction {
     SplitV,
     Close,
     Replace(TileId, Box<Pane>),
-    ReplaceThroughGallery(TileId),
+    ReplaceThroughGallery(Option<TileId>),
     Maximize,
     Exit,
 }

@@ -25,7 +25,7 @@ impl Default for DefaultPane {
 }
 
 impl PartialEq for DefaultPane {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         true
     }
 }
@@ -45,7 +45,7 @@ impl PaneBehavior for DefaultPane {
                     debug!("Horizontal Split button clicked");
                 }
                 if ui.button("Widget Gallery").clicked() {
-                    response.set_action(PaneAction::ReplaceThroughGallery(tile_id));
+                    response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
                 }
             })
             .response
