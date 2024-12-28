@@ -53,7 +53,7 @@ impl PaneBehavior for DefaultPane {
             height_occupied += btn.rect.height();
             let btn = ui.button("widget Gallery");
             if btn.clicked() {
-                response.set_action(PaneAction::ReplaceThroughGallery(tile_id));
+                response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
             }
             height_occupied += btn.rect.height();
             if !self.fixed {
