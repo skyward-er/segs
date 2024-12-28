@@ -18,7 +18,7 @@ use crate::{
 
 use super::PaneBehavior;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Plot2DPane {
     // UI settings
     #[serde(skip)]
@@ -142,6 +142,17 @@ struct PlotMessageView {
     id: egui::Id,
     #[serde(skip)]
     cache_valid: bool,
+}
+
+impl Default for PlotMessageView {
+    fn default() -> Self {
+        Self {
+            settings: MsgSources::default(),
+            points: Vec::new(),
+            id: egui::Id::new("plot"), // TODO: Fix ids
+            cache_valid: false,
+        }
+    }
 }
 
 impl PlotMessageView {
