@@ -24,3 +24,5 @@ log = "0.4"
 # for dynamic dispatch
 enum_dispatch = "0.3"
 egui_extras = "0.29.1"
+strum = "0.26.3"
+strum_macros = "0.26.4"

@@ -1,9 +1,10 @@
 use egui::Context;
 use egui_tiles::TileId;
+use strum::{EnumMessage, IntoEnumIterator};
 
 use super::{
     composable_view::PaneAction,
-    panes::{plot_2d::Plot2DPane, Pane, PaneKind},
+    panes::{Pane, PaneKind},
 };
 
 #[derive(Default)]
@@ -24,18 +25,16 @@ impl WidgetGallery {
             .collapsible(false)
             .open(&mut window_visible)
             .show(ctx, |ui| {
-                if ui.button("Plot").clicked() {
-                    if let Some(tile_id) = self.tile_id {
-                        Some(PaneAction::Replace(
-                            tile_id,
-                            Pane::boxed(PaneKind::Plot2D(Plot2DPane::default())),
-                        ))
-                    } else {
-                        None
+                for pane in PaneKind::iter() {
+                    if let PaneKind::Default(_) = pane {
+                        continue;
+                    } else if ui.button(pane.get_message().unwrap()).clicked() {
+                        if let Some(tile_id) = self.tile_id {
+                            return Some(PaneAction::Replace(tile_id, Pane::boxed(pane)));
+                        }
                     }
-                } else {
-                    None
                 }
+                None
             });
         self.open = window_visible;
 
