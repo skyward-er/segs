@@ -3251,6 +3251,7 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.95",
+]
 
 [[package]]
 name = "svgtypes"
