@@ -1,6 +1,6 @@
 mod pid_elements;
 
-use egui::{PointerButton, Sense, Theme};
+use egui::{epaint::PathStroke, Color32, PointerButton, Pos2, Sense, Stroke, Theme};
 use pid_elements::{PidElement, PidSymbol};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -14,6 +14,8 @@ pub struct PidPane {
     elements: Vec<PidElement>,
     dragged: Option<usize>,
     context_menu_pos: (i32, i32),
+    connect_element: Option<usize>,
+    connections: Vec<(usize, usize)>,
 }
 
 impl PaneBehavior for PidPane {
@@ -51,6 +53,24 @@ impl PaneBehavior for PidPane {
             }
         }
 
+        for connection in &self.connections {
+            let elem1 = &self.elements[connection.0];
+            let elem2 = &self.elements[connection.1];
+
+            let x1 = (elem1.pos.0 + elem1.size / 2) * step_size;
+            let y1 = (elem1.pos.1 + elem1.size / 2) * step_size;
+            let x2 = (elem2.pos.0 + elem2.size / 2) * step_size;
+            let y2 = (elem2.pos.1 + elem2.size / 2) * step_size;
+
+            painter.line_segment(
+                [
+                    Pos2::new(x1 as f32, y1 as f32),
+                    Pos2::new(x2 as f32, y2 as f32),
+                ],
+                PathStroke::new(1.0, Color32::GREEN),
+            );
+        }
+
         // Draw elements
         for element in &self.elements {
             let image_rect = egui::Rect::from_min_size(
@@ -81,7 +101,13 @@ impl PaneBehavior for PidPane {
             ui.set_max_width(200.0); // To make sure we wrap long text
 
             if self.is_hovering_element(self.context_menu_pos) {
-                let _ = ui.button("Delete");
+                if ui.button("Connect").clicked() {
+                    self.connect_element = self
+                        .elements
+                        .iter()
+                        .position(|element| element.contains(self.context_menu_pos));
+                    ui.close_menu();
+                }
             }
 
             ui.menu_button("Symbols", |ui| {
@@ -97,6 +123,20 @@ impl PaneBehavior for PidPane {
                 }
             });
         });
+
+        if response.clicked() && self.connect_element.is_some() {
+            let second_connect_element = self
+                .elements
+                .iter()
+                .position(|element| element.contains(pointer_pos));
+
+            if let (Some(elem1), Some(elem2)) = (self.connect_element, second_connect_element) {
+                if elem1 != elem2 {
+                    self.connections.push((elem1, elem2));
+                }
+                self.connect_element.take();
+            }
+        }
 
         if response.drag_started() {
             // Find which element the drag started on
