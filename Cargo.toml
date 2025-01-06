@@ -12,7 +12,7 @@ license = "MIT"
 egui_tiles = "0.12"
 eframe = { version = "0.31", features = ["persistence"] }
 egui = { version = "0.31", features = ["log"] }
-egui_extras = "0.31"
+egui_extras = { version = "0.31", features = ["svg"] }
 egui_plot = "0.31"
 egui_file = "0.22"
 # =========== Asynchronous ===========

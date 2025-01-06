@@ -1,6 +1,8 @@
 mod default;
 mod messages_viewer;
+mod pid_drawing_tool;
 pub mod plot;
+mod plot;
 
 use egui_tiles::TileId;
 use enum_dispatch::enum_dispatch;
@@ -87,6 +89,7 @@ pub enum PaneKind {
 
     #[strum(message = "Plot 2D")]
     Plot2D(plot::Plot2DPane),
+    PidDrawingTool(pid_drawing_tool::PidPane),
 }
 
 impl Default for PaneKind {

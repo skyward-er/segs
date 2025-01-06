@@ -258,6 +258,9 @@ impl eframe::App for App {
 
 impl App {
     pub fn new(app_name: &str, ctx: &CreationContext) -> Self {
+        // Load the image loaders
+        egui_extras::install_image_loaders(&ctx.egui_ctx);
+
         let mut layout_manager = if let Some(storage) = ctx.storage {
             LayoutManager::new(app_name, storage)
         } else {
