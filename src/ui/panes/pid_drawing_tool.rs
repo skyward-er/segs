@@ -1,8 +1,9 @@
 mod pid_elements;
 
-use egui::{Sense, Theme};
-use pid_elements::PidElement;
+use egui::{PointerButton, Sense, Theme};
+use pid_elements::{PidElement, PidSymbol};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 use crate::ui::composable_view::PaneResponse;
 
@@ -12,25 +13,7 @@ use super::PaneBehavior;
 pub struct PidPane {
     elements: Vec<PidElement>,
     dragged: Option<usize>,
-}
-
-impl PidPane {
-    pub fn new() -> Self {
-        let mut main_window = PidPane::default();
-        main_window.elements = vec![
-            PidElement {
-                x: 2,
-                y: 2,
-                size: 10,
-            },
-            PidElement {
-                x: 10,
-                y: 4,
-                size: 10,
-            },
-        ];
-        main_window
-    }
+    context_menu_pos: (i32, i32),
 }
 
 impl PaneBehavior for PidPane {
@@ -72,8 +55,8 @@ impl PaneBehavior for PidPane {
         for element in &self.elements {
             let image_rect = egui::Rect::from_min_size(
                 egui::Pos2::new(
-                    (element.x * step_size) as f32,
-                    (element.y * step_size) as f32,
+                    (element.pos.0 * step_size) as f32,
+                    (element.pos.1 * step_size) as f32,
                 ),
                 egui::Vec2::new(
                     (element.size * step_size) as f32,
@@ -81,46 +64,57 @@ impl PaneBehavior for PidPane {
                 ),
             );
 
-            match theme {
-                Theme::Light => {
-                    egui::Image::new(egui::include_image!("../../../icons/ball_valve.svg"))
-                        .paint_at(ui, image_rect);
-                }
-                Theme::Dark => {
-                    egui::Image::new(egui::include_image!("../../../icons/ball_valve_dark.svg"))
-                        .paint_at(ui, image_rect);
-                }
-            }
+            egui::Image::new(element.get_image(theme)).paint_at(ui, image_rect);
         }
 
-        let (_, response) = ui.allocate_at_least(window_rect.size(), Sense::drag());
+        let (_, response) = ui.allocate_at_least(window_rect.size(), Sense::click_and_drag());
 
-        if let Some(pointer_pos) = response.interact_pointer_pos() {
-            let x = pointer_pos.x;
-            let y = pointer_pos.y;
-            let x_grid = x as i32 / step_size;
-            let y_grid = y as i32 / step_size;
+        let pointer_pos = response
+            .hover_pos()
+            .map(|pos| (pos.x as i32 / step_size, pos.y as i32 / step_size))
+            .unwrap_or((0, 0));
 
-            if response.drag_started() {
-                // Find which element the drag started on
-                self.dragged = self
-                    .elements
-                    .iter()
-                    .position(|element| element.contains(x_grid, y_grid));
+        if response.clicked_by(PointerButton::Secondary) {
+            self.context_menu_pos = pointer_pos;
+        }
+        response.context_menu(|ui| {
+            ui.set_max_width(200.0); // To make sure we wrap long text
+
+            if self.is_hovering_element(self.context_menu_pos) {
+                let _ = ui.button("Delete");
             }
 
-            if response.dragged() {
-                if let Some(dragged) = self.dragged {
-                    let element = &mut self.elements[dragged];
-
-                    element.x = x_grid - element.size / 2;
-                    element.y = y_grid - element.size / 2;
+            ui.menu_button("Symbols", |ui| {
+                for symbol in PidSymbol::iter() {
+                    if ui.button(symbol.to_string()).clicked() {
+                        self.elements.push(PidElement {
+                            pos: self.context_menu_pos,
+                            size: 10,
+                            symbol,
+                        });
+                        ui.close_menu();
+                    }
                 }
+            });
+        });
+
+        if response.drag_started() {
+            // Find which element the drag started on
+            self.dragged = self
+                .elements
+                .iter()
+                .position(|element| element.contains(pointer_pos));
+        }
+        if response.dragged() {
+            if let Some(dragged) = self.dragged {
+                let element = &mut self.elements[dragged];
+
+                element.pos.0 = pointer_pos.0 - element.size / 2;
+                element.pos.1 = pointer_pos.1 - element.size / 2;
             }
-            if response.drag_stopped() {
-                // Reset dragged item
-                self.dragged.take();
-            }
+        }
+        if response.drag_stopped() {
+            self.dragged.take();
         }
 
         PaneResponse::default()
@@ -128,5 +122,14 @@ impl PaneBehavior for PidPane {
 
     fn contains_pointer(&self) -> bool {
         false
+    }
+}
+
+impl PidPane {
+    fn is_hovering_element(&self, pointer_pos: (i32, i32)) -> bool {
+        self.elements
+            .iter()
+            .find(|element| element.contains(pointer_pos))
+            .is_some()
     }
 }
