@@ -50,6 +50,7 @@ fn main() -> Result<(), eframe::Error> {
                     ctx.egui_ctx.clone(),
                 )))
                 .expect("Unable to set MessageManager");
+            egui_extras::install_image_loaders(&ctx.egui_ctx);
             let app = ctx
                 .storage
                 .map(|storage| ComposableView::new(APP_NAME, storage))

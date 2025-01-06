@@ -1,5 +1,6 @@
 mod default;
 mod messages_viewer;
+mod pid_drawing_tool;
 mod plot;
 
 use enum_dispatch::enum_dispatch;
@@ -41,6 +42,7 @@ pub enum PaneKind {
     Default(default::DefaultPane),
     MessagesViewer(messages_viewer::MessagesViewerPane),
     Plot2D(plot::Plot2DPane),
+    PidDrawingTool(pid_drawing_tool::PidPane),
 }
 
 impl Default for PaneKind {

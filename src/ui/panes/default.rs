@@ -1,4 +1,4 @@
-use super::{plot::Plot2DPane, Pane, PaneBehavior, PaneKind};
+use super::{pid_drawing_tool::PidPane, plot::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -48,6 +48,11 @@ impl PaneBehavior for DefaultPane {
                     response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
                         Plot2DPane::new(ui.auto_id_with("plot_2d")),
                     ))));
+                }
+                if ui.button("Pid Drawing Tool").clicked() {
+                    response.set_action(PaneAction::Replace(Pane::boxed(
+                        PaneKind::PidDrawingTool(PidPane::new()),
+                    )));
                 }
             })
             .response
