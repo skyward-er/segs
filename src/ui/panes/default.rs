@@ -51,7 +51,7 @@ impl PaneBehavior for DefaultPane {
                 }
                 if ui.button("Pid Drawing Tool").clicked() {
                     response.set_action(PaneAction::Replace(Pane::boxed(
-                        PaneKind::PidDrawingTool(PidPane::new()),
+                        PaneKind::PidDrawingTool(PidPane::default()),
                     )));
                 }
             })
