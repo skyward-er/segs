@@ -1,8 +1,9 @@
 mod pid_elements;
 
-use egui::{epaint::PathStroke, Color32, PointerButton, Pos2, Sense, Stroke, Theme};
+use egui::{epaint::PathStroke, Color32, PointerButton, Pos2, Sense, Theme, Vec2};
 use pid_elements::{PidElement, PidSymbol};
 use serde::{Deserialize, Serialize};
+use std::f32::consts::PI;
 use strum::IntoEnumIterator;
 
 use crate::ui::composable_view::PaneResponse;
@@ -84,7 +85,9 @@ impl PaneBehavior for PidPane {
                 ),
             );
 
-            egui::Image::new(element.get_image(theme)).paint_at(ui, image_rect);
+            egui::Image::new(element.get_image(theme))
+                .rotate(element.rotation, Vec2::new(0.5, 0.5))
+                .paint_at(ui, image_rect);
         }
 
         let (_, response) = ui.allocate_at_least(window_rect.size(), Sense::click_and_drag());
@@ -108,6 +111,27 @@ impl PaneBehavior for PidPane {
                         .position(|element| element.contains(self.context_menu_pos));
                     ui.close_menu();
                 }
+
+                if ui.button("Rotate 90° ⟲").clicked() {
+                    if let Some(elem) = self
+                        .elements
+                        .iter_mut()
+                        .find(|element| element.contains(self.context_menu_pos))
+                    {
+                        elem.rotation += PI / 2.0;
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("Rotate 90° ⟳").clicked() {
+                    if let Some(elem) = self
+                        .elements
+                        .iter_mut()
+                        .find(|element| element.contains(self.context_menu_pos))
+                    {
+                        elem.rotation -= PI / 2.0;
+                    }
+                    ui.close_menu();
+                }
             }
 
             ui.menu_button("Symbols", |ui| {
@@ -117,6 +141,7 @@ impl PaneBehavior for PidPane {
                             pos: self.context_menu_pos,
                             size: 10,
                             symbol,
+                            rotation: 0.0,
                         });
                         ui.close_menu();
                     }
