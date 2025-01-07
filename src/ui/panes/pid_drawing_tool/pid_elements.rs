@@ -7,6 +7,7 @@ pub struct PidElement {
     pub pos: (i32, i32),
     pub size: i32,
     pub symbol: PidSymbol,
+    pub rotation: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Display)]
