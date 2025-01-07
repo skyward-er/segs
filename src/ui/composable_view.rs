@@ -264,7 +264,7 @@ impl SourceWindow {
         egui::Window::new("Sources")
             .id(ui.id())
             .auto_sized()
-            .collapsible(true)
+            .collapsible(false)
             .movable(true)
             .open(&mut window_is_open)
             .show(ui.ctx(), |ui| {
