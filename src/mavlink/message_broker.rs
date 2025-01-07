@@ -15,7 +15,7 @@ use tracing::debug;
 
 use crate::mavlink::byte_parser;
 
-use super::{MavMessage, Message, TimedMessage};
+use super::{Message, TimedMessage};
 
 const UDP_BUFFER_SIZE: usize = 65527;
 
@@ -38,9 +38,9 @@ pub struct MessageBroker {
     /// Flag to stop the listener
     running_flag: Arc<AtomicBool>,
     /// Listener message sender
-    tx: RingSender<MavMessage>,
+    tx: RingSender<TimedMessage>,
     /// Broker message receiver
-    rx: RingReceiver<MavMessage>,
+    rx: RingReceiver<TimedMessage>,
     /// Task handle for the listener
     task: Option<JoinHandle<Result<()>>>,
     /// Egui context
@@ -101,7 +101,8 @@ impl MessageBroker {
                     .await
                     .context("Failed to receive message")?;
                 for (_, mav_message) in byte_parser(&buf[..len]) {
-                    tx.send(mav_message).context("Failed to send message")?;
+                    tx.send(TimedMessage::just_received(mav_message))
+                        .context("Failed to send message")?;
                     ctx.request_repaint();
                 }
             }
@@ -135,15 +136,15 @@ impl MessageBroker {
         while let Ok(message) = self.rx.try_recv() {
             // first update the update queues
             for (_, (id, queue)) in self.update_queues.iter_mut() {
-                if *id == message.message_id() {
-                    queue.push_back(TimedMessage::just_received(message.clone()));
+                if *id == message.message.message_id() {
+                    queue.push_back(message.clone());
                 }
             }
             // then store the message in the messages map
             self.messages
-                .entry(message.message_id())
+                .entry(message.message.message_id())
                 .or_default()
-                .push(TimedMessage::just_received(message));
+                .push(message);
         }
     }
 
