@@ -1,4 +1,4 @@
-use crate::{error::ErrInstrument, mavlink, ui::panes::PaneKind, MSG_MANAGER};
+use crate::{error::ErrInstrument, mavlink, msg_broker, ui::panes::PaneKind};
 
 use super::{
     panes::{Pane, PaneBehavior},
@@ -125,11 +125,13 @@ impl eframe::App for ComposableView {
                         let hovered_pane_is_default = panes_tree
                             .tiles
                             .get(hovered_tile)
-                            .map(|hovered_pane| match hovered_pane {
-                                Tile::Pane(Pane {
-                                    pane: PaneKind::Default(_),
-                                }) => true,
-                                _ => false,
+                            .map(|hovered_pane| {
+                                matches!(
+                                    hovered_pane,
+                                    Tile::Pane(Pane {
+                                        pane: PaneKind::Default(_),
+                                    })
+                                )
                             })
                             .unwrap_or(false);
                         if !hovered_pane_is_default {
