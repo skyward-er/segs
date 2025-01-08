@@ -1,23 +1,15 @@
 mod default;
 mod messages_viewer;
-mod plot_2d;
+mod plot;
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 use super::composable_view::PaneResponse;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Pane {
     pub pane: PaneKind,
-}
-
-impl Default for Pane {
-    fn default() -> Self {
-        Self {
-            pane: PaneKind::default(),
-        }
-    }
 }
 
 impl Pane {
@@ -48,7 +40,7 @@ impl PaneBehavior for Pane {
 pub enum PaneKind {
     Default(default::DefaultPane),
     MessagesViewer(messages_viewer::MessagesViewerPane),
-    Plot2D(plot_2d::Plot2DPane),
+    Plot2D(plot::Plot2DPane),
 }
 
 impl Default for PaneKind {
