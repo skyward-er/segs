@@ -1,22 +1,34 @@
-mod pid_elements;
+mod connections;
+mod elements;
+mod pos;
+mod symbols;
 
-use egui::{epaint::PathStroke, Color32, PointerButton, Pos2, Sense, Theme, Vec2};
-use pid_elements::{PidElement, PidSymbol};
+use connections::Connection;
+use egui::{epaint::PathStroke, Color32, CursorIcon, PointerButton, Pos2, Sense, Theme, Vec2};
+use elements::Element;
+use pos::Pos;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use strum::IntoEnumIterator;
+use symbols::Symbol;
 
 use crate::ui::composable_view::PaneResponse;
 
 use super::PaneBehavior;
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Piping and instrumentation diagram
+#[derive(Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PidPane {
-    elements: Vec<PidElement>,
+    elements: Vec<Element>,
+    connections: Vec<Connection>,
+
+    /// Index of the element the drag operation started on
     dragged: Option<usize>,
-    context_menu_pos: (i32, i32),
+
+    /// Index of the element the connection operation started on
     connect_element: Option<usize>,
-    connections: Vec<(usize, usize)>,
+
+    context_menu_pos: Pos,
 }
 
 impl PaneBehavior for PidPane {
@@ -24,6 +36,9 @@ impl PaneBehavior for PidPane {
         let step_size: i32 = 10;
         let window_rect = ui.max_rect();
         let painter = ui.painter();
+
+        ui.ctx()
+            .output_mut(|output| output.cursor_icon = CursorIcon::Grab);
 
         let theme = ui.ctx().options(|options| match options.theme_preference {
             egui::ThemePreference::Light => Theme::Light,
@@ -55,13 +70,13 @@ impl PaneBehavior for PidPane {
         }
 
         for connection in &self.connections {
-            let elem1 = &self.elements[connection.0];
-            let elem2 = &self.elements[connection.1];
+            let elem1 = &self.elements[connection.start];
+            let elem2 = &self.elements[connection.end];
 
-            let x1 = (elem1.pos.0 + elem1.size / 2) * step_size;
-            let y1 = (elem1.pos.1 + elem1.size / 2) * step_size;
-            let x2 = (elem2.pos.0 + elem2.size / 2) * step_size;
-            let y2 = (elem2.pos.1 + elem2.size / 2) * step_size;
+            let x1 = (elem1.position.x + elem1.size / 2) * step_size;
+            let y1 = (elem1.position.y + elem1.size / 2) * step_size;
+            let x2 = (elem2.position.x + elem2.size / 2) * step_size;
+            let y2 = (elem2.position.y + elem2.size / 2) * step_size;
 
             painter.line_segment(
                 [
@@ -76,8 +91,8 @@ impl PaneBehavior for PidPane {
         for element in &self.elements {
             let image_rect = egui::Rect::from_min_size(
                 egui::Pos2::new(
-                    (element.pos.0 * step_size) as f32,
-                    (element.pos.1 * step_size) as f32,
+                    (element.position.x * step_size) as f32,
+                    (element.position.y * step_size) as f32,
                 ),
                 egui::Vec2::new(
                     (element.size * step_size) as f32,
@@ -85,7 +100,7 @@ impl PaneBehavior for PidPane {
                 ),
             );
 
-            egui::Image::new(element.get_image(theme))
+            egui::Image::new(element.symbol.get_image(theme))
                 .rotate(element.rotation, Vec2::new(0.5, 0.5))
                 .paint_at(ui, image_rect);
         }
@@ -94,21 +109,24 @@ impl PaneBehavior for PidPane {
 
         let pointer_pos = response
             .hover_pos()
-            .map(|pos| (pos.x as i32 / step_size, pos.y as i32 / step_size))
-            .unwrap_or((0, 0));
+            .map(|pos| Pos {
+                x: pos.x as i32 / step_size,
+                y: pos.y as i32 / step_size,
+            })
+            .unwrap_or(Pos { x: 0, y: 0 });
 
         if response.clicked_by(PointerButton::Secondary) {
-            self.context_menu_pos = pointer_pos;
+            self.context_menu_pos = pointer_pos.clone();
         }
         response.context_menu(|ui| {
             ui.set_max_width(200.0); // To make sure we wrap long text
 
-            if self.is_hovering_element(self.context_menu_pos) {
+            if self.is_hovering_element(&self.context_menu_pos) {
                 if ui.button("Connect").clicked() {
                     self.connect_element = self
                         .elements
                         .iter()
-                        .position(|element| element.contains(self.context_menu_pos));
+                        .position(|element| element.contains(&self.context_menu_pos));
                     ui.close_menu();
                 }
 
@@ -116,7 +134,7 @@ impl PaneBehavior for PidPane {
                     if let Some(elem) = self
                         .elements
                         .iter_mut()
-                        .find(|element| element.contains(self.context_menu_pos))
+                        .find(|element| element.contains(&self.context_menu_pos))
                     {
                         elem.rotation += PI / 2.0;
                     }
@@ -126,7 +144,7 @@ impl PaneBehavior for PidPane {
                     if let Some(elem) = self
                         .elements
                         .iter_mut()
-                        .find(|element| element.contains(self.context_menu_pos))
+                        .find(|element| element.contains(&self.context_menu_pos))
                     {
                         elem.rotation -= PI / 2.0;
                     }
@@ -135,13 +153,13 @@ impl PaneBehavior for PidPane {
             }
 
             ui.menu_button("Symbols", |ui| {
-                for symbol in PidSymbol::iter() {
+                for symbol in Symbol::iter() {
                     if ui.button(symbol.to_string()).clicked() {
-                        self.elements.push(PidElement {
-                            pos: self.context_menu_pos,
+                        self.elements.push(Element {
+                            position: self.context_menu_pos.clone(),
                             size: 10,
-                            symbol,
                             rotation: 0.0,
+                            symbol,
                         });
                         ui.close_menu();
                     }
@@ -153,11 +171,14 @@ impl PaneBehavior for PidPane {
             let second_connect_element = self
                 .elements
                 .iter()
-                .position(|element| element.contains(pointer_pos));
+                .position(|element| element.contains(&pointer_pos));
 
             if let (Some(elem1), Some(elem2)) = (self.connect_element, second_connect_element) {
                 if elem1 != elem2 {
-                    self.connections.push((elem1, elem2));
+                    self.connections.push(Connection {
+                        start: elem1,
+                        end: elem2,
+                    });
                 }
                 self.connect_element.take();
             }
@@ -168,14 +189,14 @@ impl PaneBehavior for PidPane {
             self.dragged = self
                 .elements
                 .iter()
-                .position(|element| element.contains(pointer_pos));
+                .position(|element| element.contains(&pointer_pos));
         }
         if response.dragged() {
             if let Some(dragged) = self.dragged {
                 let element = &mut self.elements[dragged];
 
-                element.pos.0 = pointer_pos.0 - element.size / 2;
-                element.pos.1 = pointer_pos.1 - element.size / 2;
+                element.position.x = pointer_pos.x - element.size / 2;
+                element.position.y = pointer_pos.y - element.size / 2;
             }
         }
         if response.drag_stopped() {
@@ -191,7 +212,7 @@ impl PaneBehavior for PidPane {
 }
 
 impl PidPane {
-    fn is_hovering_element(&self, pointer_pos: (i32, i32)) -> bool {
+    fn is_hovering_element(&self, pointer_pos: &Pos) -> bool {
         self.elements
             .iter()
             .find(|element| element.contains(pointer_pos))

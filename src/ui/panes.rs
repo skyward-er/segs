@@ -11,7 +11,7 @@ use strum_macros::{self, EnumIter, EnumMessage};
 
 use super::composable_view::PaneResponse;
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Pane {
     pub pane: PaneKind,
 }
