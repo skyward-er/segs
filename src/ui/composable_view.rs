@@ -333,7 +333,7 @@ impl Behavior<Pane> for ComposableBehavior {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PaneResponse {
     pub action_called: Option<PaneAction>,
     pub drag_response: egui_tiles::UiResponse,
@@ -358,7 +358,7 @@ impl Default for PaneResponse {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum PaneAction {
     SplitH,
     SplitV,
