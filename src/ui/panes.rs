@@ -13,7 +13,7 @@ use crate::mavlink::{MavMessage, TimedMessage};
 
 use super::app::PaneResponse;
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Pane {
     pub pane: PaneKind,
 }
