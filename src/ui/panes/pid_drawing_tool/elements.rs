@@ -18,7 +18,19 @@ pub struct Element {
 }
 
 impl Element {
+    pub fn new(pos: &Pos, symbol: Symbol) -> Self {
+        Self {
+            position: pos.clone(),
+            size: 10,
+            rotation: 0.0,
+            symbol,
+        }
+    }
+
     pub fn contains(&self, pos: &Pos) -> bool {
-        self.position <= *pos && *pos < self.position.add_size(self.size)
+        let start = &self.position;
+        let end = self.position.add_size(self.size);
+
+        (start.x <= pos.x && pos.x < end.x) && (start.y <= pos.y && pos.y < end.y)
     }
 }
