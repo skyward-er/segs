@@ -240,7 +240,6 @@ impl PidPane {
                 }
                 ui.close_menu();
             }
-
             if ui.button("Rotate 90° ⟲").clicked() {
                 if let Some(elem) = self.find_hovered_element_mut(&pointer_pos) {
                     elem.rotation += PI / 2.0;
@@ -257,6 +256,14 @@ impl PidPane {
                 }
                 ui.close_menu();
             }
+            if ui.button("Delete").clicked() {
+                if let Some(idx) = self.find_hovered_element_idx(&pointer_pos) {
+                    self.delete_element(idx);
+                } else {
+                    panic!("No element found where the \"Delete\" action was issued");
+                }
+                ui.close_menu();
+            }
         } else {
             ui.menu_button("Symbols", |ui| {
                 for symbol in Symbol::iter() {
@@ -267,5 +274,14 @@ impl PidPane {
                 }
             });
         }
+    }
+
+    fn delete_element(&mut self, idx: usize) {
+        // First delete connection referencing this element
+        self.connections
+            .retain(|elem| elem.start != idx && elem.end != idx);
+
+        // Then the element
+        self.elements.remove(idx);
     }
 }
