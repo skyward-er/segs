@@ -4,7 +4,9 @@ mod pos;
 mod symbols;
 
 use connections::Connection;
-use egui::{epaint::PathStroke, Color32, Context, PointerButton, Pos2, Sense, Theme, Ui, Vec2};
+use egui::{
+    epaint::PathStroke, Color32, Context, CursorIcon, PointerButton, Pos2, Sense, Theme, Ui, Vec2,
+};
 use elements::Element;
 use pos::Pos;
 use serde::{Deserialize, Serialize};
@@ -49,9 +51,6 @@ impl Default for PidPane {
 
 impl PaneBehavior for PidPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
-        // Set cursor icon
-        // ui.ctx().output_mut(|output| output.cursor_icon = CursorIcon::Grab);
-
         let theme = PidPane::find_theme(ui.ctx());
         self.draw_grid(theme, ui);
         self.draw_connections(ui);
@@ -60,6 +59,14 @@ impl PaneBehavior for PidPane {
         // Allocate the space to sense inputs
         let (_, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
         let pointer_pos = response.hover_pos().map(|pos| self.screen_to_grid_pos(pos));
+
+        // Set grab icon when hovering an element
+        if let Some(pointer_pos) = &pointer_pos {
+            if self.is_hovering_element(pointer_pos) {
+                ui.ctx()
+                    .output_mut(|output| output.cursor_icon = CursorIcon::Grab);
+            }
+        }
 
         // Detect the action
         if let Some(pointer_pos) = &pointer_pos {
