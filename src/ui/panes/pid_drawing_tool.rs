@@ -57,7 +57,7 @@ impl PaneBehavior for PidPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let theme = PidPane::find_theme(ui.ctx());
         self.draw_grid(theme, ui);
-        self.draw_connections(ui);
+        self.draw_connections(theme, ui);
         self.draw_elements(theme, ui);
 
         // Allocate the space to sense inputs
@@ -236,7 +236,7 @@ impl PidPane {
         }
     }
 
-    fn draw_connections(&self, ui: &Ui) {
+    fn draw_connections(&self, theme: Theme, ui: &Ui) {
         let painter = ui.painter();
 
         for connection in &self.connections {
@@ -260,10 +260,14 @@ impl PidPane {
             );
 
             // Draw line segments
+            let line_color = match theme {
+                Theme::Light => Color32::BLACK,
+                Theme::Dark => Color32::WHITE,
+            };
             for i in 0..(points.len() - 1) {
                 let a = points[i];
                 let b = points[i + 1];
-                painter.line_segment([a, b], PathStroke::new(1.0, Color32::GREEN));
+                painter.line_segment([a, b], PathStroke::new(2.0, line_color));
             }
 
             // Draw dragging boxes
