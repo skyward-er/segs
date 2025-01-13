@@ -29,16 +29,16 @@ impl Element {
     }
 
     pub fn contains(&self, grid: &GridInfo, pos: &Pos2) -> bool {
-        let start = self.position.add_size(-self.size / 2).into_pos2(grid);
-        let end = self.position.add_size(self.size / 2).into_pos2(grid);
+        let start = self.position.add_size(-self.size / 2).to_pos2(grid);
+        let end = self.position.add_size(self.size / 2).to_pos2(grid);
 
         (start.x <= pos.x && pos.x < end.x) && (start.y <= pos.y && pos.y < end.y)
     }
 
-    pub fn get_anchor_point(&self, grid: &GridInfo, idx: usize) -> Pos2 {
+    pub fn get_anchor(&self, grid: &GridInfo, idx: usize) -> Pos2 {
         let anchor = self.symbol.get_anchor_points()[idx];
         let anchor = Vec2::from(anchor) * self.size as f32 * grid.size;
 
-        self.position.into_pos2(grid) + anchor
+        self.position.to_pos2(grid) + anchor
     }
 }

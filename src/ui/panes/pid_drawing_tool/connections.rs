@@ -33,16 +33,16 @@ impl Connection {
         let mut points = Vec::new();
 
         // Append start point
-        points.push(pid.elements[self.start].get_anchor_point(&pid.grid, self.start_anchor));
+        points.push(pid.elements[self.start].get_anchor(&pid.grid, self.start_anchor));
 
         // Append all midpoints
         self.middle_points
             .iter()
-            .map(|p| p.into_pos2(&pid.grid))
+            .map(|p| p.to_pos2(&pid.grid))
             .for_each(|p| points.push(p));
 
         // Append end point
-        points.push(pid.elements[self.end].get_anchor_point(&pid.grid, self.end_anchor));
+        points.push(pid.elements[self.end].get_anchor(&pid.grid, self.end_anchor));
 
         // Check each segment
         for i in 0..(points.len() - 1) {
