@@ -7,23 +7,23 @@ use super::{grid::LINE_DISTANCE_THRESHOLD, pos::Pos, PidPane};
 pub struct Connection {
     /// Index of the start element
     pub start: usize,
-    pub start_ancor: usize,
+    pub start_anchor: usize,
 
     /// Index of the end element
     pub end: usize,
-    pub end_ancor: usize,
+    pub end_anchor: usize,
 
     /// Coordinates of middle points
     pub middle_points: Vec<Pos>,
 }
 
 impl Connection {
-    pub fn new(start: usize, start_ancor: usize, end: usize, end_ancor: usize) -> Self {
+    pub fn new(start: usize, start_anchor: usize, end: usize, end_anchor: usize) -> Self {
         Self {
             start,
-            start_ancor,
+            start_anchor,
             end,
-            end_ancor,
+            end_anchor,
             middle_points: Vec::new(),
         }
     }
@@ -33,7 +33,7 @@ impl Connection {
         let mut points = Vec::new();
 
         // Append start point
-        points.push(pid.elements[self.start].get_ancor_point(&pid.grid, self.start_ancor));
+        points.push(pid.elements[self.start].get_anchor_point(&pid.grid, self.start_anchor));
 
         // Append all midpoints
         self.middle_points
@@ -42,7 +42,7 @@ impl Connection {
             .for_each(|p| points.push(p));
 
         // Append end point
-        points.push(pid.elements[self.end].get_ancor_point(&pid.grid, self.end_ancor));
+        points.push(pid.elements[self.end].get_anchor_point(&pid.grid, self.end_anchor));
 
         // Check each segment
         for i in 0..(points.len() - 1) {
