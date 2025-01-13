@@ -27,6 +27,7 @@ enum Action {
     ContextMenu(Pos2),
     DragElement(usize),
     DragConnection(usize, usize),
+    DragGrid,
 }
 
 /// Piping and instrumentation diagram
@@ -49,7 +50,10 @@ impl Default for PidPane {
         Self {
             elements: Vec::default(),
             connections: Vec::default(),
-            grid: GridInfo { size: 10.0 },
+            grid: GridInfo {
+                zero_pos: Pos2::ZERO,
+                size: 10.0,
+            },
             action: None,
             editable: false,
         }
@@ -89,20 +93,23 @@ impl PaneBehavior for PidPane {
                 self.action = Some(Action::ContextMenu(pointer_pos.clone()));
             } else if self.editable {
                 if response.drag_started() {
-                    println!("Checking drag start at {:?}", pointer_pos);
-                    if let Some(drag_connection_point) = self
-                        .find_hovered_connection_point(pointer_pos)
-                        .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
-                    {
-                        self.action = Some(drag_connection_point);
-                        println!("Connection point drag started");
-                    }
-                    if let Some(drag_element_action) = self
-                        .find_hovered_element_idx(pointer_pos)
-                        .map(|idx| Action::DragElement(idx))
-                    {
-                        self.action = Some(drag_element_action);
-                        println!("Element drag started");
+                    if response.dragged_by(PointerButton::Middle) {
+                        self.action = Some(Action::DragGrid);
+                        println!("Grid drag started");
+                    } else {
+                        if let Some(drag_element_action) = self
+                            .find_hovered_element_idx(pointer_pos)
+                            .map(|idx| Action::DragElement(idx))
+                        {
+                            self.action = Some(drag_element_action);
+                            println!("Element drag started");
+                        } else if let Some(drag_connection_point) = self
+                            .find_hovered_connection_point(pointer_pos)
+                            .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
+                        {
+                            self.action = Some(drag_connection_point);
+                            println!("Connection point drag started");
+                        }
                     }
                 } else if response.drag_stopped() {
                     self.action.take();
@@ -137,6 +144,10 @@ impl PaneBehavior for PidPane {
                 Some(Action::DragConnection(conn_idx, midpoint_idx)) => {
                     self.connections[conn_idx].middle_points[midpoint_idx] =
                         Pos::from_pos2(&self.grid, &pointer_pos);
+                }
+                Some(Action::DragGrid) => {
+                    self.grid.zero_pos += response.drag_delta();
+                    // self.grid.zero_pos = pointer_pos - start_pos.to_vec2()
                 }
                 _ => {}
             }
@@ -303,7 +314,7 @@ impl PidPane {
                 egui::Pos2::new(
                     element.position.x as f32 * self.grid.size,
                     element.position.y as f32 * self.grid.size,
-                ),
+                ) + self.grid.zero_pos.to_vec2(),
                 egui::Vec2::new(
                     element.size as f32 * self.grid.size,
                     element.size as f32 * self.grid.size,
