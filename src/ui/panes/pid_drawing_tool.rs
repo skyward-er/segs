@@ -5,9 +5,10 @@ mod pos;
 mod symbols;
 
 use connections::Connection;
+use core::f32;
 use egui::{
-    epaint::PathStroke, Color32, Context, CursorIcon, PointerButton, Pos2, Rounding, Sense, Stroke,
-    Theme, Ui, Vec2,
+    epaint::PathStroke, Color32, Context, CursorIcon, Painter, PointerButton, Pos2, Rounding,
+    Sense, Stroke, Theme, Ui, Vec2,
 };
 use elements::Element;
 use grid::GridInfo;
@@ -43,6 +44,8 @@ pub struct PidPane {
 
     #[serde(skip)]
     editable: bool,
+
+    center_content: bool,
 }
 
 impl Default for PidPane {
@@ -56,6 +59,7 @@ impl Default for PidPane {
             },
             action: None,
             editable: false,
+            center_content: false,
         }
     }
 }
@@ -64,12 +68,16 @@ impl PaneBehavior for PidPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let theme = PidPane::find_theme(ui.ctx());
 
-        if self.editable {
-            self.draw_grid(theme, ui);
+        if self.center_content && !self.editable {
+            self.center(ui);
         }
 
-        self.draw_connections(theme, self.editable, ui);
-        self.draw_elements(theme, ui);
+        if self.editable {
+            self.draw_grid(ui, theme);
+        }
+
+        self.draw_connections(ui, theme, self.editable);
+        self.draw_elements(ui, theme);
 
         // Allocate the space to sense inputs
         let (_, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
@@ -120,7 +128,7 @@ impl PaneBehavior for PidPane {
 
         // Context menu
         if let Some(Action::ContextMenu(pointer_pos)) = self.action.clone() {
-            response.context_menu(|ui| self.draw_context_menu(&pointer_pos, ui));
+            response.context_menu(|ui| self.draw_context_menu(ui, &pointer_pos));
         }
 
         // Connect action
@@ -147,7 +155,6 @@ impl PaneBehavior for PidPane {
                 }
                 Some(Action::DragGrid) => {
                     self.grid.zero_pos += response.drag_delta();
-                    // self.grid.zero_pos = pointer_pos - start_pos.to_vec2()
                 }
                 _ => {}
             }
@@ -236,7 +243,7 @@ impl PidPane {
         connection_idx.zip(midpoint_idx)
     }
 
-    fn draw_grid(&self, theme: Theme, ui: &Ui) {
+    fn draw_grid(&self, ui: &Ui, theme: Theme) {
         let painter = ui.painter();
         let window_rect = ui.max_rect();
         let dot_color = PidPane::dots_color(theme);
@@ -257,47 +264,41 @@ impl PidPane {
         }
     }
 
-    fn draw_connections(&self, theme: Theme, draw_handles: bool, ui: &Ui) {
+    fn draw_connections(&self, ui: &Ui, theme: Theme, draw_handles: bool) {
         let painter = ui.painter();
+        let color = match theme {
+            Theme::Light => Color32::BLACK,
+            Theme::Dark => Color32::WHITE,
+        };
 
-        for connection in &self.connections {
-            let mut points = Vec::new();
+        // Each connection is composed from multiple lines
+        for conn in &self.connections {
+            let start = self.elements[conn.start].get_anchor(&self.grid, conn.start_anchor);
+            let end = self.elements[conn.end].get_anchor(&self.grid, conn.end_anchor);
 
-            // Append start point
-            points.push(
-                self.elements[connection.start]
-                    .get_anchor_point(&self.grid, connection.start_anchor),
-            );
-
-            // Append all midpoints
-            connection
+            let points: Vec<Pos2> = conn
                 .middle_points
                 .iter()
-                .map(|p| p.into_pos2(&self.grid))
-                .for_each(|p| points.push(p));
-
-            // Append end point
-            points.push(
-                self.elements[connection.end].get_anchor_point(&self.grid, connection.end_anchor),
-            );
+                .map(|p| p.to_pos2(&self.grid))
+                .collect();
 
             // Draw line segments
-            let line_color = match theme {
-                Theme::Light => Color32::BLACK,
-                Theme::Dark => Color32::WHITE,
-            };
-            for i in 0..(points.len() - 1) {
-                let a = points[i];
-                let b = points[i + 1];
-                painter.line_segment([a, b], PathStroke::new(2.0, line_color));
+            if points.is_empty() {
+                PidPane::draw_connection_segment(painter, color, start, end);
+            } else {
+                PidPane::draw_connection_segment(painter, color, start, *points.first().unwrap());
+                for i in 0..(points.len() - 1) {
+                    PidPane::draw_connection_segment(painter, color, points[i], points[i + 1]);
+                }
+                PidPane::draw_connection_segment(painter, color, *points.last().unwrap(), end);
             }
 
             // Draw handles (dragging boxes)
             if draw_handles {
-                for middle_point in &connection.middle_points {
+                for point in points {
                     painter.rect(
                         egui::Rect::from_center_size(
-                            middle_point.into_pos2(&self.grid),
+                            point,
                             Vec2::new(self.grid.size, self.grid.size),
                         ),
                         Rounding::ZERO,
@@ -309,17 +310,15 @@ impl PidPane {
         }
     }
 
-    fn draw_elements(&self, theme: Theme, ui: &Ui) {
+    fn draw_connection_segment(painter: &Painter, color: Color32, a: Pos2, b: Pos2) {
+        painter.line_segment([a, b], PathStroke::new(2.0, color));
+    }
+
+    fn draw_elements(&self, ui: &Ui, theme: Theme) {
         for element in &self.elements {
             let image_rect = egui::Rect::from_center_size(
-                egui::Pos2::new(
-                    element.position.x as f32 * self.grid.size,
-                    element.position.y as f32 * self.grid.size,
-                ) + self.grid.zero_pos.to_vec2(),
-                egui::Vec2::new(
-                    element.size as f32 * self.grid.size,
-                    element.size as f32 * self.grid.size,
-                ),
+                element.position.to_pos2(&self.grid),
+                Vec2::splat(element.size as f32 * self.grid.size),
             );
 
             egui::Image::new(element.symbol.get_image(theme))
@@ -328,7 +327,7 @@ impl PidPane {
         }
     }
 
-    fn draw_context_menu(&mut self, pointer_pos: &Pos2, ui: &mut Ui) {
+    fn draw_context_menu(&mut self, ui: &mut Ui, pointer_pos: &Pos2) {
         ui.set_max_width(120.0); // To make sure we wrap long text
 
         if !self.editable {
@@ -336,6 +335,7 @@ impl PidPane {
                 self.editable = true;
                 ui.close_menu();
             }
+            ui.checkbox(&mut self.center_content, "Center");
             return;
         }
 
@@ -419,5 +419,15 @@ impl PidPane {
 
         // Then the element
         self.elements.remove(idx);
+    }
+
+    fn center(&mut self, ui: &Ui) {
+        let ui_center = ui.max_rect().center();
+
+        let elements_center = self.elements.iter().fold(Vec2::ZERO, |acc, e| {
+            acc + e.position.to_relative_pos2(&self.grid).to_vec2()
+        }) / self.elements.len() as f32;
+
+        self.grid.zero_pos = ui_center - elements_center;
     }
 }

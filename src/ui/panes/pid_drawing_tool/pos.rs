@@ -17,7 +17,14 @@ impl Pos {
         }
     }
 
-    pub fn into_pos2(&self, grid: &GridInfo) -> Pos2 {
+    pub fn to_pos2(&self, grid: &GridInfo) -> Pos2 {
+        Pos2 {
+            x: self.x as f32 * grid.size + grid.zero_pos.x,
+            y: self.y as f32 * grid.size + grid.zero_pos.y,
+        }
+    }
+
+    pub fn to_relative_pos2(&self, grid: &GridInfo) -> Pos2 {
         Pos2 {
             x: self.x as f32 * grid.size,
             y: self.y as f32 * grid.size,
@@ -26,13 +33,13 @@ impl Pos {
 
     pub fn from_pos2(grid: &GridInfo, pos: &Pos2) -> Self {
         Self {
-            x: (pos.x / grid.size) as i32,
-            y: (pos.y / grid.size) as i32,
+            x: ((pos.x - grid.zero_pos.x) / grid.size) as i32,
+            y: ((pos.y - grid.zero_pos.y) / grid.size) as i32,
         }
     }
 
     pub fn distance(&self, grid: &GridInfo, pos: &Pos2) -> f32 {
-        let me = self.into_pos2(grid);
+        let me = self.to_pos2(grid);
 
         ((me.x - pos.x).powi(2) + (me.y - pos.y).powi(2)).sqrt()
     }
