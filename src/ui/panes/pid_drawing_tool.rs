@@ -424,10 +424,25 @@ impl PidPane {
     fn center(&mut self, ui: &Ui) {
         let ui_center = ui.max_rect().center();
 
-        let elements_center = self.elements.iter().fold(Vec2::ZERO, |acc, e| {
-            acc + e.position.to_relative_pos2(&self.grid).to_vec2()
-        }) / self.elements.len() as f32;
+        let points: Vec<Pos> = self
+            .elements
+            .iter()
+            .map(|e| e.position.clone())
+            .chain(
+                self.connections
+                    .iter()
+                    .flat_map(|conn| conn.middle_points.clone()),
+            )
+            .collect();
 
-        self.grid.zero_pos = ui_center - elements_center;
+        let min_x = points.iter().map(|p| p.x).min().unwrap();
+        let max_x = points.iter().map(|p| p.x).max().unwrap();
+        let min_y = points.iter().map(|p| p.y).min().unwrap();
+        let max_y = points.iter().map(|p| p.y).max().unwrap();
+
+        let pid_center =
+            Pos::new((max_x + min_x) / 2, (max_y + min_y) / 2).to_relative_pos2(&self.grid);
+
+        self.grid.zero_pos = ui_center - pid_center.to_vec2();
     }
 }
