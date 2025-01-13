@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Element {
-    /// Ancor postion in the grid, symbol center
+    /// Anchor postion in the grid, symbol center
     pub position: Pos,
 
     /// Size in grid units
@@ -35,10 +35,10 @@ impl Element {
         (start.x <= pos.x && pos.x < end.x) && (start.y <= pos.y && pos.y < end.y)
     }
 
-    pub fn get_ancor_point(&self, grid: &GridInfo, idx: usize) -> Pos2 {
-        let ancor = self.symbol.get_ancor_points()[idx];
-        let ancor = Vec2::from(ancor) * self.size as f32 * grid.size;
+    pub fn get_anchor_point(&self, grid: &GridInfo, idx: usize) -> Pos2 {
+        let anchor = self.symbol.get_anchor_points()[idx];
+        let anchor = Vec2::from(anchor) * self.size as f32 * grid.size;
 
-        self.position.into_pos2(grid) + ancor
+        self.position.into_pos2(grid) + anchor
     }
 }
