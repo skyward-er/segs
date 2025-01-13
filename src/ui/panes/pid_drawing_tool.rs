@@ -113,7 +113,7 @@ impl PaneBehavior for PidPane {
                     if let Some(end) = self.find_hovered_element_idx(&pointer_pos) {
                         if response.clicked() {
                             if start != end {
-                                self.connections.push(Connection::new(start, end));
+                                self.connections.push(Connection::new(start, 0, end, 0));
                                 println!("Added connection from {} to {}", start, end);
                             }
                             self.action.take();
@@ -243,8 +243,9 @@ impl PidPane {
             let mut points = Vec::new();
 
             // Append start point
-            let start = &self.elements[connection.start];
-            points.push(start.position.into_pos2(&self.grid));
+            points.push(
+                self.elements[connection.start].get_ancor_point(&self.grid, connection.start_ancor),
+            );
 
             // Append all midpoints
             connection
@@ -254,8 +255,9 @@ impl PidPane {
                 .for_each(|p| points.push(p));
 
             // Append end point
-            let end = &self.elements[connection.end];
-            points.push(end.position.into_pos2(&self.grid));
+            points.push(
+                self.elements[connection.end].get_ancor_point(&self.grid, connection.end_ancor),
+            );
 
             // Draw line segments
             for i in 0..(points.len() - 1) {
@@ -299,7 +301,7 @@ impl PidPane {
     }
 
     fn draw_context_menu(&mut self, pointer_pos: &Pos2, ui: &mut Ui) {
-        ui.set_max_width(100.0); // To make sure we wrap long text
+        ui.set_max_width(120.0); // To make sure we wrap long text
 
         if self.is_hovering_element(&pointer_pos) {
             let hovered_element = self.find_hovered_element_idx(&pointer_pos);
@@ -340,6 +342,18 @@ impl PidPane {
             if ui.button("Split").clicked() {
                 println!("Splitting connection line");
                 self.connections[conn_idx].split(segm_idx, Pos::from_pos2(&self.grid, pointer_pos));
+                ui.close_menu();
+            }
+            if ui.button("Change start ancor").clicked() {
+                let conn = &mut self.connections[conn_idx];
+                conn.start_ancor = (conn.start_ancor + 1)
+                    % self.elements[conn.start].symbol.get_ancor_points().len();
+                ui.close_menu();
+            }
+            if ui.button("Change end ancor").clicked() {
+                let conn = &mut self.connections[conn_idx];
+                conn.end_ancor =
+                    (conn.end_ancor + 1) % self.elements[conn.end].symbol.get_ancor_points().len();
                 ui.close_menu();
             }
         } else {

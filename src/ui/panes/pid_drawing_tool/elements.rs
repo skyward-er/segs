@@ -1,6 +1,6 @@
 use super::symbols::Symbol;
 use super::{grid::GridInfo, pos::Pos};
-use egui::Pos2;
+use egui::{Pos2, Vec2};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
@@ -33,5 +33,12 @@ impl Element {
         let end = self.position.add_size(self.size / 2).into_pos2(grid);
 
         (start.x <= pos.x && pos.x < end.x) && (start.y <= pos.y && pos.y < end.y)
+    }
+
+    pub fn get_ancor_point(&self, grid: &GridInfo, idx: usize) -> Pos2 {
+        let ancor = self.symbol.get_ancor_points()[idx];
+        let ancor = Vec2::from(ancor) * self.size as f32 * grid.size;
+
+        self.position.into_pos2(grid) + ancor
     }
 }
