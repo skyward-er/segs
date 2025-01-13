@@ -42,7 +42,7 @@ impl Symbol {
         }
     }
 
-    pub fn get_ancor_points(&self) -> Vec<(f32, f32)> {
+    pub fn get_anchor_points(&self) -> Vec<(f32, f32)> {
         match self {
             Symbol::ManualValve => [(-0.5, 0.0), (0.5, 0.0)].into(),
             Symbol::CheckValve => [(-0.5, 0.0), (0.5, 0.0)].into(),
