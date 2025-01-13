@@ -265,7 +265,8 @@ impl PidPane {
 
             // Append start point
             points.push(
-                self.elements[connection.start].get_ancor_point(&self.grid, connection.start_ancor),
+                self.elements[connection.start]
+                    .get_anchor_point(&self.grid, connection.start_anchor),
             );
 
             // Append all midpoints
@@ -277,7 +278,7 @@ impl PidPane {
 
             // Append end point
             points.push(
-                self.elements[connection.end].get_ancor_point(&self.grid, connection.end_ancor),
+                self.elements[connection.end].get_anchor_point(&self.grid, connection.end_anchor),
             );
 
             // Draw line segments
@@ -379,16 +380,16 @@ impl PidPane {
                 self.connections[conn_idx].split(segm_idx, Pos::from_pos2(&self.grid, pointer_pos));
                 ui.close_menu();
             }
-            if ui.button("Change start ancor").clicked() {
+            if ui.button("Change start anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
-                conn.start_ancor = (conn.start_ancor + 1)
-                    % self.elements[conn.start].symbol.get_ancor_points().len();
+                conn.start_anchor = (conn.start_anchor + 1)
+                    % self.elements[conn.start].symbol.get_anchor_points().len();
                 ui.close_menu();
             }
-            if ui.button("Change end ancor").clicked() {
+            if ui.button("Change end anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
-                conn.end_ancor =
-                    (conn.end_ancor + 1) % self.elements[conn.end].symbol.get_ancor_points().len();
+                conn.end_anchor = (conn.end_anchor + 1)
+                    % self.elements[conn.end].symbol.get_anchor_points().len();
                 ui.close_menu();
             }
         } else {
