@@ -1,5 +1,6 @@
-use super::pos::Pos;
 use super::symbols::Symbol;
+use super::{grid::GridInfo, pos::Pos};
+use egui::Pos2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
@@ -18,18 +19,18 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn new(pos: &Pos, symbol: Symbol) -> Self {
+    pub fn new(pos: Pos, symbol: Symbol) -> Self {
         Self {
-            position: pos.clone(),
+            position: pos,
             size: 10,
             rotation: 0.0,
             symbol,
         }
     }
 
-    pub fn contains(&self, pos: &Pos) -> bool {
-        let start = &self.position;
-        let end = self.position.add_size(self.size);
+    pub fn contains(&self, grid: &GridInfo, pos: &Pos2) -> bool {
+        let start = self.position.add_size(-self.size / 2).into_pos2(grid);
+        let end = self.position.add_size(self.size / 2).into_pos2(grid);
 
         (start.x <= pos.x && pos.x < end.x) && (start.y <= pos.y && pos.y < end.y)
     }
