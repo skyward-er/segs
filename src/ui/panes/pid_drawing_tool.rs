@@ -220,12 +220,13 @@ impl PidPane {
         let window_rect = ui.max_rect();
         let dot_color = PidPane::dots_color(theme);
 
-        for x in (window_rect.min.x as i32..window_rect.max.x.round() as i32)
-            .step_by(self.grid.size as usize)
-        {
-            for y in (window_rect.min.y as i32..window_rect.max.y.round() as i32)
-                .step_by(self.grid.size as usize)
-            {
+        let start_x = (window_rect.min.x / self.grid.size) as i32 * self.grid.size as i32;
+        let end_x = (window_rect.max.x / self.grid.size + 1.0) as i32 * self.grid.size as i32;
+        let start_y = (window_rect.min.y / self.grid.size) as i32 * self.grid.size as i32;
+        let end_y = (window_rect.max.y / self.grid.size + 1.0) as i32 * self.grid.size as i32;
+
+        for x in (start_x..end_x).step_by(self.grid.size as usize) {
+            for y in (start_y..end_y).step_by(self.grid.size as usize) {
                 let rect = egui::Rect::from_min_size(
                     egui::Pos2::new(x as f32, y as f32),
                     egui::Vec2::new(1.0, 1.0),
