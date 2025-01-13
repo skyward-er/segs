@@ -39,6 +39,9 @@ pub struct PidPane {
 
     #[serde(skip)]
     action: Option<Action>,
+
+    #[serde(skip)]
+    editable: bool,
 }
 
 impl Default for PidPane {
@@ -47,8 +50,8 @@ impl Default for PidPane {
             elements: Vec::default(),
             connections: Vec::default(),
             grid: GridInfo { size: 10.0 },
-
             action: None,
+            editable: false,
         }
     }
 }
@@ -56,8 +59,12 @@ impl Default for PidPane {
 impl PaneBehavior for PidPane {
     fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let theme = PidPane::find_theme(ui.ctx());
-        self.draw_grid(theme, ui);
-        self.draw_connections(theme, ui);
+
+        if self.editable {
+            self.draw_grid(theme, ui);
+        }
+
+        self.draw_connections(theme, self.editable, ui);
         self.draw_elements(theme, ui);
 
         // Allocate the space to sense inputs
@@ -66,8 +73,9 @@ impl PaneBehavior for PidPane {
 
         // Set grab icon when hovering an element
         if let Some(pointer_pos) = &pointer_pos {
-            if self.is_hovering_element(pointer_pos)
-                || self.is_hovering_connection_point(pointer_pos)
+            if self.editable
+                && (self.is_hovering_element(pointer_pos)
+                    || self.is_hovering_connection_point(pointer_pos))
             {
                 ui.ctx()
                     .output_mut(|output| output.cursor_icon = CursorIcon::Grab);
@@ -79,25 +87,27 @@ impl PaneBehavior for PidPane {
             if response.clicked_by(PointerButton::Secondary) {
                 println!("Context menu opened");
                 self.action = Some(Action::ContextMenu(pointer_pos.clone()));
-            } else if response.drag_started() {
-                println!("Checking drag start at {:?}", pointer_pos);
-                if let Some(drag_connection_point) = self
-                    .find_hovered_connection_point(pointer_pos)
-                    .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
-                {
-                    self.action = Some(drag_connection_point);
-                    println!("Connection point drag started");
+            } else if self.editable {
+                if response.drag_started() {
+                    println!("Checking drag start at {:?}", pointer_pos);
+                    if let Some(drag_connection_point) = self
+                        .find_hovered_connection_point(pointer_pos)
+                        .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
+                    {
+                        self.action = Some(drag_connection_point);
+                        println!("Connection point drag started");
+                    }
+                    if let Some(drag_element_action) = self
+                        .find_hovered_element_idx(pointer_pos)
+                        .map(|idx| Action::DragElement(idx))
+                    {
+                        self.action = Some(drag_element_action);
+                        println!("Element drag started");
+                    }
+                } else if response.drag_stopped() {
+                    self.action.take();
+                    println!("Drag stopped");
                 }
-                if let Some(drag_element_action) = self
-                    .find_hovered_element_idx(pointer_pos)
-                    .map(|idx| Action::DragElement(idx))
-                {
-                    self.action = Some(drag_element_action);
-                    println!("Element drag started");
-                }
-            } else if response.drag_stopped() {
-                self.action.take();
-                println!("Drag stopped");
             }
         }
 
@@ -236,7 +246,7 @@ impl PidPane {
         }
     }
 
-    fn draw_connections(&self, theme: Theme, ui: &Ui) {
+    fn draw_connections(&self, theme: Theme, draw_handles: bool, ui: &Ui) {
         let painter = ui.painter();
 
         for connection in &self.connections {
@@ -270,17 +280,19 @@ impl PidPane {
                 painter.line_segment([a, b], PathStroke::new(2.0, line_color));
             }
 
-            // Draw dragging boxes
-            for middle_point in &connection.middle_points {
-                painter.rect(
-                    egui::Rect::from_center_size(
-                        middle_point.into_pos2(&self.grid),
-                        Vec2::new(self.grid.size, self.grid.size),
-                    ),
-                    Rounding::ZERO,
-                    Color32::DARK_GRAY,
-                    Stroke::NONE,
-                );
+            // Draw handles (dragging boxes)
+            if draw_handles {
+                for middle_point in &connection.middle_points {
+                    painter.rect(
+                        egui::Rect::from_center_size(
+                            middle_point.into_pos2(&self.grid),
+                            Vec2::new(self.grid.size, self.grid.size),
+                        ),
+                        Rounding::ZERO,
+                        Color32::DARK_GRAY,
+                        Stroke::NONE,
+                    );
+                }
             }
         }
     }
@@ -306,6 +318,14 @@ impl PidPane {
 
     fn draw_context_menu(&mut self, pointer_pos: &Pos2, ui: &mut Ui) {
         ui.set_max_width(120.0); // To make sure we wrap long text
+
+        if !self.editable {
+            if ui.button("Enable editing").clicked() {
+                self.editable = true;
+                ui.close_menu();
+            }
+            return;
+        }
 
         if self.is_hovering_element(&pointer_pos) {
             let hovered_element = self.find_hovered_element_idx(&pointer_pos);
@@ -372,6 +392,11 @@ impl PidPane {
                     }
                 }
             });
+        }
+
+        if ui.button("Disable editing").clicked() {
+            self.editable = false;
+            ui.close_menu();
         }
     }
 
