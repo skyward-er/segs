@@ -231,14 +231,21 @@ impl PidPane {
         let window_rect = ui.max_rect();
         let dot_color = PidPane::dots_color(theme);
 
-        let start_x =
-            (window_rect.min.x / self.grid.get_size()) as i32 * self.grid.get_size() as i32;
-        let end_x =
-            (window_rect.max.x / self.grid.get_size() + 1.0) as i32 * self.grid.get_size() as i32;
-        let start_y =
-            (window_rect.min.y / self.grid.get_size()) as i32 * self.grid.get_size() as i32;
-        let end_y =
-            (window_rect.max.y / self.grid.get_size() + 1.0) as i32 * self.grid.get_size() as i32;
+        let offset_x = (self.grid.zero_pos.x % self.grid.get_size()) as i32;
+        let offset_y = (self.grid.zero_pos.y % self.grid.get_size()) as i32;
+
+        let start_x = (window_rect.min.x / self.grid.get_size()) as i32
+            * self.grid.get_size() as i32
+            + offset_x;
+        let end_x = (window_rect.max.x / self.grid.get_size() + 2.0) as i32
+            * self.grid.get_size() as i32
+            + offset_x;
+        let start_y = (window_rect.min.y / self.grid.get_size()) as i32
+            * self.grid.get_size() as i32
+            + offset_y;
+        let end_y = (window_rect.max.y / self.grid.get_size() + 2.0) as i32
+            * self.grid.get_size() as i32
+            + offset_y;
 
         for x in (start_x..end_x).step_by(self.grid.get_size() as usize) {
             for y in (start_y..end_y).step_by(self.grid.get_size() as usize) {
