@@ -23,22 +23,22 @@ impl Pos {
 
     pub fn to_pos2(&self, grid: &GridInfo) -> Pos2 {
         Pos2 {
-            x: self.x as f32 * grid.size + grid.zero_pos.x,
-            y: self.y as f32 * grid.size + grid.zero_pos.y,
+            x: self.x as f32 * grid.get_size() + grid.zero_pos.x,
+            y: self.y as f32 * grid.get_size() + grid.zero_pos.y,
         }
     }
 
     pub fn to_relative_pos2(&self, grid: &GridInfo) -> Pos2 {
         Pos2 {
-            x: self.x as f32 * grid.size,
-            y: self.y as f32 * grid.size,
+            x: self.x as f32 * grid.get_size(),
+            y: self.y as f32 * grid.get_size(),
         }
     }
 
     pub fn from_pos2(grid: &GridInfo, pos: &Pos2) -> Self {
         Self {
-            x: ((pos.x - grid.zero_pos.x) / grid.size) as i32,
-            y: ((pos.y - grid.zero_pos.y) / grid.size) as i32,
+            x: ((pos.x - grid.zero_pos.x) / grid.get_size()) as i32,
+            y: ((pos.y - grid.zero_pos.y) / grid.get_size()) as i32,
         }
     }
 

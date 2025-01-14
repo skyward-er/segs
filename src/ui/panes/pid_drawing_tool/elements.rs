@@ -37,7 +37,7 @@ impl Element {
 
     pub fn get_anchor(&self, grid: &GridInfo, idx: usize) -> Pos2 {
         let anchor = self.symbol.get_anchor_points()[idx];
-        let anchor = Vec2::from(anchor) * self.size as f32 * grid.size;
+        let anchor = Vec2::from(anchor) * self.size as f32 * grid.get_size();
 
         self.position.to_pos2(grid) + anchor
     }
