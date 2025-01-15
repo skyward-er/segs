@@ -1,5 +1,5 @@
 use egui::{epaint::PathStroke, Color32, Painter, Rect, Rounding, Stroke, Theme};
-use glam::Vec2;
+use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::ui::utils::glam_to_egui;
@@ -48,10 +48,7 @@ impl Connection {
         points.push(pid.elements[self.start].anchor_point(self.start_anchor));
 
         // Append all midpoints
-        self.points_g
-            .iter()
-            .map(|p| pid.grid.grid_to_screen(*p))
-            .for_each(|p| points.push(p));
+        self.points_g.iter().for_each(|&p| points.push(p));
 
         // Append end point
         points.push(pid.elements[self.end].anchor_point(self.end_anchor));
@@ -60,7 +57,7 @@ impl Connection {
         for i in 0..(points.len() - 1) {
             let a = points[i];
             let b = points[i + 1];
-            if is_hovering_segment(p_g, a, b) {
+            if hovers_segment(&pid.grid, p_g, a, b) {
                 return Some(i);
             }
         }
@@ -144,41 +141,19 @@ impl Connection {
     }
 }
 
-fn distance(a: Vec2, b: Vec2) -> f32 {
-    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
-}
-
-/// Distance of a from the line defined by b and c
-fn distance_from_line(p: Vec2, m: f32, q: f32) -> f32 {
-    (p.y - m * p.x - q).abs() / (1.0 + m * m).sqrt()
-}
-
 /// True if p hovers the segment defined by a and b
-fn is_hovering_segment(p: Vec2, a: Vec2, b: Vec2) -> bool {
-    if a != b {
-        let midpoint = (a + b) / 2.0;
-        let m = (a.y - b.y) / (a.x - b.x);
+fn hovers_segment(grid: &GridInfo, p_g: Vec2, a_g: Vec2, b_g: Vec2) -> bool {
+    if a_g != b_g {
+        let segment_g = b_g - a_g;
+        let rotm = Mat2::from_angle(-segment_g.to_angle());
 
-        let (d1, d2) = if m == 0.0 {
-            ((p.y - midpoint.y).abs(), (p.x - midpoint.x).abs())
-        } else if m == f32::INFINITY {
-            ((p.x - midpoint.x).abs(), (p.y - midpoint.y).abs())
-        } else {
-            let q = (a.x * b.y - b.x * a.y) / (a.x - b.x);
+        // Rototranslate the point in the segment frame with a as origin
+        let p_s = rotm * (p_g - a_g);
 
-            let m_inv = -1.0 / m;
-            let q_inv = midpoint.y - m_inv * midpoint.x;
-
-            (
-                distance_from_line(p, m, q),
-                distance_from_line(p, m_inv, q_inv),
-            )
-        };
-
-        let length = distance(a, b);
-
-        d1 <= CONNECTION_LINE_THRESHOLD && d2 <= length
+        let y_threshold = CONNECTION_LINE_THRESHOLD / grid.size();
+        0.0 <= p_s.x && p_s.x <= segment_g.length() && p_s.y.abs() <= y_threshold
     } else {
+        // If a and b are the same point, prevent adding another
         false
     }
 }
