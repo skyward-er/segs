@@ -190,7 +190,8 @@ impl PidPane {
         if !self.editable {
             if ui.button("Enable editing").clicked() {
                 self.editable = true;
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
             ui.checkbox(&mut self.center_content, "Center");
             return;
@@ -200,36 +201,42 @@ impl PidPane {
         if let Some(elem_idx) = elem_idx {
             if ui.button("Connect").clicked() {
                 self.action = Some(Action::Connect(elem_idx));
-                self.close_context_menu(ui);
+                ui.close_menu();
             }
             if ui.button("Rotate 90° ⟲").clicked() {
                 self.elements[elem_idx].rotate(-PI / 2.0);
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
             if ui.button("Rotate 90° ⟳").clicked() {
                 self.elements[elem_idx].rotate(PI / 2.0);
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
             if ui.button("Delete").clicked() {
                 self.delete_element(elem_idx);
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
         } else if let Some((conn_idx, segm_idx)) = self.hovers_connection(pointer_pos) {
             if ui.button("Split").clicked() {
                 self.connections[conn_idx].split(segm_idx, self.grid.screen_to_grid(pointer_pos));
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
             if ui.button("Change start anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
                 conn.start_anchor =
                     (conn.start_anchor + 1) % self.elements[conn.start].anchor_points_len();
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
             if ui.button("Change end anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
                 conn.end_anchor =
                     (conn.end_anchor + 1) % self.elements[conn.end].anchor_points_len();
-                self.close_context_menu(ui);
+                self.action.take();
+                ui.close_menu();
             }
         } else {
             ui.menu_button("Symbols", |ui| {
@@ -237,7 +244,8 @@ impl PidPane {
                     if ui.button(symbol.to_string()).clicked() {
                         self.elements
                             .push(Element::new(self.grid.screen_to_grid(pointer_pos), symbol));
-                        self.close_context_menu(ui);
+                        self.action.take();
+                        ui.close_menu();
                     }
                 }
             });
@@ -247,11 +255,6 @@ impl PidPane {
             self.editable = false;
             ui.close_menu();
         }
-    }
-
-    fn close_context_menu(&mut self, ui: &mut Ui) {
-        ui.close_menu();
-        self.action.take();
     }
 
     /// Removes an element from the diagram
