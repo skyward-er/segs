@@ -42,3 +42,15 @@ pub fn vertically_centered(
         .response
     }
 }
+
+#[inline(always)]
+pub fn egui_to_glam(p: egui::Vec2) -> glam::Vec2 {
+    let p: mint::Vector2<f32> = p.into();
+    glam::Vec2::from(p)
+}
+
+#[inline(always)]
+pub fn glam_to_egui(p: glam::Vec2) -> egui::Vec2 {
+    let p: mint::Vector2<f32> = p.into();
+    egui::Vec2::from(p)
+}
