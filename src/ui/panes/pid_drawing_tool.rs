@@ -242,8 +242,10 @@ impl PidPane {
             ui.menu_button("Symbols", |ui| {
                 for symbol in Symbol::iter() {
                     if ui.button(symbol.to_string()).clicked() {
-                        self.elements
-                            .push(Element::new(self.grid.screen_to_grid(pointer_pos), symbol));
+                        self.elements.push(Element::new(
+                            self.grid.screen_to_grid(pointer_pos).round(),
+                            symbol,
+                        ));
                         self.action.take();
                         ui.close_menu();
                     }
