@@ -376,7 +376,7 @@ impl Default for PaneResponse {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PaneAction {
     SplitH,
     SplitV,

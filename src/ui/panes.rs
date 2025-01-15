@@ -2,7 +2,6 @@ mod default;
 mod messages_viewer;
 mod pid_drawing_tool;
 pub mod plot;
-mod plot;
 
 use egui_tiles::TileId;
 use enum_dispatch::enum_dispatch;
@@ -11,7 +10,7 @@ use strum_macros::{self, EnumIter, EnumMessage};
 
 use super::composable_view::PaneResponse;
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct Pane {
     pub pane: PaneKind,
 }
