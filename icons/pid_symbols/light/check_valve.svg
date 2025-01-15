@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="10"
+   height="5"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="2_check_valve.svg"
+   inkscape:version="1.4 (e7c3feb100, 2024-10-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="0 : 0 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_z="10 : 0 : 1"
+       inkscape:persp3d-origin="5 : -1.6666667 : 1"
+       id="perspective3" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="64"
+     inkscape:cx="3.7109375"
+     inkscape:cy="5.2421875"
+     inkscape:window-width="1996"
+     inkscape:window-height="1371"
+     inkscape:window-x="20"
+     inkscape:window-y="20"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg1"
+     showgrid="true">
+    <inkscape:grid
+       id="grid3"
+       units="px"
+       originx="0"
+       originy="0"
+       spacingx="0.1"
+       spacingy="0.1"
+       empcolor="#0099e5"
+       empopacity="0.30196078"
+       color="#0099e5"
+       opacity="0.14901961"
+       empspacing="5"
+       enabled="true"
+       visible="true" />
+  </sodipodi:namedview>
+  <circle
+     style="fill:#000000;stroke:none"
+     id="path2"
+     inkscape:label="path4"
+     cx="1"
+     cy="4.5"
+     r="0.5" />
+  <path
+     fill="none"
+     stroke="#000000"
+     d="m 9,2.5 h 1 z"
+     id="path1-5-2"
+     style="stroke-width:0.2;stroke-dasharray:none"
+     sodipodi:nodetypes="ccccc"
+     inkscape:label="path3" />
+  <path
+     fill="none"
+     stroke="#000000"
+     d="M 0,2.5 H 1 Z"
+     id="path1-5"
+     style="stroke-width:0.2;stroke-dasharray:none"
+     sodipodi:nodetypes="ccccc"
+     inkscape:label="path2" />
+  <path
+     fill="none"
+     stroke="#000000"
+     d="m 1,0.5 v 4 l 8,-4 v 4"
+     id="path1"
+     style="stroke-width:0.2;stroke-dasharray:none"
+     sodipodi:nodetypes="cccc" />
+</svg>
