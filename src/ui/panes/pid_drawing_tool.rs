@@ -18,7 +18,7 @@ use crate::ui::{composable_view::PaneResponse, utils::egui_to_glam};
 
 use super::PaneBehavior;
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 enum Action {
     Connect(usize),
     ContextMenu(Vec2),
@@ -28,7 +28,7 @@ enum Action {
 }
 
 /// Piping and instrumentation diagram
-#[derive(Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Default, Debug)]
 pub struct PidPane {
     elements: Vec<Element>,
     connections: Vec<Connection>,
@@ -201,7 +201,6 @@ impl PidPane {
             if ui.button("Connect").clicked() {
                 self.action = Some(Action::Connect(elem_idx));
                 self.close_context_menu(ui);
-                println!("Connect action started on {}", elem_idx);
             }
             if ui.button("Rotate 90° ⟲").clicked() {
                 self.elements[elem_idx].rotate(-PI / 2.0);
@@ -340,19 +339,12 @@ impl PidPane {
     }
 
     fn handle_actions(&mut self, response: &Response, pointer_pos: Vec2) {
-        println!("Handling actions");
         match self.action {
             Some(Action::Connect(start)) => {
-                println!("Handling connect action");
                 if response.clicked() {
-                    println!("A click occurred");
                     if let Some(end) = self.hovers_element(pointer_pos) {
-                        println!("The pointer was hovering the element {}", end);
                         if start != end {
                             self.connections.push(Connection::new(start, 0, end, 0));
-                            println!("Connect action ended on {}", end);
-                        } else {
-                            println!("Connect action onded on the same element")
                         }
                         self.action.take();
                     }

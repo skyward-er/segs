@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::composable_view::PaneResponse;
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct Pane {
     pub pane: PaneKind,
 }
@@ -36,7 +36,7 @@ impl PaneBehavior for Pane {
 }
 
 // An enum to represent the diffent kinds of widget available to the user.
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[enum_dispatch]
 pub enum PaneKind {
     Default(default::DefaultPane),

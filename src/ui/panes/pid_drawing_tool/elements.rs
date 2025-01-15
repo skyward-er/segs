@@ -6,7 +6,7 @@ use egui::{Rect, Theme, Ui};
 use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Element {
     /// Anchor postion in grid coordinates, top-left corner
     position: glam::Vec2,

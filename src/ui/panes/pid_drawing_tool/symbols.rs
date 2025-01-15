@@ -3,7 +3,7 @@ use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, Display)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, Display, Debug)]
 pub enum Symbol {
     ManualValve,
     CheckValve,

@@ -9,7 +9,7 @@ use super::{
     PidPane,
 };
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Connection {
     /// Index of the start element
     pub start: usize,
