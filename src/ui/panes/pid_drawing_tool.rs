@@ -275,7 +275,7 @@ impl PidPane {
         let points: Vec<Vec2> = self
             .elements
             .iter()
-            .map(|e| e.position())
+            .map(|e| e.center())
             .chain(self.connections.iter().flat_map(|conn| conn.points()))
             .collect();
 
@@ -303,8 +303,7 @@ impl PidPane {
             .unwrap();
         let max = Vec2::new(max_x, max_y);
 
-        let center_g = (min + max) / 2.0;
-        self.grid.zero_pos = ui_center - center_g * self.grid.size();
+        self.grid.zero_pos = ui_center - min.midpoint(max) * self.grid.size();
     }
 
     fn handle_zoom(&mut self, ui: &Ui, theme: Theme, pointer_pos: Vec2) {
