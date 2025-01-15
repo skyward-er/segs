@@ -1,31 +1,27 @@
 mod connections;
 mod elements;
 mod grid;
-mod pos;
 mod symbols;
 
 use connections::Connection;
 use core::f32;
-use egui::{
-    epaint::PathStroke, Color32, Context, CursorIcon, Painter, PointerButton, Pos2, Rounding,
-    Sense, Stroke, Theme, Ui, Vec2,
-};
+use egui::{Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui};
 use elements::Element;
-use grid::{GridInfo, LINE_THICKNESS};
-use pos::Pos;
+use glam::Vec2;
+use grid::GridInfo;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use strum::IntoEnumIterator;
 use symbols::Symbol;
 
-use crate::ui::composable_view::PaneResponse;
+use crate::ui::{composable_view::PaneResponse, utils::egui_to_glam};
 
 use super::PaneBehavior;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 enum Action {
     Connect(usize),
-    ContextMenu(Pos2),
+    ContextMenu(Vec2),
     DragElement(usize),
     DragConnection(usize, usize),
     DragGrid,
@@ -59,93 +55,32 @@ impl PaneBehavior for PidPane {
         if self.editable {
             self.draw_grid(ui, theme);
         }
-
-        self.draw_connections(ui, theme, self.editable);
+        self.draw_connections(ui, theme);
         self.draw_elements(ui, theme);
 
-        // Allocate the space to sense inputs
+        // Handle things that require knowing the position of the pointer
         let (_, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
-        let pointer_pos = response.hover_pos();
-
-        if let Some(pointer_pos) = pointer_pos {
+        if let Some(pointer_pos) = response.hover_pos().map(|p| egui_to_glam(p.to_vec2())) {
             if self.editable {
-                self.handle_zoom(ui, theme, &pointer_pos);
+                self.handle_zoom(ui, theme, pointer_pos);
             }
-        }
 
-        // Set grab icon when hovering an element
-        if let Some(pointer_pos) = &pointer_pos {
-            if self.editable
-                && (self.is_hovering_element(pointer_pos)
-                    || self.is_hovering_connection_point(pointer_pos))
-            {
+            // Set grab icon when hovering something
+            let hovers_element = self.hovers_element(pointer_pos).is_some();
+            let hovers_connection_point = self.hovers_connection_point(pointer_pos).is_some();
+            if self.editable && (hovers_element || hovers_connection_point) {
                 ui.ctx()
                     .output_mut(|output| output.cursor_icon = CursorIcon::Grab);
             }
+
+            self.detect_action(&response, pointer_pos);
+            self.handle_actions(&response, pointer_pos);
         }
 
-        // Detect the action
-        if let Some(pointer_pos) = &pointer_pos {
-            if response.clicked_by(PointerButton::Secondary) {
-                println!("Context menu opened");
-                self.action = Some(Action::ContextMenu(*pointer_pos));
-            } else if self.editable {
-                if response.drag_started() {
-                    if response.dragged_by(PointerButton::Middle) {
-                        self.action = Some(Action::DragGrid);
-                        println!("Grid drag started");
-                    } else if let Some(drag_element_action) = self
-                        .find_hovered_element_idx(pointer_pos)
-                        .map(Action::DragElement)
-                    {
-                        self.action = Some(drag_element_action);
-                        println!("Element drag started");
-                    } else if let Some(drag_connection_point) = self
-                        .find_hovered_connection_point(pointer_pos)
-                        .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
-                    {
-                        self.action = Some(drag_connection_point);
-                        println!("Connection point drag started");
-                    }
-                } else if response.drag_stopped() {
-                    self.action.take();
-                    println!("Drag stopped");
-                }
-            }
-        }
-
-        // Context menu
+        // The context menu does not need the pointer's position.
+        // If active it has to be shown even if the pointer goes off screen.
         if let Some(Action::ContextMenu(pointer_pos)) = self.action.clone() {
-            response.context_menu(|ui| self.draw_context_menu(ui, &pointer_pos));
-        }
-
-        // Connect action
-        if let Some(pointer_pos) = pointer_pos {
-            match self.action {
-                Some(Action::Connect(start)) => {
-                    if let Some(end) = self.find_hovered_element_idx(&pointer_pos) {
-                        if response.clicked() {
-                            if start != end {
-                                self.connections.push(Connection::new(start, 0, end, 0));
-                                println!("Added connection from {} to {}", start, end);
-                            }
-                            self.action.take();
-                            println!("Connect action ended");
-                        }
-                    }
-                }
-                Some(Action::DragElement(idx)) => {
-                    self.elements[idx].position = Pos::from_pos2(&self.grid, &pointer_pos)
-                }
-                Some(Action::DragConnection(conn_idx, midpoint_idx)) => {
-                    self.connections[conn_idx].middle_points[midpoint_idx] =
-                        Pos::from_pos2(&self.grid, &pointer_pos);
-                }
-                Some(Action::DragGrid) => {
-                    self.grid.zero_pos += response.drag_delta();
-                }
-                _ => {}
-            }
+            response.context_menu(|ui| self.draw_context_menu(ui, pointer_pos));
         }
 
         PaneResponse::default()
@@ -157,20 +92,6 @@ impl PaneBehavior for PidPane {
 }
 
 impl PidPane {
-    fn is_hovering_element(&self, pointer_pos: &Pos2) -> bool {
-        self.elements
-            .iter()
-            .any(|element| element.contains(&self.grid, pointer_pos))
-    }
-
-    fn is_hovering_connection_point(&self, pointer_pos: &Pos2) -> bool {
-        self.connections.iter().any(|conn| {
-            conn.middle_points
-                .iter()
-                .any(|p| p.distance(&self.grid, pointer_pos) < 10.0)
-        })
-    }
-
     /// Returns the currently used theme
     fn find_theme(ctx: &Context) -> Theme {
         // In Egui you can either decide a theme or use the system one.
@@ -193,37 +114,32 @@ impl PidPane {
         }
     }
 
-    fn find_hovered_element_idx(&self, pos: &Pos2) -> Option<usize> {
+    /// Returns the index of the element the point is on, if any
+    fn hovers_element(&self, p_s: Vec2) -> Option<usize> {
         self.elements
             .iter()
-            .position(|elem| elem.contains(&self.grid, pos))
-    }
-
-    fn find_hovered_element_mut(&mut self, pos: &Pos2) -> Option<&mut Element> {
-        self.elements
-            .iter_mut()
-            .find(|element| element.contains(&self.grid, pos))
+            .position(|elem| elem.contains(self.grid.screen_to_grid(p_s)))
     }
 
     /// Return the connection and segment indexes where the position is on, if any
-    fn find_hovered_connection_idx(&self, pos: &Pos2) -> Option<(usize, usize)> {
+    fn hovers_connection(&self, p_s: Vec2) -> Option<(usize, usize)> {
         self.connections
             .iter()
             .enumerate()
-            .find_map(|(idx, conn)| Some(idx).zip(conn.contains(self, pos)))
+            .find_map(|(conn_idx, conn)| {
+                let segm_idx = conn.contains(self, p_s);
+                Some(conn_idx).zip(segm_idx)
+            })
     }
 
-    fn find_hovered_connection_point(&self, pos: &Pos2) -> Option<(usize, usize)> {
-        let mut midpoint_idx = Some(0);
-        let connection_idx = self.connections.iter().position(|conn| {
-            midpoint_idx = conn
-                .middle_points
-                .iter()
-                .position(|p| p.distance(&self.grid, pos) < 12.0);
-            midpoint_idx.is_some()
-        });
-
-        connection_idx.zip(midpoint_idx)
+    fn hovers_connection_point(&self, p_s: Vec2) -> Option<(usize, usize)> {
+        self.connections
+            .iter()
+            .enumerate()
+            .find_map(|(conn_idx, conn)| {
+                let p_idx = conn.hovers_point(self.grid.screen_to_grid(p_s));
+                Some(conn_idx).zip(p_idx)
+            })
     }
 
     fn draw_grid(&self, ui: &Ui, theme: Theme) {
@@ -231,24 +147,20 @@ impl PidPane {
         let window_rect = ui.max_rect();
         let dot_color = PidPane::dots_color(theme);
 
-        let offset_x = (self.grid.zero_pos.x % self.grid.get_size()) as i32;
-        let offset_y = (self.grid.zero_pos.y % self.grid.get_size()) as i32;
+        let offset_x = (self.grid.zero_pos.x % self.grid.size()) as i32;
+        let offset_y = (self.grid.zero_pos.y % self.grid.size()) as i32;
 
-        let start_x = (window_rect.min.x / self.grid.get_size()) as i32
-            * self.grid.get_size() as i32
+        let start_x =
+            (window_rect.min.x / self.grid.size()) as i32 * self.grid.size() as i32 + offset_x;
+        let end_x = (window_rect.max.x / self.grid.size() + 2.0) as i32 * self.grid.size() as i32
             + offset_x;
-        let end_x = (window_rect.max.x / self.grid.get_size() + 2.0) as i32
-            * self.grid.get_size() as i32
-            + offset_x;
-        let start_y = (window_rect.min.y / self.grid.get_size()) as i32
-            * self.grid.get_size() as i32
-            + offset_y;
-        let end_y = (window_rect.max.y / self.grid.get_size() + 2.0) as i32
-            * self.grid.get_size() as i32
+        let start_y =
+            (window_rect.min.y / self.grid.size()) as i32 * self.grid.size() as i32 + offset_y;
+        let end_y = (window_rect.max.y / self.grid.size() + 2.0) as i32 * self.grid.size() as i32
             + offset_y;
 
-        for x in (start_x..end_x).step_by(self.grid.get_size() as usize) {
-            for y in (start_y..end_y).step_by(self.grid.get_size() as usize) {
+        for x in (start_x..end_x).step_by(self.grid.size() as usize) {
+            for y in (start_y..end_y).step_by(self.grid.size() as usize) {
                 let rect = egui::Rect::from_min_size(
                     egui::Pos2::new(x as f32, y as f32),
                     egui::Vec2::new(1.0, 1.0),
@@ -258,146 +170,75 @@ impl PidPane {
         }
     }
 
-    fn draw_connections(&self, ui: &Ui, theme: Theme, draw_handles: bool) {
+    fn draw_connections(&self, ui: &Ui, theme: Theme) {
         let painter = ui.painter();
-        let color = match theme {
-            Theme::Light => Color32::BLACK,
-            Theme::Dark => Color32::WHITE,
-        };
 
-        // Each connection is composed from multiple lines
         for conn in &self.connections {
-            let start = self.elements[conn.start].get_anchor(&self.grid, conn.start_anchor);
-            let end = self.elements[conn.end].get_anchor(&self.grid, conn.end_anchor);
-
-            let points: Vec<Pos2> = conn
-                .middle_points
-                .iter()
-                .map(|p| p.to_pos2(&self.grid))
-                .collect();
-
-            // Draw line segments
-            if points.is_empty() {
-                self.draw_connection_segment(painter, color, start, end);
-            } else {
-                self.draw_connection_segment(painter, color, start, *points.first().unwrap());
-                for i in 0..(points.len() - 1) {
-                    self.draw_connection_segment(painter, color, points[i], points[i + 1]);
-                }
-                self.draw_connection_segment(painter, color, *points.last().unwrap(), end);
-            }
-
-            // Draw handles (dragging boxes)
-            if draw_handles {
-                for point in points {
-                    painter.rect(
-                        egui::Rect::from_center_size(
-                            point,
-                            Vec2::new(self.grid.get_size(), self.grid.get_size()),
-                        ),
-                        Rounding::ZERO,
-                        Color32::DARK_GRAY,
-                        Stroke::NONE,
-                    );
-                }
-            }
+            conn.draw(self, painter, theme);
         }
-    }
-
-    fn draw_connection_segment(&self, painter: &Painter, color: Color32, a: Pos2, b: Pos2) {
-        painter.line_segment(
-            [a, b],
-            PathStroke::new(LINE_THICKNESS * self.grid.get_size(), color),
-        );
     }
 
     fn draw_elements(&self, ui: &Ui, theme: Theme) {
         for element in &self.elements {
-            let image_rect = egui::Rect::from_center_size(
-                element.position.to_pos2(&self.grid),
-                Vec2::splat(element.size as f32 * self.grid.get_size()),
-            );
-
-            egui::Image::new(element.symbol.get_image(theme))
-                .rotate(element.rotation, Vec2::new(0.5, 0.5))
-                .paint_at(ui, image_rect);
+            element.draw(&self.grid, ui, theme);
         }
     }
 
-    fn draw_context_menu(&mut self, ui: &mut Ui, pointer_pos: &Pos2) {
+    fn draw_context_menu(&mut self, ui: &mut Ui, pointer_pos: Vec2) {
         ui.set_max_width(120.0); // To make sure we wrap long text
 
         if !self.editable {
             if ui.button("Enable editing").clicked() {
                 self.editable = true;
-                ui.close_menu();
+                self.close_context_menu(ui);
             }
             ui.checkbox(&mut self.center_content, "Center");
             return;
         }
 
-        if self.is_hovering_element(pointer_pos) {
-            let hovered_element = self.find_hovered_element_idx(pointer_pos);
+        let elem_idx = self.hovers_element(pointer_pos);
+        if let Some(elem_idx) = elem_idx {
             if ui.button("Connect").clicked() {
-                if let Some(idx) = hovered_element {
-                    println!("Connect action started");
-                    self.action = Some(Action::Connect(idx));
-                } else {
-                    panic!("No element found where the \"Connect\" action was issued");
-                }
-                ui.close_menu();
+                self.action = Some(Action::Connect(elem_idx));
+                self.close_context_menu(ui);
+                println!("Connect action started on {}", elem_idx);
             }
             if ui.button("Rotate 90° ⟲").clicked() {
-                if let Some(elem) = self.find_hovered_element_mut(pointer_pos) {
-                    elem.rotation += PI / 2.0;
-                } else {
-                    panic!("No element found where the \"Rotate 90° ⟲\" action was issued");
-                }
-                ui.close_menu();
+                self.elements[elem_idx].rotate(-PI / 2.0);
+                self.close_context_menu(ui);
             }
             if ui.button("Rotate 90° ⟳").clicked() {
-                if let Some(elem) = self.find_hovered_element_mut(pointer_pos) {
-                    elem.rotation -= PI / 2.0;
-                } else {
-                    panic!("No element found where the \"Rotate 90° ⟳\" action was issued");
-                }
-                ui.close_menu();
+                self.elements[elem_idx].rotate(PI / 2.0);
+                self.close_context_menu(ui);
             }
             if ui.button("Delete").clicked() {
-                if let Some(idx) = self.find_hovered_element_idx(pointer_pos) {
-                    self.delete_element(idx);
-                } else {
-                    panic!("No element found where the \"Delete\" action was issued");
-                }
-                ui.close_menu();
+                self.delete_element(elem_idx);
+                self.close_context_menu(ui);
             }
-        } else if let Some((conn_idx, segm_idx)) = self.find_hovered_connection_idx(pointer_pos) {
+        } else if let Some((conn_idx, segm_idx)) = self.hovers_connection(pointer_pos) {
             if ui.button("Split").clicked() {
-                println!("Splitting connection line");
-                self.connections[conn_idx].split(segm_idx, Pos::from_pos2(&self.grid, pointer_pos));
-                ui.close_menu();
+                self.connections[conn_idx].split(segm_idx, self.grid.screen_to_grid(pointer_pos));
+                self.close_context_menu(ui);
             }
             if ui.button("Change start anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
-                conn.start_anchor = (conn.start_anchor + 1)
-                    % self.elements[conn.start].symbol.get_anchor_points().len();
-                ui.close_menu();
+                conn.start_anchor =
+                    (conn.start_anchor + 1) % self.elements[conn.start].anchor_points_len();
+                self.close_context_menu(ui);
             }
             if ui.button("Change end anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
-                conn.end_anchor = (conn.end_anchor + 1)
-                    % self.elements[conn.end].symbol.get_anchor_points().len();
-                ui.close_menu();
+                conn.end_anchor =
+                    (conn.end_anchor + 1) % self.elements[conn.end].anchor_points_len();
+                self.close_context_menu(ui);
             }
         } else {
             ui.menu_button("Symbols", |ui| {
                 for symbol in Symbol::iter() {
                     if ui.button(symbol.to_string()).clicked() {
-                        self.elements.push(Element::new(
-                            Pos::from_pos2(&self.grid, pointer_pos),
-                            symbol,
-                        ));
-                        ui.close_menu();
+                        self.elements
+                            .push(Element::new(self.grid.screen_to_grid(pointer_pos), symbol));
+                        self.close_context_menu(ui);
                     }
                 }
             });
@@ -409,41 +250,60 @@ impl PidPane {
         }
     }
 
-    fn delete_element(&mut self, idx: usize) {
+    fn close_context_menu(&mut self, ui: &mut Ui) {
+        ui.close_menu();
+        self.action.take();
+    }
+
+    /// Removes an element from the diagram
+    fn delete_element(&mut self, elem_idx: usize) {
         // First delete connection referencing this element
-        self.connections
-            .retain(|elem| elem.start != idx && elem.end != idx);
+        self.connections.retain(|elem| !elem.connected(elem_idx));
 
         // Then the element
-        self.elements.remove(idx);
+        self.elements.remove(elem_idx);
     }
 
     fn center(&mut self, ui: &Ui) {
-        let ui_center = ui.max_rect().center();
+        let ui_center = egui_to_glam(ui.max_rect().center().to_vec2());
 
-        let points: Vec<Pos> = self
+        // Chain elements positions and connection mid points
+        let points: Vec<Vec2> = self
             .elements
             .iter()
-            .map(|e| e.position.clone())
-            .chain(
-                self.connections
-                    .iter()
-                    .flat_map(|conn| conn.middle_points.clone()),
-            )
+            .map(|e| e.position())
+            .chain(self.connections.iter().flat_map(|conn| conn.points()))
             .collect();
 
-        let min_x = points.iter().map(|p| p.x).min().unwrap();
-        let max_x = points.iter().map(|p| p.x).max().unwrap();
-        let min_y = points.iter().map(|p| p.y).min().unwrap();
-        let max_y = points.iter().map(|p| p.y).max().unwrap();
+        let min_x = points
+            .iter()
+            .map(|p| p.x)
+            .min_by(|a, b| a.total_cmp(b))
+            .unwrap();
+        let min_y = points
+            .iter()
+            .map(|p| p.y)
+            .min_by(|a, b| a.total_cmp(b))
+            .unwrap();
+        let min = Vec2::new(min_x, min_y);
 
-        let pid_center =
-            Pos::new((max_x + min_x) / 2, (max_y + min_y) / 2).to_relative_pos2(&self.grid);
+        let max_x = points
+            .iter()
+            .map(|p| p.x)
+            .max_by(|a, b| a.total_cmp(b))
+            .unwrap();
+        let max_y = points
+            .iter()
+            .map(|p| p.y)
+            .max_by(|a, b| a.total_cmp(b))
+            .unwrap();
+        let max = Vec2::new(max_x, max_y);
 
-        self.grid.zero_pos = ui_center - pid_center.to_vec2();
+        let center_g = (min + max) / 2.0;
+        self.grid.zero_pos = ui_center - center_g * self.grid.size();
     }
 
-    fn handle_zoom(&mut self, ui: &Ui, theme: Theme, pointer_pos: &Pos2) {
+    fn handle_zoom(&mut self, ui: &Ui, theme: Theme, pointer_pos: Vec2) {
         let scroll_delta = ui.input(|i| i.raw_scroll_delta).y;
         if scroll_delta != 0.0 {
             self.grid.apply_scroll_delta(scroll_delta, pointer_pos);
@@ -453,6 +313,65 @@ impl PidPane {
                 let img: egui::ImageSource = symbol.get_image(theme);
                 ui.ctx().forget_image(img.uri().unwrap());
             }
+        }
+    }
+
+    fn detect_action(&mut self, response: &Response, pointer_pos: Vec2) {
+        if response.clicked_by(PointerButton::Secondary) {
+            self.action = Some(Action::ContextMenu(pointer_pos));
+        } else if self.editable {
+            if response.drag_started() {
+                if response.dragged_by(PointerButton::Middle) {
+                    self.action = Some(Action::DragGrid);
+                } else if let Some(drag_element_action) =
+                    self.hovers_element(pointer_pos).map(Action::DragElement)
+                {
+                    self.action = Some(drag_element_action);
+                } else if let Some(drag_connection_point) = self
+                    .hovers_connection_point(pointer_pos)
+                    .map(|(idx1, idx2)| Action::DragConnection(idx1, idx2))
+                {
+                    self.action = Some(drag_connection_point);
+                }
+            } else if response.drag_stopped() {
+                self.action.take();
+            }
+        }
+    }
+
+    fn handle_actions(&mut self, response: &Response, pointer_pos: Vec2) {
+        println!("Handling actions");
+        match self.action {
+            Some(Action::Connect(start)) => {
+                println!("Handling connect action");
+                if response.clicked() {
+                    println!("A click occurred");
+                    if let Some(end) = self.hovers_element(pointer_pos) {
+                        println!("The pointer was hovering the element {}", end);
+                        if start != end {
+                            self.connections.push(Connection::new(start, 0, end, 0));
+                            println!("Connect action ended on {}", end);
+                        } else {
+                            println!("Connect action onded on the same element")
+                        }
+                        self.action.take();
+                    }
+                }
+            }
+            Some(Action::DragElement(idx)) => {
+                let pointer_pos_g = self.grid.screen_to_grid(pointer_pos).round();
+                self.elements[idx].set_center_at(pointer_pos_g);
+            }
+            Some(Action::DragConnection(conn_idx, point_idx)) => {
+                let pointer_pos_g = self.grid.screen_to_grid(pointer_pos).round();
+                self.connections[conn_idx].set_point(point_idx, pointer_pos_g);
+            }
+            Some(Action::DragGrid) => {
+                self.grid.zero_pos += egui_to_glam(response.drag_delta());
+            }
+            // Context menu has to be handled outside since it does not reuquire the pointer's position
+            Some(Action::ContextMenu(_)) => {}
+            None => {}
         }
     }
 }

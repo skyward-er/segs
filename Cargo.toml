@@ -11,7 +11,7 @@ license = "MIT"
 # ======= GUI & Rendering =======
 egui_tiles = "0.10"
 eframe = { version = "0.29", features = ["persistence"] }
-egui = { version = "0.29", features = ["log"] }
+egui = { version = "0.29", features = ["log", "mint"] }
 egui_plot = "0.29"
 egui_file = "0.19"
 # =========== Asynchronous ===========
@@ -49,3 +49,5 @@ anyhow = "1.0"
 ring-channel = "0.12.0"
 thiserror = "2.0.7"
 uuid = { version = "1.12.1", features = ["serde", "v7"] }
+glam = { version = "0.29", features = ["serde", "mint"] }
+mint = "0.5.9"

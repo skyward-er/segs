@@ -1079,6 +1079,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1fe0049ce51d0fb414d029e668dd72eb30bc2b739bf34296ed97bd33df544f3"
 dependencies = [
  "bytemuck",
+ "mint",
  "serde",
 ]
 
@@ -1441,6 +1442,16 @@ dependencies = [
  "khronos_api",
  "log",
  "xml-rs",
+]
+
+[[package]]
+name = "glam"
+version = "0.29.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc46dd3ec48fdd8e693a98d2b8bafae273a2d54c1de02a2a7e3d57d501f39677"
+dependencies = [
+ "mint",
+ "serde",
 ]
 
 [[package]]
@@ -2086,6 +2097,12 @@ dependencies = [
  "adler2",
  "simd-adler32",
 ]
+
+[[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
 
 [[package]]
 name = "mio"
@@ -2938,7 +2955,9 @@ dependencies = [
  "egui_plot",
  "egui_tiles",
  "enum_dispatch",
+ "glam",
  "mavlink-bindgen",
+ "mint",
  "parking_lot",
  "ring-channel",
  "serde",
