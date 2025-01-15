@@ -108,9 +108,9 @@ impl Element {
         self.symbol.size()
     }
 
-    /// Position of the element's top-left corner
-    pub fn position(&self) -> Vec2 {
-        self.position
+    /// Position of the element's center in grid frame
+    pub fn center(&self) -> Vec2 {
+        self.position + Mat2::from_angle(self.rotation) * self.size() * 0.5
     }
 
     pub fn draw(&self, grid: &GridInfo, ui: &Ui, theme: Theme) {
