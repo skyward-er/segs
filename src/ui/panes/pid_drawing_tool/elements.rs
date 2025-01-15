@@ -25,9 +25,9 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn new(position: Vec2, symbol: Symbol) -> Self {
+    pub fn new(center: Vec2, symbol: Symbol) -> Self {
         Self {
-            position,
+            position: center - symbol.size() / 2.0,
             rotation: 0.0,
             anchor_points: symbol.anchor_points(),
             symbol,
@@ -54,7 +54,7 @@ impl Element {
         let rotm_e_to_g = Mat2::from_angle(self.rotation);
 
         // Center in grid's frame
-        let center_g = rotm_e_to_g * self.symbol.size() / 2.0;
+        let center_g = rotm_e_to_g * self.size() / 2.0;
 
         self.position = p_g - center_g;
     }
