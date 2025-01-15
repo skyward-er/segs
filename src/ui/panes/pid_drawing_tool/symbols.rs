@@ -27,79 +27,79 @@ impl Symbol {
                 egui::include_image!("../../../../icons/pid_symbols/light/arrow.svg")
             }
             (Symbol::Arrow, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/arrow.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/arrow.svg")
             }
             (Symbol::BurstDisk, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/burst_disk.svg")
             }
             (Symbol::BurstDisk, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/burst_disk.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/burst_disk.svg")
             }
             (Symbol::ManualValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/manual_valve.svg")
             }
             (Symbol::ManualValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/manual_valve.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/manual_valve.svg")
             }
             (Symbol::CheckValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/check_valve.svg")
             }
             (Symbol::CheckValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/check_valve.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/check_valve.svg")
             }
             (Symbol::ReliefValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/relief_valve.svg")
             }
             (Symbol::ReliefValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/relief_valve.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/relief_valve.svg")
             }
             (Symbol::MotorValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/motor_valve.svg")
             }
             (Symbol::MotorValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/motor_valve.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/motor_valve.svg")
             }
             (Symbol::ThreeWayValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/three_way_valve.svg")
             }
             (Symbol::ThreeWayValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/three_way_valve.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/three_way_valve.svg")
             }
             (Symbol::PressureRegulator, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/pressure_regulator.svg")
             }
             (Symbol::PressureRegulator, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/pressure_regulator.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/pressure_regulator.svg")
             }
             (Symbol::QuickConnector, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/quick_connector.svg")
             }
             (Symbol::QuickConnector, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/quick_connector.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/quick_connector.svg")
             }
             (Symbol::PressureTransducer, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/pressure_transducer.svg")
             }
             (Symbol::PressureTransducer, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/pressure_transducer.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/pressure_transducer.svg")
             }
             (Symbol::PressureGauge, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/pressure_gauge.svg")
             }
             (Symbol::PressureGauge, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/pressure_gauge.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/pressure_gauge.svg")
             }
             (Symbol::FlexibleConnection, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/flexible_connection.svg")
             }
             (Symbol::FlexibleConnection, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/flexible_connection.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/flexible_connection.svg")
             }
             (Symbol::Vessel, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/vessel.svg")
             }
             (Symbol::Vessel, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/vessel.svg")
+                egui::include_image!("../../../../icons/pid_symbols/dark/vessel.svg")
             }
         }
     }
