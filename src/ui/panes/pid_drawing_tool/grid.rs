@@ -14,7 +14,6 @@ pub const CONNECTION_POINT_SIZE: f32 = 1.0; // Grid units
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct GridInfo {
-    /// Grid's zero position on screen
     pub zero_pos: Vec2,
     size: f32,
 }

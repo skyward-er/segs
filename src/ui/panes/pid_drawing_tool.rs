@@ -18,7 +18,7 @@ use crate::ui::{composable_view::PaneResponse, utils::egui_to_glam};
 
 use super::PaneBehavior;
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 enum Action {
     Connect(usize),
     ContextMenu(Vec2),
@@ -28,7 +28,7 @@ enum Action {
 }
 
 /// Piping and instrumentation diagram
-#[derive(Clone, Serialize, Deserialize, PartialEq, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct PidPane {
     elements: Vec<Element>,
     connections: Vec<Connection>,
@@ -42,6 +42,15 @@ pub struct PidPane {
     editable: bool,
 
     center_content: bool,
+}
+
+impl PartialEq for PidPane {
+    fn eq(&self, other: &Self) -> bool {
+        self.elements == other.elements
+            && self.connections == other.connections
+            && self.grid == other.grid
+            && self.center_content == other.center_content
+    }
 }
 
 impl PaneBehavior for PidPane {
@@ -178,8 +187,8 @@ impl PidPane {
         }
     }
 
-    fn draw_elements(&self, ui: &Ui, theme: Theme) {
-        for element in &self.elements {
+    fn draw_elements(&mut self, ui: &Ui, theme: Theme) {
+        for element in &mut self.elements {
             element.draw(&self.grid, ui, theme);
         }
     }
