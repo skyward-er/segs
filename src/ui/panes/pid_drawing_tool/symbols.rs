@@ -1,5 +1,8 @@
+mod motor_valve;
+
 use egui::{ImageSource, Theme};
 use glam::Vec2;
+use motor_valve::MotorValve;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 
@@ -10,7 +13,7 @@ pub enum Symbol {
     CheckValve,
     FlexibleConnection,
     ManualValve,
-    MotorValve,
+    MotorValve(MotorValve),
     PressureGauge,
     PressureRegulator,
     PressureTransducer,
@@ -53,12 +56,26 @@ impl Symbol {
             (Symbol::ReliefValve, Theme::Dark) => {
                 egui::include_image!("../../../../icons/pid_symbols/dark/relief_valve.svg")
             }
-            (Symbol::MotorValve, Theme::Light) => {
-                egui::include_image!("../../../../icons/pid_symbols/light/motor_valve.svg")
-            }
-            (Symbol::MotorValve, Theme::Dark) => {
-                egui::include_image!("../../../../icons/pid_symbols/dark/motor_valve.svg")
-            }
+            (Symbol::MotorValve(state), Theme::Light) => match state.last_value {
+                None => egui::include_image!("../../../../icons/pid_symbols/light/motor_valve.svg"),
+                Some(true) => {
+                    egui::include_image!(
+                        "../../../../icons/pid_symbols/light/motor_valve_green.svg"
+                    )
+                }
+                Some(false) => {
+                    egui::include_image!("../../../../icons/pid_symbols/light/motor_valve_red.svg")
+                }
+            },
+            (Symbol::MotorValve(state), Theme::Dark) => match state.last_value {
+                None => egui::include_image!("../../../../icons/pid_symbols/dark/motor_valve.svg"),
+                Some(true) => {
+                    egui::include_image!("../../../../icons/pid_symbols/dark/motor_valve_green.svg")
+                }
+                Some(false) => {
+                    egui::include_image!("../../../../icons/pid_symbols/dark/motor_valve_red.svg")
+                }
+            },
             (Symbol::ThreeWayValve, Theme::Light) => {
                 egui::include_image!("../../../../icons/pid_symbols/light/three_way_valve.svg")
             }
@@ -112,7 +129,7 @@ impl Symbol {
             Symbol::CheckValve => (10.0, 5.0),
             Symbol::FlexibleConnection => (10.0, 6.0),
             Symbol::ManualValve => (10.0, 5.0),
-            Symbol::MotorValve => (10.0, 8.0),
+            Symbol::MotorValve(_) => (10.0, 8.0),
             Symbol::PressureGauge => (7.0, 7.0),
             Symbol::PressureRegulator => (10.0, 10.0),
             Symbol::PressureTransducer => (7.0, 7.0),
@@ -132,7 +149,7 @@ impl Symbol {
             Symbol::CheckValve => vec![(0.0, 2.5), (10.0, 2.5)],
             Symbol::FlexibleConnection => vec![(0.0, 3.0), (10.0, 3.0)],
             Symbol::ManualValve => vec![(0.0, 2.5), (10.0, 2.5)],
-            Symbol::MotorValve => vec![(0.0, 5.0), (10.0, 5.0)],
+            Symbol::MotorValve(_) => vec![(0.0, 5.0), (10.0, 5.0)],
             Symbol::PressureGauge => vec![(3.5, 7.0)],
             Symbol::PressureRegulator => vec![(0.0, 7.0), (10.0, 7.0)],
             Symbol::PressureTransducer => vec![(3.5, 7.0)],
@@ -144,5 +161,32 @@ impl Symbol {
         .iter()
         .map(|&p| p.into())
         .collect()
+    }
+}
+
+/// Single MavLink value source info
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(from = "SerialMavlinkValue")]
+struct MavlinkValue {
+    msg_id: u32,
+    field: String,
+
+    #[serde(skip)]
+    view_id: egui::Id,
+}
+
+#[derive(Deserialize)]
+struct SerialMavlinkValue {
+    msg_id: u32,
+    field: String,
+}
+
+impl From<SerialMavlinkValue> for MavlinkValue {
+    fn from(value: SerialMavlinkValue) -> Self {
+        Self {
+            msg_id: value.msg_id,
+            field: value.field,
+            view_id: egui::Id::new(""),
+        }
     }
 }

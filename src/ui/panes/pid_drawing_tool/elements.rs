@@ -1,12 +1,14 @@
-use crate::ui::utils::glam_to_egui;
+use crate::{msg_broker, ui::utils::glam_to_egui};
 
 use super::grid::GridInfo;
 use super::symbols::Symbol;
+use crate::error::ErrInstrument;
 use egui::{Rect, Theme, Ui};
 use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(from = "SerialElement")]
 pub struct Element {
     /// Anchor postion in grid coordinates, top-left corner
     position: glam::Vec2,
@@ -21,7 +23,16 @@ pub struct Element {
     ///
     /// These vectors include the current rotation of the element.
     /// They are cached to avoid recomputing the rotation.
+    #[serde(skip)]
     anchor_points: Vec<Vec2>,
+}
+
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.position == other.position
+            && self.symbol == other.symbol
+            && self.rotation == other.rotation
+    }
 }
 
 impl Element {
@@ -113,12 +124,36 @@ impl Element {
         self.position + Mat2::from_angle(self.rotation) * self.size() * 0.5
     }
 
-    pub fn draw(&self, grid: &GridInfo, ui: &Ui, theme: Theme) {
+    pub fn draw(&mut self, grid: &GridInfo, ui: &Ui, theme: Theme) {
         let center = glam_to_egui(grid.grid_to_screen(self.position)).to_pos2();
         let image_rect = Rect::from_min_size(center, glam_to_egui(self.size() * grid.size()));
 
         egui::Image::new(self.symbol.get_image(theme))
             .rotate(self.rotation, egui::Vec2::splat(0.0))
             .paint_at(ui, image_rect);
+
+        if let Symbol::MotorValve(motor_valve) = &mut self.symbol {
+            msg_broker!().refresh_view(motor_valve).log_expect("bruh");
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SerialElement {
+    position: glam::Vec2,
+    symbol: Symbol,
+    rotation: f32,
+}
+
+impl From<SerialElement> for Element {
+    fn from(value: SerialElement) -> Self {
+        let mut value = Self {
+            position: value.position,
+            symbol: value.symbol,
+            rotation: value.rotation,
+            anchor_points: Vec::new(),
+        };
+        value.reload_anchor_points();
+        value
     }
 }
