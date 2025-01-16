@@ -1,10 +1,10 @@
-use egui::{Context, Id};
+use egui::Context;
 use egui_tiles::TileId;
 use strum::{EnumMessage, IntoEnumIterator};
 
 use super::{
     composable_view::PaneAction,
-    panes::{plot::Plot2DPane, Pane, PaneKind},
+    panes::{Pane, PaneKind},
 };
 
 #[derive(Default)]
@@ -28,9 +28,11 @@ impl WidgetGallery {
                 for pane in PaneKind::iter() {
                     if let PaneKind::Default(_) = pane {
                         continue;
-                    } else if ui.button(pane.get_message().unwrap()).clicked() {
-                        if let Some(tile_id) = self.tile_id {
-                            return Some(PaneAction::Replace(tile_id, Pane::boxed(pane)));
+                    } else if let Some(message) = pane.get_message() {
+                        if ui.button(message).clicked() {
+                            if let Some(tile_id) = self.tile_id {
+                                return Some(PaneAction::Replace(tile_id, Pane::boxed(pane)));
+                            }
                         }
                     }
                 }
@@ -38,7 +40,7 @@ impl WidgetGallery {
             });
         self.open = window_visible;
 
-        let action = resp.map(|resp| resp.inner.flatten()).flatten();
+        let action = resp.and_then(|resp| resp.inner).flatten();
 
         // If an action was taken, always close the window
         if action.is_some() {
