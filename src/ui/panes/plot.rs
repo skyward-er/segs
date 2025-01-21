@@ -9,7 +9,7 @@ use source_window::{sources_window, SourceSettings};
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        extract_from_message, MavlinkResult, MessageData, MessageView, TimedMessage,
+        extract_from_message, MavlinkResult, MessageData, MessageView, TimedMessage, ViewId,
         ROCKET_FLIGHT_TM_DATA,
     },
     msg_broker,
@@ -18,7 +18,7 @@ use crate::{
 
 use super::PaneBehavior;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
     // UI settings
     #[serde(skip)]
@@ -28,18 +28,6 @@ pub struct Plot2DPane {
     line_settings: Vec<LineSettings>,
     plot_active: bool,
     view: PlotMessageView,
-}
-
-impl Plot2DPane {
-    pub fn new(id: egui::Id) -> Self {
-        Self {
-            contains_pointer: false,
-            settings_visible: false,
-            line_settings: vec![],
-            plot_active: false,
-            view: PlotMessageView::new(id),
-        }
-    }
 }
 
 impl PartialEq for Plot2DPane {
@@ -131,7 +119,7 @@ impl PaneBehavior for Plot2DPane {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct PlotMessageView {
     // == Settings from the UI ==
     settings: MsgSources,
@@ -139,36 +127,20 @@ struct PlotMessageView {
     #[serde(skip)]
     points: Vec<(f64, Vec<f64>)>,
     // == Internal ==
-    id: egui::Id,
+    id: ViewId,
     #[serde(skip)]
     cache_valid: bool,
 }
 
-impl Default for PlotMessageView {
-    fn default() -> Self {
-        Self {
-            settings: MsgSources::default(),
-            points: Vec::new(),
-            id: egui::Id::new("plot"), // TODO: Fix ids
-            cache_valid: false,
-        }
-    }
-}
-
 impl PlotMessageView {
-    fn new(id: egui::Id) -> Self {
-        Self {
-            settings: Default::default(),
-            points: Vec::new(),
-            id,
-            cache_valid: false,
-        }
+    fn new() -> Self {
+        Self::default()
     }
 }
 
 impl MessageView for PlotMessageView {
-    fn widget_id(&self) -> &egui::Id {
-        &self.id
+    fn view_id(&self) -> ViewId {
+        self.id
     }
 
     fn id_of_interest(&self) -> u32 {
