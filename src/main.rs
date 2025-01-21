@@ -6,6 +6,7 @@ mod error;
 mod mavlink;
 mod serial;
 mod ui;
+mod utils;
 
 use std::{
     num::NonZeroUsize,
