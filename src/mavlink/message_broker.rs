@@ -111,8 +111,7 @@ impl MessageBroker {
     }
 
     /// Start a listener task that listens to incoming messages from the given
-    /// Ethernet port, and accumulates them in a ring buffer, read only when
-    /// views request a refresh.
+    /// Ethernet port and stores them in a ring buffer.
     pub fn listen_from_ethernet_port(&mut self, port: u16) {
         // Stop the current listener if it exists
         self.stop_listening();
@@ -138,6 +137,40 @@ impl MessageBroker {
                     .await
                     .context("Failed to receive message")?;
                 for (_, mav_message) in byte_parser(&buf[..len]) {
+                    debug!("Received message: {:?}", mav_message);
+                    tx.send(TimedMessage::just_received(mav_message))
+                        .context("Failed to send message")?;
+                    ctx.request_repaint();
+                }
+            }
+
+            Ok::<(), anyhow::Error>(())
+        });
+        self.task = Some(handle);
+    }
+
+    /// Start a listener task that listens to incoming messages from the given
+    /// serial port and stores them in a ring buffer.
+    pub fn listen_from_serial_port(&mut self, port: String, baud_rate: u32) {
+        // Stop the current listener if it exists
+        self.stop_listening();
+        self.running_flag.store(true, Ordering::Relaxed);
+
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+
+        let running_flag = self.running_flag.clone();
+
+        debug!("Spawning listener task at {}", port);
+        let handle = tokio::task::spawn_blocking(move || {
+            let mut serial_port = serialport::new(port, baud_rate)
+                .timeout(std::time::Duration::from_millis(100))
+                .open()
+                .context("Failed to open serial port")?;
+            debug!("Listening on serial port");
+
+            while running_flag.load(Ordering::Relaxed) {
+                for (_, mav_message) in byte_parser(&mut serial_port) {
                     debug!("Received message: {:?}", mav_message);
                     tx.send(TimedMessage::just_received(mav_message))
                         .context("Failed to send message")?;

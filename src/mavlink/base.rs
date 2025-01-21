@@ -61,7 +61,9 @@ where
 }
 
 /// Read a stream of bytes and return an iterator of MavLink messages
-pub fn byte_parser(buf: &[u8]) -> impl Iterator<Item = (MavHeader, MavMessage)> + '_ {
-    let mut reader = PeekReader::new(buf);
+pub fn byte_parser<'a>(
+    reader: impl std::io::Read + 'a,
+) -> impl Iterator<Item = (MavHeader, MavMessage)> + 'a {
+    let mut reader = PeekReader::new(reader);
     std::iter::from_fn(move || read_v1_msg(&mut reader).ok())
 }
