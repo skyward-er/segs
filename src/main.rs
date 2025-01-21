@@ -4,6 +4,7 @@
 
 mod error;
 mod mavlink;
+mod serial;
 mod ui;
 
 use std::{
