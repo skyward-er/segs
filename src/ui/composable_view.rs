@@ -1,4 +1,9 @@
-use crate::{error::ErrInstrument, mavlink, msg_broker, ui::panes::PaneKind};
+use crate::{
+    error::ErrInstrument,
+    mavlink, msg_broker,
+    serial::{get_first_stm32_serial_port, list_all_serial_ports},
+    ui::panes::PaneKind,
+};
 
 use super::{
     panes::{Pane, PaneBehavior},
@@ -12,7 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use egui::{Key, Modifiers};
+use egui::{Align2, Button, ComboBox, Key, Modifiers};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, trace};
@@ -272,18 +277,33 @@ impl ComposableViewState {
     }
 }
 
-struct SourceWindow {
-    port: u16,
-    visible: bool,
+#[derive(Debug, PartialEq, Eq, Default)]
+enum ConnectionKind {
+    #[default]
+    Ethernet,
+    Serial,
 }
 
-impl Default for SourceWindow {
+#[derive(Debug)]
+enum ConnectionDetails {
+    Ethernet { port: u16 },
+    Serial { port: String, baud_rate: u32 },
+}
+
+impl Default for ConnectionDetails {
     fn default() -> Self {
-        Self {
+        ConnectionDetails::Ethernet {
             port: mavlink::DEFAULT_ETHERNET_PORT,
-            visible: false,
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct SourceWindow {
+    visible: bool,
+    connected: bool,
+    connection_kind: ConnectionKind,
+    connection_details: ConnectionDetails,
 }
 
 impl SourceWindow {
@@ -292,9 +312,10 @@ impl SourceWindow {
         let mut can_be_closed = false;
         egui::Window::new("Sources")
             .id(ui.id())
-            .auto_sized()
+            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+            .max_width(200.0)
             .collapsible(false)
-            .movable(true)
+            .resizable(false)
             .open(&mut window_is_open)
             .show(ui.ctx(), |ui| {
                 self.ui(ui, &mut can_be_closed);
@@ -303,22 +324,110 @@ impl SourceWindow {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, can_be_closed: &mut bool) {
-        egui::Grid::new(ui.id())
-            .num_columns(2)
-            .spacing([10.0, 5.0])
-            .show(ui, |ui| {
-                ui.label("Ethernet Port:");
-                ui.add(
-                    egui::DragValue::new(&mut self.port)
-                        .range(0..=65535)
-                        .speed(10),
-                );
-                ui.end_row();
-            });
-        if ui.button("Connect").clicked() {
-            msg_broker!().listen_from_ethernet_port(self.port);
-            *can_be_closed = true;
-        }
+        let SourceWindow {
+            connected,
+            connection_kind,
+            connection_details,
+            ..
+        } = self;
+        ui.label("Select Source:");
+        ui.horizontal_top(|ui| {
+            ui.radio_value(connection_kind, ConnectionKind::Ethernet, "Ethernet");
+            ui.radio_value(connection_kind, ConnectionKind::Serial, "Serial");
+        });
+
+        ui.separator();
+
+        match *connection_kind {
+            ConnectionKind::Ethernet => {
+                if !matches!(connection_details, ConnectionDetails::Ethernet { .. }) {
+                    *connection_details = ConnectionDetails::Ethernet {
+                        port: mavlink::DEFAULT_ETHERNET_PORT,
+                    };
+                }
+                let ConnectionDetails::Ethernet { port } = connection_details else {
+                    error!("UNREACHABLE: Connection kind is not Ethernet");
+                    unreachable!("Connection kind is not Ethernet");
+                };
+
+                egui::Grid::new("grid")
+                    .num_columns(2)
+                    .spacing([10.0, 5.0])
+                    .show(ui, |ui| {
+                        ui.label("Ethernet Port:");
+                        ui.add(egui::DragValue::new(port).range(0..=65535).speed(10));
+                        ui.end_row();
+                    });
+            }
+            ConnectionKind::Serial => {
+                if !matches!(connection_details, ConnectionDetails::Serial { .. }) {
+                    *connection_details = ConnectionDetails::Serial {
+                        // Default to the first STM32 serial port if available, otherwise
+                        // default to the first serial port available
+                        port: get_first_stm32_serial_port().unwrap_or(
+                            list_all_serial_ports()
+                                .ok()
+                                .and_then(|ports| ports.first().cloned())
+                                .unwrap_or_default(),
+                        ),
+                        baud_rate: 115200,
+                    };
+                }
+                let ConnectionDetails::Serial { port, baud_rate } = connection_details else {
+                    error!("UNREACHABLE: Connection kind is not Serial");
+                    unreachable!("Connection kind is not Serial");
+                };
+
+                egui::Grid::new("grid")
+                    .num_columns(2)
+                    .spacing([10.0, 5.0])
+                    .show(ui, |ui| {
+                        ui.label("Serial Port:");
+                        ComboBox::from_id_salt("serial_port")
+                            .selected_text(port.clone())
+                            .show_ui(ui, |ui| {
+                                for available_port in list_all_serial_ports().unwrap_or_default() {
+                                    ui.selectable_value(
+                                        port,
+                                        available_port.clone(),
+                                        available_port,
+                                    );
+                                }
+                            });
+                        ui.end_row();
+                        ui.label("Baud Rate:");
+                        ui.add(
+                            egui::DragValue::new(baud_rate)
+                                .range(110..=256000)
+                                .speed(100),
+                        );
+                        ui.end_row();
+                    });
+            }
+        };
+
+        ui.separator();
+
+        ui.horizontal_top(|ui| {
+            let btn1 = Button::new("Connect");
+            let btn2 = Button::new("Disconnect");
+            if ui.add_enabled(!*connected, btn1).clicked() {
+                match connection_details {
+                    ConnectionDetails::Ethernet { port } => {
+                        msg_broker!().listen_from_ethernet_port(*port);
+                    }
+                    ConnectionDetails::Serial { port, baud_rate } => {
+                        msg_broker!().listen_from_serial_port(port.clone(), *baud_rate);
+                    }
+                }
+                *can_be_closed = true;
+                *connected = true;
+            }
+            if ui.add_enabled(*connected, btn2).clicked() {
+                msg_broker!().stop_listening();
+                *connected = false;
+            }
+        });
     }
 }
 
