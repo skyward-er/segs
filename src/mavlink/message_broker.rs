@@ -7,6 +7,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
+    io::Write,
     num::NonZeroUsize,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -21,7 +22,7 @@ use tokio::{net::UdpSocket, task::JoinHandle};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::mavlink::byte_parser;
+use crate::{error::ErrInstrument, mavlink::byte_parser, utils::RingBuffer};
 
 use super::{MavlinkResult, Message, TimedMessage};
 
@@ -169,8 +170,19 @@ impl MessageBroker {
                 .context("Failed to open serial port")?;
             debug!("Listening on serial port");
 
+            let mut ring_buf = RingBuffer::<1024>::new();
+            let mut temp_buf = [0; 512];
+            // need to do a better error handling for this (need toast errors)
             while running_flag.load(Ordering::Relaxed) {
-                for (_, mav_message) in byte_parser(&mut serial_port) {
+                let result = serial_port
+                    .read(&mut temp_buf)
+                    .log_expect("Failed to read from serial port");
+                debug!("Read {} bytes from serial port", result);
+                trace!("data read from serial: {:?}", &temp_buf[..result]);
+                ring_buf
+                    .write(&temp_buf[..result])
+                    .log_expect("Failed to write to ring buffer, check buffer size");
+                for (_, mav_message) in byte_parser(&mut ring_buf) {
                     debug!("Received message: {:?}", mav_message);
                     tx.send(TimedMessage::just_received(mav_message))
                         .context("Failed to send message")?;
