@@ -15,10 +15,11 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use egui::{ahash::HashMapExt, IdMap};
 use ring_channel::{ring_channel, RingReceiver, RingSender};
+use serde::{Deserialize, Serialize};
 use tokio::{net::UdpSocket, task::JoinHandle};
 use tracing::{debug, trace};
+use uuid::Uuid;
 
 use crate::mavlink::byte_parser;
 
@@ -32,8 +33,8 @@ const UDP_BUFFER_SIZE: usize = 65527;
 /// This trait should be implemented by any view that wants to interact with the
 /// `MessageBroker` and get updates on the messages it is interested in.
 pub trait MessageView {
-    /// Returns the widget ID of the view
-    fn widget_id(&self) -> &egui::Id;
+    /// Returns an hashable value as widget identifier
+    fn view_id(&self) -> ViewId;
     /// Returns the message ID of interest for the view
     fn id_of_interest(&self) -> u32;
     /// Returns whether the view is cache valid or not, i.e. if it can be
@@ -59,7 +60,7 @@ pub struct MessageBroker {
     /// map(message ID -> vector of messages received so far)
     messages: HashMap<u32, Vec<TimedMessage>>,
     /// map(widget ID -> queue of messages left for update)
-    update_queues: IdMap<(u32, VecDeque<TimedMessage>)>,
+    update_queues: HashMap<ViewId, (u32, VecDeque<TimedMessage>)>,
     // == Internal ==
     /// Flag to stop the listener
     running_flag: Arc<AtomicBool>,
@@ -79,7 +80,7 @@ impl MessageBroker {
         let (tx, rx) = ring_channel(channel_size);
         Self {
             messages: HashMap::new(),
-            update_queues: IdMap::new(),
+            update_queues: HashMap::new(),
             tx,
             rx,
             ctx,
@@ -92,7 +93,7 @@ impl MessageBroker {
     /// validity based on `is_valid` method of the view.
     pub fn refresh_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
         self.process_incoming_msgs();
-        if !view.is_valid() || !self.is_view_subscribed(view.widget_id()) {
+        if !view.is_valid() || !self.is_view_subscribed(view.view_id()) {
             self.init_view(view)?;
         } else {
             self.update_view(view)?;
@@ -159,25 +160,25 @@ impl MessageBroker {
         self.messages.clear();
     }
 
-    fn is_view_subscribed(&self, widget_id: &egui::Id) -> bool {
-        self.update_queues.contains_key(widget_id)
+    fn is_view_subscribed(&self, view_id: ViewId) -> bool {
+        self.update_queues.contains_key(&view_id)
     }
 
     /// Init a view in case of cache invalidation or first time initialization.
     fn init_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
-        trace!("initializing view: {:?}", view.widget_id());
+        trace!("initializing view: {:?}", view.view_id());
         if let Some(messages) = self.messages.get(&view.id_of_interest()) {
             view.populate_view(messages)?;
         }
         self.update_queues
-            .insert(*view.widget_id(), (view.id_of_interest(), VecDeque::new()));
+            .insert(view.view_id(), (view.id_of_interest(), VecDeque::new()));
         Ok(())
     }
 
     /// Update a view with new messages, used when the cache is valid.
     fn update_view<V: MessageView>(&mut self, view: &mut V) -> MavlinkResult<()> {
-        trace!("updating view: {:?}", view.widget_id());
-        if let Some((_, queue)) = self.update_queues.get_mut(view.widget_id()) {
+        trace!("updating view: {:?}", view.view_id());
+        if let Some((_, queue)) = self.update_queues.get_mut(&view.view_id()) {
             while let Some(msg) = queue.pop_front() {
                 view.update_view(&[msg])?;
             }
@@ -209,4 +210,19 @@ impl MessageBroker {
 
     // TODO: Implement a scheduler removal of old messages (configurable, must not hurt performance)
     // TODO: Add a Dashmap if performance is a problem (Personally don't think it will be)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ViewId(Uuid);
+
+impl ViewId {
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
+impl Default for ViewId {
+    fn default() -> Self {
+        Self(Uuid::now_v7())
+    }
 }

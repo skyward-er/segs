@@ -44,6 +44,8 @@ crossbeam-channel = "0.5"
 enum_dispatch = "0.3"
 egui_extras = "0.29.1"
 strum = "0.26"
+strum_macros = "0.26"
 anyhow = "1.0"
 ring-channel = "0.12.0"
 thiserror = "2.0.7"
+uuid = { version = "1.12.1", features = ["serde", "v7"] }

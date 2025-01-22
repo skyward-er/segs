@@ -1,4 +1,4 @@
-use super::{plot::Plot2DPane, Pane, PaneBehavior, PaneKind};
+use super::PaneBehavior;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -22,7 +22,7 @@ impl PartialEq for DefaultPane {
 }
 
 impl PaneBehavior for DefaultPane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui, tile_id: egui_tiles::TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let parent = vertically_centered(ui, &mut self.centering_memo, |ui| {
@@ -35,10 +35,8 @@ impl PaneBehavior for DefaultPane {
                     response.set_action(PaneAction::SplitH);
                     debug!("Horizontal Split button clicked");
                 }
-                if ui.button("Plot").clicked() {
-                    response.set_action(PaneAction::Replace(Pane::boxed(PaneKind::Plot2D(
-                        Plot2DPane::new(ui.auto_id_with("plot_2d")),
-                    ))));
+                if ui.button("Widget Gallery").clicked() {
+                    response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
                 }
             })
             .response
