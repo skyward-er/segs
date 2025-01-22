@@ -17,7 +17,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use egui::{Align2, Button, ComboBox, Key, Modifiers};
+use egui::{Align2, Button, ComboBox, Key, Modifiers, Vec2};
+use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, trace};
@@ -408,25 +409,38 @@ impl SourceWindow {
 
         ui.separator();
 
-        ui.horizontal_top(|ui| {
-            let btn1 = Button::new("Connect");
-            let btn2 = Button::new("Disconnect");
-            if ui.add_enabled(!*connected, btn1).clicked() {
-                match connection_details {
-                    ConnectionDetails::Ethernet { port } => {
-                        msg_broker!().listen_from_ethernet_port(*port);
-                    }
-                    ConnectionDetails::Serial { port, baud_rate } => {
-                        msg_broker!().listen_from_serial_port(port.clone(), *baud_rate);
-                    }
-                }
-                *can_be_closed = true;
-                *connected = true;
-            }
-            if ui.add_enabled(*connected, btn2).clicked() {
-                msg_broker!().stop_listening();
-                *connected = false;
-            }
+        ui.allocate_ui(Vec2::new(ui.available_width(), 20.0), |ui| {
+            StripBuilder::new(ui)
+                .sizes(Size::remainder(), 2) // top cell
+                .horizontal(|mut strip| {
+                    strip.cell(|ui| {
+                        let btn1 = Button::new("Connect");
+                        ui.add_enabled_ui(!*connected, |ui| {
+                            if ui.add_sized(ui.available_size(), btn1).clicked() {
+                                match connection_details {
+                                    ConnectionDetails::Ethernet { port } => {
+                                        msg_broker!().listen_from_ethernet_port(*port);
+                                    }
+                                    ConnectionDetails::Serial { port, baud_rate } => {
+                                        msg_broker!()
+                                            .listen_from_serial_port(port.clone(), *baud_rate);
+                                    }
+                                }
+                                *can_be_closed = true;
+                                *connected = true;
+                            }
+                        });
+                    });
+                    strip.cell(|ui| {
+                        let btn2 = Button::new("Disconnect");
+                        ui.add_enabled_ui(*connected, |ui| {
+                            if ui.add_sized(ui.available_size(), btn2).clicked() {
+                                msg_broker!().stop_listening();
+                                *connected = false;
+                            }
+                        });
+                    });
+                });
         });
     }
 }
