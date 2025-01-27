@@ -6,7 +6,11 @@ use motor_valve::MotorValve;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 
-use crate::ui::utils::glam_to_egui;
+use crate::{
+    mavlink::{MessageBroker, ViewId},
+    msg_broker,
+    ui::utils::glam_to_egui,
+};
 
 use super::SymbolBehavior;
 
@@ -214,7 +218,7 @@ struct MavlinkValue {
     field: String,
 
     #[serde(skip)]
-    view_id: egui::Id,
+    view_id: ViewId,
 }
 
 #[derive(Deserialize)]
@@ -228,7 +232,7 @@ impl From<SerialMavlinkValue> for MavlinkValue {
         Self {
             msg_id: value.msg_id,
             field: value.field,
-            view_id: egui::Id::new(""),
+            view_id: ViewId::new(),
         }
     }
 }

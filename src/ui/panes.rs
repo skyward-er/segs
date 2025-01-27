@@ -1,6 +1,5 @@
 mod default;
 mod messages_viewer;
-mod pid;
 mod pid_drawing_tool;
 pub mod plot;
 
@@ -50,11 +49,8 @@ pub enum PaneKind {
     #[strum(message = "Plot 2D")]
     Plot2D(plot::Plot2DPane),
 
-    #[strum(message = "PID Old")]
+    #[strum(message = "Pid")]
     PidOld(pid_drawing_tool::PidPane),
-
-    #[strum(message = "PID New")]
-    Pid(pid::Pid),
 }
 
 impl Default for PaneKind {
