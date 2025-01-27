@@ -1,4 +1,4 @@
-use crate::mavlink::{extract_from_message, MavlinkResult, MessageView, TimedMessage};
+use crate::mavlink::{extract_from_message, MavlinkResult, MessageView, TimedMessage, ViewId};
 
 use super::MavlinkValue;
 
@@ -19,7 +19,7 @@ impl Default for MotorValve {
             source: MavlinkValue {
                 msg_id: orion::GSE_TM_DATA::ID,
                 field: "n2o_filling_valve_state".to_string(),
-                view_id: egui::Id::new(""),
+                view_id: ViewId::new(),
             },
             last_value: None,
         }
@@ -27,8 +27,8 @@ impl Default for MotorValve {
 }
 
 impl MessageView for MotorValve {
-    fn widget_id(&self) -> &egui::Id {
-        &self.source.view_id
+    fn view_id(&self) -> crate::mavlink::ViewId {
+        self.source.view_id
     }
 
     fn id_of_interest(&self) -> u32 {
