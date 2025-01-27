@@ -13,7 +13,7 @@ use grid::GridInfo;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use strum::IntoEnumIterator;
-use symbols::Symbol;
+use symbols::{icons::Icon, Symbol};
 
 use crate::ui::{composable_view::PaneResponse, utils::egui_to_glam};
 
@@ -213,16 +213,7 @@ impl PidPane {
                 self.action = Some(Action::Connect(elem_idx));
                 ui.close_menu();
             }
-            if ui.button("Rotate 90° ⟲").clicked() {
-                self.elements[elem_idx].rotate(-PI / 2.0);
-                self.action.take();
-                ui.close_menu();
-            }
-            if ui.button("Rotate 90° ⟳").clicked() {
-                self.elements[elem_idx].rotate(PI / 2.0);
-                self.action.take();
-                ui.close_menu();
-            }
+            self.elements[elem_idx].context_menu(ui);
             if ui.button("Delete").clicked() {
                 self.delete_element(elem_idx);
                 self.action.take();
@@ -251,7 +242,20 @@ impl PidPane {
         } else {
             ui.menu_button("Symbols", |ui| {
                 for symbol in Symbol::iter() {
-                    if ui.button(symbol.to_string()).clicked() {
+                    if let Symbol::Icon(_) = symbol {
+                        ui.menu_button("Icons", |ui| {
+                            for icon in Icon::iter() {
+                                if ui.button(icon.to_string()).clicked() {
+                                    self.elements.push(Element::new(
+                                        self.grid.screen_to_grid(pointer_pos).round(),
+                                        Symbol::Icon(icon),
+                                    ));
+                                    self.action.take();
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+                    } else if ui.button(symbol.to_string()).clicked() {
                         self.elements.push(Element::new(
                             self.grid.screen_to_grid(pointer_pos).round(),
                             symbol,
@@ -322,8 +326,8 @@ impl PidPane {
             self.grid.apply_scroll_delta(scroll_delta, pointer_pos);
 
             // Invalidate the cache to redraw the images
-            for symbol in Symbol::iter() {
-                let img: egui::ImageSource = symbol.get_image(theme);
+            for icon in Icon::iter() {
+                let img: egui::ImageSource = icon.get_image(theme);
                 ui.ctx().forget_image(img.uri().unwrap());
             }
         }
