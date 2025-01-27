@@ -1,5 +1,4 @@
 use super::PaneBehavior;
-use super::{pid_drawing_tool::PidPane, plot::Plot2DPane, Pane, PaneBehavior, PaneKind};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -39,11 +38,6 @@ impl PaneBehavior for DefaultPane {
                 }
                 if ui.button("Widget Gallery").clicked() {
                     response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
-                }
-                if ui.button("Pid Drawing Tool").clicked() {
-                    response.set_action(PaneAction::Replace(Pane::boxed(
-                        PaneKind::PidDrawingTool(PidPane::default()),
-                    )));
                 }
             })
             .response

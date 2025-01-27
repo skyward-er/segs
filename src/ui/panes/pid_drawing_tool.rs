@@ -6,6 +6,7 @@ mod symbols;
 use connections::Connection;
 use core::f32;
 use egui::{Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui};
+use egui_tiles::TileId;
 use elements::Element;
 use glam::Vec2;
 use grid::GridInfo;
@@ -54,7 +55,7 @@ impl PartialEq for PidPane {
 }
 
 impl PaneBehavior for PidPane {
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let theme = PidPane::find_theme(ui.ctx());
 
         if self.center_content && !self.editable {
