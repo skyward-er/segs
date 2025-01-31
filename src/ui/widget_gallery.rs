@@ -4,7 +4,7 @@ use strum::{EnumMessage, IntoEnumIterator};
 
 use super::{
     composable_view::PaneAction,
-    panes::{Pane, PaneKind},
+    panes::{pid::Pid2, Pane, PaneKind},
 };
 
 #[derive(Default)]
@@ -28,6 +28,16 @@ impl WidgetGallery {
                 for pane in PaneKind::iter() {
                     if let PaneKind::Default(_) = pane {
                         continue;
+                    } else if let PaneKind::Pid(_) = pane {
+                        let pid = Pid2::from_file();
+                        if ui.button("PID").clicked() {
+                            if let Some(tile_id) = self.tile_id {
+                                return Some(PaneAction::Replace(
+                                    tile_id,
+                                    Pane::boxed(PaneKind::Pid(pid)),
+                                ));
+                            }
+                        }
                     } else if let Some(message) = pane.get_message() {
                         if ui.button(message).clicked() {
                             if let Some(tile_id) = self.tile_id {

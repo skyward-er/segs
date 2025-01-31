@@ -1,7 +1,8 @@
 mod default;
 mod messages_viewer;
-mod pid;
+pub mod pid;
 mod pid_drawing_tool;
+pub mod pid_new;
 pub mod plot;
 
 use egui_tiles::TileId;
@@ -50,11 +51,14 @@ pub enum PaneKind {
     #[strum(message = "Plot 2D")]
     Plot2D(plot::Plot2DPane),
 
-    #[strum(message = "PID Old")]
-    PidOld(pid_drawing_tool::PidPane),
+    #[strum(message = "PID 1")]
+    PidOld(pid_drawing_tool::Pid1),
 
-    #[strum(message = "PID New")]
-    Pid(pid::Pid),
+    #[strum(message = "PID 2")]
+    Pid(pid::Pid2),
+
+    #[strum(message = "PID 3")]
+    PidNew(pid_new::Pid3),
 }
 
 impl Default for PaneKind {

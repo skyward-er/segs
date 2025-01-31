@@ -6,7 +6,7 @@ use crate::ui::utils::glam_to_egui;
 
 use super::{
     grid::{GridInfo, CONNECTION_LINE_THICKNESS, CONNECTION_LINE_THRESHOLD, CONNECTION_POINT_SIZE},
-    PidPane,
+    Pid1,
 };
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -40,7 +40,7 @@ impl Connection {
     }
 
     /// Return the index of the segment the point is on, if any
-    pub fn contains(&self, pid: &PidPane, p_s: Vec2) -> Option<usize> {
+    pub fn contains(&self, pid: &Pid1, p_s: Vec2) -> Option<usize> {
         let p_g = pid.grid.screen_to_grid(p_s);
         let mut points = Vec::new();
 
@@ -94,7 +94,7 @@ impl Connection {
         }
     }
 
-    pub fn draw(&self, pid: &PidPane, painter: &Painter, theme: Theme) {
+    pub fn draw(&self, pid: &Pid1, painter: &Painter, theme: Theme) {
         let color = Connection::line_color(theme);
 
         let start = pid.elements[self.start].anchor_point(self.start_anchor);

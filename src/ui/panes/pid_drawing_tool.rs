@@ -30,7 +30,7 @@ enum Action {
 
 /// Piping and instrumentation diagram
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
-pub struct PidPane {
+pub struct Pid1 {
     elements: Vec<Element>,
     connections: Vec<Connection>,
 
@@ -45,7 +45,7 @@ pub struct PidPane {
     center_content: bool,
 }
 
-impl PartialEq for PidPane {
+impl PartialEq for Pid1 {
     fn eq(&self, other: &Self) -> bool {
         self.elements == other.elements
             && self.connections == other.connections
@@ -54,9 +54,9 @@ impl PartialEq for PidPane {
     }
 }
 
-impl PaneBehavior for PidPane {
+impl PaneBehavior for Pid1 {
     fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
-        let theme = PidPane::find_theme(ui.ctx());
+        let theme = Pid1::find_theme(ui.ctx());
 
         if self.center_content && !self.editable {
             self.center(ui);
@@ -69,7 +69,9 @@ impl PaneBehavior for PidPane {
         self.draw_elements(ui, theme);
 
         // Handle things that require knowing the position of the pointer
-        let (_, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
+        let (rect, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
+        println!("Allocated rectangle: {rect:?}");
+        println!("Response: {response:?}");
         if let Some(pointer_pos) = response.hover_pos().map(|p| egui_to_glam(p.to_vec2())) {
             if self.editable {
                 self.handle_zoom(ui, theme, pointer_pos);
@@ -101,7 +103,7 @@ impl PaneBehavior for PidPane {
     }
 }
 
-impl PidPane {
+impl Pid1 {
     /// Returns the currently used theme
     fn find_theme(ctx: &Context) -> Theme {
         // In Egui you can either decide a theme or use the system one.
@@ -155,7 +157,7 @@ impl PidPane {
     fn draw_grid(&self, ui: &Ui, theme: Theme) {
         let painter = ui.painter();
         let window_rect = ui.max_rect();
-        let dot_color = PidPane::dots_color(theme);
+        let dot_color = Pid1::dots_color(theme);
 
         let offset_x = (self.grid.zero_pos.x % self.grid.size()) as i32;
         let offset_y = (self.grid.zero_pos.y % self.grid.size()) as i32;

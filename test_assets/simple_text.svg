@@ -1,0 +1,7 @@
+<svg width="200" height="200" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <path id="line" style="stroke:#000000ff;stroke-width:5" d="M 10 10 L 200 200"/>
+    </defs>
+    <use href="#line"/>
+    <text transform="translate(100 100)" font-size="20" font-family="monospace">Your text here</text>
+</svg>
