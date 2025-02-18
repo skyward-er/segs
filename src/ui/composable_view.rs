@@ -10,7 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use egui::{Key, Modifiers};
+use egui::{Align2, Button, Key, Modifiers, Sides};
+use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, trace};
@@ -114,20 +115,36 @@ impl eframe::App for ComposableView {
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
             // Horizontal belt of controls
-            ui.horizontal(|ui| {
-                egui::global_theme_preference_switch(ui);
+            Sides::new().show(
+                ui,
+                |ui| {
+                    ui.label("Informative side here!");
+                },
+                |ui| {
+                    ui.horizontal(|ui| {
+                        egui::global_theme_preference_switch(ui);
 
-                // Window for the sources
-                self.sources_window.show_window(ui);
+                        // Window for the sources
+                        self.sources_window.show_window(ui);
 
-                if ui.button("Sources").clicked() {
-                    self.sources_window.visible = !self.sources_window.visible;
-                }
-                if ui.button("Layout Manager").clicked() {
-                    self.layout_manager_window
-                        .toggle_open_state(&self.layout_manager);
-                }
-            })
+                        if ui
+                            .add(Button::new("🔌").frame(false))
+                            .on_hover_text("Open the Sources")
+                            .clicked()
+                        {
+                            self.sources_window.visible = !self.sources_window.visible;
+                        }
+                        if ui
+                            .add(Button::new("💾").frame(false))
+                            .on_hover_text("Open the Layout Manager")
+                            .clicked()
+                        {
+                            self.layout_manager_window
+                                .toggle_open_state(&self.layout_manager);
+                        }
+                    });
+                },
+            );
         });
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
@@ -226,8 +243,9 @@ impl SourceWindow {
         egui::Window::new("Sources")
             .id(ui.id())
             .auto_sized()
-            .collapsible(true)
-            .movable(true)
+            .collapsible(false)
+            .movable(false)
+            .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
             .open(&mut window_is_open)
             .show(ui.ctx(), |ui| {
                 self.ui(ui, &mut can_be_closed);
