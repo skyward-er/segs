@@ -182,6 +182,21 @@ impl eframe::App for ComposableView {
                         // Window for the sources
                         self.sources_window.show_window(ui);
 
+<<<<<<< HEAD
+                if ui.button("Sources").clicked() {
+                    self.sources_window.visible = !self.sources_window.visible;
+                }
+                if ui.button("Layout Manager").clicked() {
+                    self.layout_manager_window
+                        .toggle_open_state(&self.layout_manager);
+                }
+
+                // If a pane is maximized show a visual clue
+                if self.maximized_pane.is_some() {
+                    ui.label("Pane Maximized!");
+                }
+            })
+=======
                         if ui
                             .add(Button::new("🔌").frame(false))
                             .on_hover_text("Open the Sources")
@@ -197,14 +212,10 @@ impl eframe::App for ComposableView {
                             self.layout_manager_window
                                 .toggle_open_state(&self.layout_manager);
                         }
-
-                        // If a pane is maximized show a visual clue
-                        if self.maximized_pane.is_some() {
-                            ui.label("Pane Maximized!");
-                        }
                     });
                 },
             );
+>>>>>>> 9dc29a7 ([StatusBar] added right side (action bar) with icons instead of text)
         });
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
@@ -329,10 +340,17 @@ impl SourceWindow {
         let mut can_be_closed = false;
         egui::Window::new("Sources")
             .id(ui.id())
+<<<<<<< HEAD
             .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
             .max_width(200.0)
             .collapsible(false)
             .resizable(false)
+=======
+            .auto_sized()
+            .collapsible(false)
+            .movable(false)
+            .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
+>>>>>>> 9dc29a7 ([StatusBar] added right side (action bar) with icons instead of text)
             .open(&mut window_is_open)
             .show(ui.ctx(), |ui| {
                 self.ui(ui, &mut can_be_closed);

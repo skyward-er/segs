@@ -170,41 +170,25 @@ impl eframe::App for ComposableView {
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
             // Horizontal belt of controls
-            Sides::new().show(
-                ui,
-                |ui| {
-                    ui.label("Informative side here!");
-                },
-                |ui| {
-                    ui.horizontal(|ui| {
-                        egui::global_theme_preference_switch(ui);
+            ui.horizontal(|ui| {
+                egui::global_theme_preference_switch(ui);
 
-                        // Window for the sources
-                        self.sources_window.show_window(ui);
+                // Window for the sources
+                self.sources_window.show_window(ui);
 
-                        if ui
-                            .add(Button::new("🔌").frame(false))
-                            .on_hover_text("Open the Sources")
-                            .clicked()
-                        {
-                            self.sources_window.visible = !self.sources_window.visible;
-                        }
-                        if ui
-                            .add(Button::new("💾").frame(false))
-                            .on_hover_text("Open the Layout Manager")
-                            .clicked()
-                        {
-                            self.layout_manager_window
-                                .toggle_open_state(&self.layout_manager);
-                        }
+                if ui.button("Sources").clicked() {
+                    self.sources_window.visible = !self.sources_window.visible;
+                }
+                if ui.button("Layout Manager").clicked() {
+                    self.layout_manager_window
+                        .toggle_open_state(&self.layout_manager);
+                }
 
-                        // If a pane is maximized show a visual clue
-                        if self.maximized_pane.is_some() {
-                            ui.label("Pane Maximized!");
-                        }
-                    });
-                },
-            );
+                // If a pane is maximized show a visual clue
+                if self.maximized_pane.is_some() {
+                    ui.label("Pane Maximized!");
+                }
+            })
         });
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
