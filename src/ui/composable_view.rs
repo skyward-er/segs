@@ -4,13 +4,15 @@ use super::{
     panes::{Pane, PaneBehavior},
     persistency::{LayoutManager, LayoutManagerWindow},
     shortcuts,
+    widgets::reception_led::ReceptionLed,
 };
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
-use egui::{Align2, Button, Key, Modifiers, Sides};
+use egui::{Align2, Button, Key, Modifiers, Sides, Vec2};
 use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
@@ -118,7 +120,11 @@ impl eframe::App for ComposableView {
             Sides::new().show(
                 ui,
                 |ui| {
-                    ui.label("Informative side here!");
+                    let active = msg_broker!()
+                        .time_since_last_reception()
+                        .unwrap_or(Duration::MAX)
+                        < Duration::from_millis(100);
+                    ui.add(ReceptionLed::new(active))
                 },
                 |ui| {
                     ui.horizontal(|ui| {
@@ -154,6 +160,8 @@ impl eframe::App for ComposableView {
 
         self.layout_manager_window
             .show(ctx, &mut self.layout_manager, &mut self.state);
+
+        ctx.request_repaint();
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

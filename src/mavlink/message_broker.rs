@@ -12,10 +12,12 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
 use egui::{ahash::HashMapExt, IdMap};
+use parking_lot::Mutex;
 use ring_channel::{ring_channel, RingReceiver, RingSender};
 use tokio::{net::UdpSocket, task::JoinHandle};
 use tracing::{debug, trace};
@@ -61,6 +63,8 @@ pub struct MessageBroker {
     /// map(widget ID -> queue of messages left for update)
     update_queues: IdMap<(u32, VecDeque<TimedMessage>)>,
     // == Internal ==
+    /// instant queue used for frequency calculation and reception time
+    last_receptions: Arc<Mutex<ReceptionQueue>>,
     /// Flag to stop the listener
     running_flag: Arc<AtomicBool>,
     /// Listener message sender
@@ -80,6 +84,8 @@ impl MessageBroker {
         Self {
             messages: HashMap::new(),
             update_queues: IdMap::new(),
+            // TODO: make this configurable
+            last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(Duration::from_secs(1)))),
             tx,
             rx,
             ctx,
@@ -116,6 +122,7 @@ impl MessageBroker {
         // Stop the current listener if it exists
         self.stop_listening();
         self.running_flag.store(true, Ordering::Relaxed);
+        let last_receptions = Arc::clone(&self.last_receptions);
 
         let tx = self.tx.clone();
         let ctx = self.ctx.clone();
@@ -138,6 +145,7 @@ impl MessageBroker {
                     .context("Failed to receive message")?;
                 for (_, mav_message) in byte_parser(&buf[..len]) {
                     debug!("Received message: {:?}", mav_message);
+                    last_receptions.lock().push(Instant::now());
                     tx.send(mav_message).context("Failed to send message")?;
                     ctx.request_repaint();
                 }
@@ -156,6 +164,16 @@ impl MessageBroker {
     /// scenarios.
     pub fn clear(&mut self) {
         self.messages.clear();
+    }
+
+    /// Returns the time since the last message was received.
+    pub fn time_since_last_reception(&self) -> Option<Duration> {
+        self.last_receptions.lock().time_since_last_reception()
+    }
+
+    /// Returns the frequency of messages received in the last second.
+    pub fn reception_frequency(&self) -> f64 {
+        self.last_receptions.lock().frequency()
     }
 
     fn is_view_subscribed(&self, widget_id: &egui::Id) -> bool {
@@ -205,4 +223,41 @@ impl MessageBroker {
 
     // TODO: Implement a scheduler removal of old messages (configurable, must not hurt performance)
     // TODO: Add a Dashmap if performance is a problem (Personally don't think it will be)
+}
+
+#[derive(Debug)]
+struct ReceptionQueue {
+    queue: VecDeque<Instant>,
+    threshold: Duration,
+}
+
+impl ReceptionQueue {
+    fn new(threshold: Duration) -> Self {
+        Self {
+            queue: VecDeque::new(),
+            threshold,
+        }
+    }
+
+    fn push(&mut self, instant: Instant) {
+        self.queue.push_front(instant);
+        // clear the queue of all elements older than the threshold
+        while let Some(front) = self.queue.back() {
+            if instant.duration_since(*front) > self.threshold {
+                self.queue.pop_back();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn frequency(&self) -> f64 {
+        let till = Instant::now();
+        let since = till - self.threshold;
+        self.queue.iter().take_while(|t| **t > since).count() as f64 / self.threshold.as_secs_f64()
+    }
+
+    fn time_since_last_reception(&self) -> Option<Duration> {
+        self.queue.front().map(|t| t.elapsed())
+    }
 }
