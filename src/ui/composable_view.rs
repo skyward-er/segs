@@ -11,13 +11,15 @@ use super::{
     shortcuts,
     utils::maximized_pane_ui,
     widget_gallery::WidgetGallery,
+    widgets::reception_led::ReceptionLed,
 };
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
-use egui::{Align2, Button, ComboBox, Key, Modifiers, Vec2};
+use egui::{Align2, Button, ComboBox, Key, Modifiers, Sides, Vec2};
 use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
@@ -173,7 +175,11 @@ impl eframe::App for ComposableView {
             Sides::new().show(
                 ui,
                 |ui| {
-                    ui.label("Informative side here!");
+                    let active = msg_broker!()
+                        .time_since_last_reception()
+                        .unwrap_or(Duration::MAX)
+                        < Duration::from_millis(100);
+                    ui.add(ReceptionLed::new(active))
                 },
                 |ui| {
                     ui.horizontal(|ui| {
@@ -226,6 +232,9 @@ impl eframe::App for ComposableView {
             debug!("Widget gallery returned action {action:?}");
             self.behavior.action = Some(action);
         }
+
+        // UNCOMMENT THIS TO ENABLE CONTINOUS MODE
+        // ctx.request_repaint();
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
