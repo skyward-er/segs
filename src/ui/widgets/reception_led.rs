@@ -29,8 +29,7 @@ impl ReceptionLed {
 
         // Use the painter to draw a rectangle
         if ui.is_rect_visible(rect) {
-            ui.painter()
-                .circle(rect.center(), rect.width() / 2.0, fill_color, stroke);
+            ui.painter().rect(rect, 1.0, fill_color, stroke);
         }
 
         response
