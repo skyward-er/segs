@@ -1,4 +1,5 @@
-use crate::{error::ErrInstrument, mavlink, msg_broker, ui::panes::PaneKind};
+use crate::get_message_broker;
+use crate::{error::ErrInstrument, mavlink, ui::panes::PaneKind};
 
 use super::{
     panes::{Pane, PaneBehavior},
@@ -35,6 +36,10 @@ pub struct ComposableView {
 impl eframe::App for ComposableView {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        {
+            get_message_broker!().process_incoming_msgs();
+        }
+
         let panes_tree = &mut self.state.panes_tree;
 
         // Get the id of the hovered pane, in order to apply actions to it
@@ -316,7 +321,7 @@ impl SourceWindow {
                 ui.end_row();
             });
         if ui.button("Connect").clicked() {
-            msg_broker!().listen_from_ethernet_port(self.port);
+            get_message_broker!().listen_from_ethernet_port(self.port);
             *can_be_closed = true;
         }
     }

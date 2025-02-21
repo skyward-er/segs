@@ -4,37 +4,24 @@
 
 mod error;
 mod mavlink;
+mod message_broker;
 mod ui;
 
-use std::{
-    num::NonZeroUsize,
-    sync::{LazyLock, OnceLock},
-};
+use std::{num::NonZeroUsize, sync::LazyLock};
 
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
+use message_broker::{MessageBroker, MESSAGE_BROKER_INSTANCE};
 use error::ErrInstrument;
-use mavlink::{MessageBroker, ReflectionContext};
+use mavlink::ReflectionContext;
 use ui::ComposableView;
 
-/// MessageBroker singleton, used to fetch & filter Mavlink messages collected
-static MSG_MANAGER: OnceLock<Mutex<MessageBroker>> = OnceLock::new();
 /// ReflectionContext singleton, used to get access to the Mavlink message definitions
 static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
 
 static APP_NAME: &str = "segs";
-
-#[macro_export]
-macro_rules! msg_broker {
-    () => {
-        $crate::MSG_MANAGER
-            .get()
-            .log_expect("Unable to get MessageBroker")
-            .lock()
-    };
-}
 
 fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
@@ -62,7 +49,7 @@ fn main() -> Result<(), eframe::Error> {
         native_options,
         Box::new(|ctx| {
             // First we initialize the MSGManager, as a global singleton available to all the panes
-            MSG_MANAGER
+            MESSAGE_BROKER_INSTANCE
                 .set(Mutex::new(MessageBroker::new(
                     // FIXME: Choose where to put the channel size of the MessageBroker
                     NonZeroUsize::new(50).log_unwrap(),
