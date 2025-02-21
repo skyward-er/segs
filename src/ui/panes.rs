@@ -7,6 +7,8 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
 
+use crate::mavlink::TimedMessage;
+
 use super::composable_view::PaneResponse;
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
@@ -22,8 +24,19 @@ impl Pane {
 
 #[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
+    /// Renders the UI of the pane.
     fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse;
+    /// Whether the pane contains the pointer.
     fn contains_pointer(&self) -> bool;
+
+    /// Updates the pane state. This method is called before `ui` to allow the
+    /// pane to update its state based on the messages received.
+    fn update(&mut self, messages: &[TimedMessage]);
+
+    /// Returns the ID of the messages this pane is interested in, if any.
+    fn get_message_subscription(&self) -> Option<u32>;
+    /// Checks whether the full message history should be sent to the pane.
+    fn should_send_message_history(&self) -> bool;
 }
 
 impl PaneBehavior for Pane {
@@ -33,6 +46,18 @@ impl PaneBehavior for Pane {
 
     fn contains_pointer(&self) -> bool {
         self.pane.contains_pointer()
+    }
+
+    fn update(&mut self, messages: &[TimedMessage]) {
+        self.pane.update(messages)
+    }
+
+    fn get_message_subscription(&self) -> Option<u32> {
+        self.pane.get_message_subscription()
+    }
+
+    fn should_send_message_history(&self) -> bool {
+        self.pane.should_send_message_history()
     }
 }
 

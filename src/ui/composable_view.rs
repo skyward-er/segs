@@ -1,10 +1,3 @@
-use crate::{
-    error::ErrInstrument,
-    mavlink, msg_broker,
-    serial::{get_first_stm32_serial_port, list_all_serial_ports},
-    ui::panes::PaneKind,
-};
-
 use super::{
     panes::{Pane, PaneBehavior},
     persistency::{LayoutManager, LayoutManagerWindow},
@@ -13,28 +6,37 @@ use super::{
     widget_gallery::WidgetGallery,
     widgets::reception_led::ReceptionLed,
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::Duration,
+use crate::{
+    error::ErrInstrument,
+    mavlink,
+    message_broker::{MessageBroker, MessageBundle},
+    serial::{get_first_stm32_serial_port, list_all_serial_ports},
+    ui::panes::PaneKind,
 };
-
+use eframe::CreationContext;
 use egui::{Align2, Button, ComboBox, Key, Modifiers, Sides, Vec2};
 use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    num::NonZeroUsize,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 use tracing::{debug, error, trace};
 
-#[derive(Default)]
 pub struct ComposableView {
     /// Persistent state of the app
     state: ComposableViewState,
     layout_manager: LayoutManager,
-    widget_gallery: WidgetGallery,
     behavior: ComposableBehavior,
     maximized_pane: Option<TileId>,
-
+    // == Message handling ==
+    message_broker: MessageBroker,
+    message_bundle: MessageBundle,
     // == Windows ==
+    widget_gallery: WidgetGallery,
     sources_window: SourceWindow,
     layout_manager_window: LayoutManagerWindow,
 }
@@ -43,6 +45,8 @@ pub struct ComposableView {
 impl eframe::App for ComposableView {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.process_messages();
+
         let panes_tree = &mut self.state.panes_tree;
 
         // Get the id of the hovered pane, in order to apply actions to it
@@ -169,24 +173,27 @@ impl eframe::App for ComposableView {
             }
         }
 
+        // TODO: maybe introduce a stats struct to store these values?
+        let reception_led_active = self
+            .message_broker
+            .time_since_last_reception()
+            .unwrap_or(Duration::MAX)
+            < Duration::from_millis(100);
+        let reception_frequency = self.message_broker.reception_frequency();
+
         // Show a panel at the bottom of the screen with few global controls
         egui::TopBottomPanel::bottom("bottom_control").show(ctx, |ui| {
             // Horizontal belt of controls
             Sides::new().show(
                 ui,
-                |ui| {
-                    let active = msg_broker!()
-                        .time_since_last_reception()
-                        .unwrap_or(Duration::MAX)
-                        < Duration::from_millis(100);
-                    ui.add(ReceptionLed::new(active))
-                },
+                |ui| ui.add(ReceptionLed::new(reception_led_active, reception_frequency)),
                 |ui| {
                     ui.horizontal(|ui| {
                         egui::global_theme_preference_switch(ui);
 
                         // Window for the sources
-                        self.sources_window.show_window(ui);
+                        self.sources_window
+                            .show_window(ui, &mut self.message_broker);
 
                         if ui
                             .add(Button::new("🔌").frame(false))
@@ -243,21 +250,79 @@ impl eframe::App for ComposableView {
 }
 
 impl ComposableView {
-    pub fn new(app_name: &str, storage: &dyn eframe::Storage) -> Self {
-        let layout_manager = LayoutManager::new(app_name, storage);
-        let mut s = Self {
-            layout_manager,
-            ..Self::default()
+    pub fn new(app_name: &str, ctx: &CreationContext) -> Self {
+        let mut layout_manager = if let Some(storage) = ctx.storage {
+            LayoutManager::new(app_name, storage)
+        } else {
+            LayoutManager::default()
         };
+
+        let mut state = ComposableViewState::default();
+
         // Load the selected layout if valid and existing
-        if let Some(layout) = s.layout_manager.current_layout().cloned() {
-            s.layout_manager
-                .load_layout(layout, &mut s.state)
+        if let Some(layout) = layout_manager.current_layout().cloned() {
+            layout_manager
+                .load_layout(layout, &mut state)
                 .unwrap_or_else(|e| {
                     error!("Error loading layout: {}", e);
                 });
         }
-        s
+
+        Self {
+            state,
+            layout_manager,
+            message_broker: MessageBroker::new(
+                NonZeroUsize::new(50).log_unwrap(),
+                ctx.egui_ctx.clone(),
+            ),
+            widget_gallery: WidgetGallery::default(),
+            behavior: ComposableBehavior::default(),
+            maximized_pane: None,
+            message_bundle: MessageBundle::default(),
+            sources_window: SourceWindow::default(),
+            layout_manager_window: LayoutManagerWindow::default(),
+        }
+    }
+
+    /// Retrieves new messages from the message broker and dispatches them to the panes.
+    fn process_messages(&mut self) {
+        let start = Instant::now();
+
+        self.message_broker
+            .process_messages(&mut self.message_bundle);
+
+        // Skip updating the panes if there are no messages
+        let count = self.message_bundle.count();
+        if count == 0 {
+            return;
+        }
+
+        debug!(
+            "Receiving {count} messages from message broker took {:?}",
+            start.elapsed()
+        );
+
+        let start = Instant::now();
+        for (_, tile) in self.state.panes_tree.tiles.iter_mut() {
+            // Skip non-pane tiles
+            let Tile::Pane(pane) = tile else { continue };
+            // Skip panes that do not have a subscription
+            let Some(sub_id) = pane.get_message_subscription() else {
+                continue;
+            };
+
+            if pane.should_send_message_history() {
+                pane.update(self.message_broker.get(sub_id));
+            } else {
+                pane.update(self.message_bundle.get(sub_id));
+            }
+        }
+
+        debug!(
+            "Panes message processing messages took {:?}",
+            start.elapsed()
+        );
+        self.message_bundle.reset();
     }
 }
 
@@ -333,7 +398,7 @@ struct SourceWindow {
 }
 
 impl SourceWindow {
-    fn show_window(&mut self, ui: &mut egui::Ui) {
+    fn show_window(&mut self, ui: &mut egui::Ui, message_broker: &mut MessageBroker) {
         let mut window_is_open = self.visible;
         let mut can_be_closed = false;
         egui::Window::new("Sources")
@@ -344,12 +409,17 @@ impl SourceWindow {
             .resizable(false)
             .open(&mut window_is_open)
             .show(ui.ctx(), |ui| {
-                self.ui(ui, &mut can_be_closed);
+                self.ui(ui, &mut can_be_closed, message_broker);
             });
         self.visible = window_is_open && !can_be_closed;
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, can_be_closed: &mut bool) {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        can_be_closed: &mut bool,
+        message_broker: &mut MessageBroker,
+    ) {
         let SourceWindow {
             connected,
             connection_kind,
@@ -444,10 +514,10 @@ impl SourceWindow {
                             if ui.add_sized(ui.available_size(), btn1).clicked() {
                                 match connection_details {
                                     ConnectionDetails::Ethernet { port } => {
-                                        msg_broker!().listen_from_ethernet_port(*port);
+                                        message_broker.listen_from_ethernet_port(*port);
                                     }
                                     ConnectionDetails::Serial { port, baud_rate } => {
-                                        msg_broker!()
+                                        message_broker
                                             .listen_from_serial_port(port.clone(), *baud_rate);
                                     }
                                 }
@@ -460,7 +530,7 @@ impl SourceWindow {
                         let btn2 = Button::new("Disconnect");
                         ui.add_enabled_ui(*connected, |ui| {
                             if ui.add_sized(ui.available_size(), btn2).clicked() {
-                                msg_broker!().stop_listening();
+                                message_broker.stop_listening();
                                 *connected = false;
                             }
                         });

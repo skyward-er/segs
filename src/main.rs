@@ -5,38 +5,23 @@
 mod error;
 mod mavlink;
 mod serial;
+mod message_broker;
 mod ui;
 mod utils;
 
-use std::{
-    num::NonZeroUsize,
-    sync::{LazyLock, OnceLock},
-};
+use std::sync::LazyLock;
 
-use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 use error::ErrInstrument;
-use mavlink::{MessageBroker, ReflectionContext};
+use mavlink::ReflectionContext;
 use ui::ComposableView;
 
-/// MessageBroker singleton, used to fetch & filter Mavlink messages collected
-static MSG_MANAGER: OnceLock<Mutex<MessageBroker>> = OnceLock::new();
 /// ReflectionContext singleton, used to get access to the Mavlink message definitions
 static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
 
 static APP_NAME: &str = "segs";
-
-#[macro_export]
-macro_rules! msg_broker {
-    () => {
-        $crate::MSG_MANAGER
-            .get()
-            .log_expect("Unable to get MessageBroker")
-            .lock()
-    };
-}
 
 fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
@@ -62,20 +47,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         APP_NAME, // This is the app id, used for example by Wayland
         native_options,
-        Box::new(|ctx| {
-            // First we initialize the MSGManager, as a global singleton available to all the panes
-            MSG_MANAGER
-                .set(Mutex::new(MessageBroker::new(
-                    // FIXME: Choose where to put the channel size of the MessageBroker
-                    NonZeroUsize::new(50).log_unwrap(),
-                    ctx.egui_ctx.clone(),
-                )))
-                .log_expect("Unable to set MessageManager");
-            let app = ctx
-                .storage
-                .map(|storage| ComposableView::new(APP_NAME, storage))
-                .unwrap_or_default();
-            Ok(Box::new(app))
-        }),
+        Box::new(|ctx| Ok(Box::new(ComposableView::new(APP_NAME, ctx)))),
     )
 }

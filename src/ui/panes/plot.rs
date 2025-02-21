@@ -1,22 +1,15 @@
 mod source_window;
 
+use super::PaneBehavior;
+use crate::{
+    mavlink::{extract_from_message, MessageData, TimedMessage, ROCKET_FLIGHT_TM_DATA},
+    ui::composable_view::PaneResponse,
+};
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoints};
 use egui_tiles::TileId;
 use serde::{Deserialize, Serialize};
 use source_window::{sources_window, SourceSettings};
-
-use crate::{
-    error::ErrInstrument,
-    mavlink::{
-        extract_from_message, MavlinkResult, MessageData, MessageView, TimedMessage, ViewId,
-        ROCKET_FLIGHT_TM_DATA,
-    },
-    msg_broker,
-    ui::composable_view::PaneResponse,
-};
-
-use super::PaneBehavior;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
@@ -27,12 +20,16 @@ pub struct Plot2DPane {
     settings_visible: bool,
     line_settings: Vec<LineSettings>,
     plot_active: bool,
-    view: PlotMessageView,
+    settings: MsgSources,
+    #[serde(skip)]
+    cache_valid: bool,
+    #[serde(skip)]
+    points: Vec<(f64, Vec<f64>)>,
 }
 
 impl PartialEq for Plot2DPane {
     fn eq(&self, other: &Self) -> bool {
-        self.view.settings == other.view.settings
+        self.settings == other.settings
             && self.line_settings == other.line_settings
             && self.plot_active == other.plot_active
     }
@@ -42,37 +39,26 @@ impl PaneBehavior for Plot2DPane {
     fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
-        let Self {
-            line_settings: plot_lines,
-            settings_visible,
-            plot_active,
-            view,
-            ..
-        } = self;
-
-        let mut settings = SourceSettings::new(&mut view.settings, plot_lines);
+        let mut settings = SourceSettings::new(&mut self.settings, &mut self.line_settings);
         egui::Window::new("Plot Settings")
             .id(ui.auto_id_with("plot_settings")) // TODO: fix this issue with ids
             .auto_sized()
             .collapsible(true)
             .movable(true)
-            .open(settings_visible)
+            .open(&mut self.settings_visible)
             .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
         // if settings are changed, invalidate the cache
-        view.cache_valid = !settings.are_sources_changed();
+        self.cache_valid = !settings.are_sources_changed();
         // if there are no fields, do not plot
-        *plot_active = !settings.fields_empty();
+        self.plot_active = !settings.fields_empty();
 
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
         let mut plot_lines = Vec::new();
         if self.plot_active {
-            msg_broker!()
-                .refresh_view(view)
-                .log_expect("MessageView may be invalid");
-            let acc_points = &view.points;
+            let acc_points = &self.points;
 
-            let field_x = &view.settings.x_field;
+            let field_x = &self.settings.x_field;
             if !acc_points.is_empty() {
                 for (i, plot_line) in self.line_settings.iter().enumerate() {
                     let points: Vec<[f64; 2]> = {
@@ -108,7 +94,7 @@ impl PaneBehavior for Plot2DPane {
             }
             plot_ui
                 .response()
-                .context_menu(|ui| show_menu(ui, settings_visible));
+                .context_menu(|ui| show_menu(ui, &mut self.settings_visible));
         });
 
         response
@@ -117,63 +103,28 @@ impl PaneBehavior for Plot2DPane {
     fn contains_pointer(&self) -> bool {
         self.contains_pointer
     }
-}
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-struct PlotMessageView {
-    // == Settings from the UI ==
-    settings: MsgSources,
-    // == Data ==
-    #[serde(skip)]
-    points: Vec<(f64, Vec<f64>)>,
-    // == Internal ==
-    id: ViewId,
-    #[serde(skip)]
-    cache_valid: bool,
-}
+    fn update(&mut self, messages: &[TimedMessage]) {
+        if !self.cache_valid {
+            self.points.clear();
+        }
 
-impl PlotMessageView {
-    fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl MessageView for PlotMessageView {
-    fn view_id(&self) -> ViewId {
-        self.id
-    }
-
-    fn id_of_interest(&self) -> u32 {
-        self.settings.msg_id
-    }
-
-    fn is_valid(&self) -> bool {
-        self.cache_valid
-    }
-
-    fn populate_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()> {
-        self.points.clear();
         let MsgSources {
             x_field, y_fields, ..
         } = &self.settings;
-        for msg in msg_slice {
-            let x: f64 = extract_from_message(&msg.message, [x_field])?[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields)?;
+        for msg in messages {
+            let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0];
+            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).unwrap();
             self.points.push((x, ys));
         }
-        Ok(())
     }
 
-    fn update_view(&mut self, msg_slice: &[TimedMessage]) -> MavlinkResult<()> {
-        let MsgSources {
-            x_field, y_fields, ..
-        } = &self.settings;
-        for msg in msg_slice {
-            let x: f64 = extract_from_message(&msg.message, [x_field])?[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields)?;
-            self.points.push((x, ys));
-        }
-        Ok(())
+    fn get_message_subscription(&self) -> Option<u32> {
+        Some(self.settings.msg_id)
+    }
+
+    fn should_send_message_history(&self) -> bool {
+        !self.cache_valid
     }
 }
 
