@@ -1,4 +1,4 @@
-use egui::{Color32, Response, Sense, Stroke, Ui, Vec2, Widget};
+use egui::{Color32, Response, Sense, Stroke, StrokeKind, Ui, Vec2, Widget};
 
 use crate::error::ErrInstrument;
 
@@ -30,7 +30,8 @@ impl ReceptionLed {
 
         // Use the painter to draw a rectangle
         if ui.is_rect_visible(rect) {
-            ui.painter().rect(rect, 1.0, fill_color, stroke);
+            ui.painter()
+                .rect(rect, 1.0, fill_color, stroke, StrokeKind::Outside);
         }
 
         response
