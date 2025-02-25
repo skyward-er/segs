@@ -7,6 +7,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
+    io::Write,
     num::NonZeroUsize,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -21,7 +22,7 @@ use tokio::{net::UdpSocket, task::JoinHandle};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::mavlink::byte_parser;
+use crate::{error::ErrInstrument, mavlink::byte_parser, utils::RingBuffer};
 
 use super::{MavlinkResult, Message, TimedMessage};
 
@@ -111,8 +112,7 @@ impl MessageBroker {
     }
 
     /// Start a listener task that listens to incoming messages from the given
-    /// Ethernet port, and accumulates them in a ring buffer, read only when
-    /// views request a refresh.
+    /// Ethernet port and stores them in a ring buffer.
     pub fn listen_from_ethernet_port(&mut self, port: u16) {
         // Stop the current listener if it exists
         self.stop_listening();
@@ -138,6 +138,51 @@ impl MessageBroker {
                     .await
                     .context("Failed to receive message")?;
                 for (_, mav_message) in byte_parser(&buf[..len]) {
+                    debug!("Received message: {:?}", mav_message);
+                    tx.send(TimedMessage::just_received(mav_message))
+                        .context("Failed to send message")?;
+                    ctx.request_repaint();
+                }
+            }
+
+            Ok::<(), anyhow::Error>(())
+        });
+        self.task = Some(handle);
+    }
+
+    /// Start a listener task that listens to incoming messages from the given
+    /// serial port and stores them in a ring buffer.
+    pub fn listen_from_serial_port(&mut self, port: String, baud_rate: u32) {
+        // Stop the current listener if it exists
+        self.stop_listening();
+        self.running_flag.store(true, Ordering::Relaxed);
+
+        let tx = self.tx.clone();
+        let ctx = self.ctx.clone();
+
+        let running_flag = self.running_flag.clone();
+
+        debug!("Spawning listener task at {}", port);
+        let handle = tokio::task::spawn_blocking(move || {
+            let mut serial_port = serialport::new(port, baud_rate)
+                .timeout(std::time::Duration::from_millis(100))
+                .open()
+                .context("Failed to open serial port")?;
+            debug!("Listening on serial port");
+
+            let mut ring_buf = RingBuffer::<1024>::new();
+            let mut temp_buf = [0; 512];
+            // need to do a better error handling for this (need toast errors)
+            while running_flag.load(Ordering::Relaxed) {
+                let result = serial_port
+                    .read(&mut temp_buf)
+                    .log_expect("Failed to read from serial port");
+                debug!("Read {} bytes from serial port", result);
+                trace!("data read from serial: {:?}", &temp_buf[..result]);
+                ring_buf
+                    .write(&temp_buf[..result])
+                    .log_expect("Failed to write to ring buffer, check buffer size");
+                for (_, mav_message) in byte_parser(&mut ring_buf) {
                     debug!("Received message: {:?}", mav_message);
                     tx.send(TimedMessage::just_received(mav_message))
                         .context("Failed to send message")?;
