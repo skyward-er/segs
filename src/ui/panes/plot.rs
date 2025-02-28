@@ -10,6 +10,7 @@ use egui_plot::{Legend, Line, PlotPoints};
 use egui_tiles::TileId;
 use serde::{Deserialize, Serialize};
 use source_window::{sources_window, SourceSettings};
+use std::iter::zip;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
@@ -18,20 +19,20 @@ pub struct Plot2DPane {
     pub contains_pointer: bool,
     #[serde(skip)]
     settings_visible: bool,
+
     line_settings: Vec<LineSettings>,
-    plot_active: bool,
+    #[serde(skip)]
+    line_data: Vec<Vec<[f64; 2]>>,
+
     settings: MsgSources,
+
     #[serde(skip)]
-    cache_valid: bool,
-    #[serde(skip)]
-    points: Vec<(f64, Vec<f64>)>,
+    state_valid: bool,
 }
 
 impl PartialEq for Plot2DPane {
     fn eq(&self, other: &Self) -> bool {
-        self.settings == other.settings
-            && self.line_settings == other.line_settings
-            && self.plot_active == other.plot_active
+        self.settings == other.settings && self.line_settings == other.line_settings
     }
 }
 
@@ -47,55 +48,36 @@ impl PaneBehavior for Plot2DPane {
             .movable(true)
             .open(&mut self.settings_visible)
             .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
-        // if settings are changed, invalidate the cache
-        self.cache_valid = !settings.are_sources_changed();
-        // if there are no fields, do not plot
-        self.plot_active = !settings.fields_empty();
+
+        if settings.are_sources_changed() {
+            self.state_valid = false;
+        }
 
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
-        let mut plot_lines = Vec::new();
-        if self.plot_active {
-            let acc_points = &self.points;
-
-            let field_x = &self.settings.x_field;
-            if !acc_points.is_empty() {
-                for (i, plot_line) in self.line_settings.iter().enumerate() {
-                    let points: Vec<[f64; 2]> = {
-                        let iter = acc_points.iter();
-                        if field_x == "timestamp" {
-                            iter.map(|(x, ys)| [x / 1e6, ys[i]]).collect()
-                        } else {
-                            iter.map(|(x, ys)| [*x, ys[i]]).collect()
-                        }
-                    };
-                    plot_lines.push((plot_line.clone(), points));
-                }
-            }
-        }
-
-        let plot = egui_plot::Plot::new("plot")
+        egui_plot::Plot::new("plot")
             .auto_bounds(Vec2b::TRUE)
             .legend(Legend::default())
-            .label_formatter(|name, value| format!("{} - x:{:.2} y:{:.2}", name, value.x, value.y));
-        plot.show(ui, |plot_ui| {
-            self.contains_pointer = plot_ui.response().contains_pointer();
-            if plot_ui.response().dragged() && ctrl_pressed {
-                println!("ctrl + drag");
-                response.set_drag_started();
-            }
-            for (plot_settings, data_points) in plot_lines {
-                plot_ui.line(
-                    Line::new(PlotPoints::from(data_points))
-                        .color(plot_settings.color)
-                        .width(plot_settings.width)
-                        .name(&plot_settings.field),
-                );
-            }
-            plot_ui
-                .response()
-                .context_menu(|ui| show_menu(ui, &mut self.settings_visible));
-        });
+            .label_formatter(|name, value| format!("{} - x:{:.2} y:{:.2}", name, value.x, value.y))
+            .show(ui, |plot_ui| {
+                self.contains_pointer = plot_ui.response().contains_pointer();
+                if plot_ui.response().dragged() && ctrl_pressed {
+                    response.set_drag_started();
+                }
+
+                for (settings, points) in zip(&self.line_settings, &mut self.line_data) {
+                    plot_ui.line(
+                        // TODO: remove clone when PlotPoints supports borrowing
+                        Line::new(PlotPoints::from(points.clone()))
+                            .color(settings.color)
+                            .width(settings.width)
+                            .name(&settings.field),
+                    );
+                }
+                plot_ui
+                    .response()
+                    .context_menu(|ui| show_menu(ui, &mut self.settings_visible));
+            });
 
         response
     }
@@ -105,18 +87,34 @@ impl PaneBehavior for Plot2DPane {
     }
 
     fn update(&mut self, messages: &[TimedMessage]) {
-        if !self.cache_valid {
-            self.points.clear();
+        if !self.state_valid {
+            self.line_data.clear();
         }
 
         let MsgSources {
             x_field, y_fields, ..
         } = &self.settings;
+
         for msg in messages {
             let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0];
             let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).unwrap();
-            self.points.push((x, ys));
+
+            if self.line_data.len() < ys.len() {
+                self.line_data.resize(ys.len(), Vec::new());
+            }
+
+            for (line, y) in zip(&mut self.line_data, ys) {
+                let point = if x_field == "timestamp" {
+                    [x / 1e6, y]
+                } else {
+                    [x, y]
+                };
+
+                line.push(point);
+            }
         }
+
+        self.state_valid = true;
     }
 
     fn get_message_subscription(&self) -> Option<u32> {
@@ -124,7 +122,7 @@ impl PaneBehavior for Plot2DPane {
     }
 
     fn should_send_message_history(&self) -> bool {
-        !self.cache_valid
+        !self.state_valid
     }
 }
 
