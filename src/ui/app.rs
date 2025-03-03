@@ -7,14 +7,14 @@ use super::{
     widgets::reception_led::ReceptionLed,
 };
 use crate::{
+    communication::SerialPortCandidate,
     error::ErrInstrument,
     mavlink,
     message_broker::{MessageBroker, MessageBundle},
-    serial::{get_first_stm32_serial_port, list_all_serial_ports},
     ui::panes::PaneKind,
 };
 use eframe::CreationContext;
-use egui::{Align2, Button, ComboBox, Key, Modifiers, Sides, Vec2};
+use egui::{Align2, Button, Color32, ComboBox, Key, Modifiers, RichText, Sides, Vec2};
 use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
 
 pub struct App {
     /// Persistent state of the app
@@ -374,24 +374,54 @@ impl AppState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
-enum ConnectionKind {
-    #[default]
-    Ethernet,
-    Serial,
-}
-
 #[derive(Debug)]
-enum ConnectionDetails {
-    Ethernet { port: u16 },
-    Serial { port: String, baud_rate: u32 },
+enum ConnectionKind {
+    Ethernet {
+        port: u16,
+    },
+    Serial {
+        port: Option<SerialPortCandidate>,
+        baud_rate: u32,
+    },
 }
 
-impl Default for ConnectionDetails {
-    fn default() -> Self {
-        ConnectionDetails::Ethernet {
+impl ConnectionKind {
+    fn default_ethernet() -> Self {
+        ConnectionKind::Ethernet {
             port: mavlink::DEFAULT_ETHERNET_PORT,
         }
+    }
+
+    fn default_serial() -> Self {
+        ConnectionKind::Serial {
+            port: SerialPortCandidate::find_first_stm32_port().or(
+                SerialPortCandidate::list_all_usb_ports()
+                    .ok()
+                    .and_then(|ports| ports.first().cloned()),
+            ),
+            baud_rate: 115200,
+        }
+    }
+}
+
+impl Default for ConnectionKind {
+    fn default() -> Self {
+        ConnectionKind::Ethernet {
+            port: mavlink::DEFAULT_ETHERNET_PORT,
+        }
+    }
+}
+
+// Implement PartialEq just for the variants, not the fields (for radio buttons)
+impl PartialEq for ConnectionKind {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (
+                ConnectionKind::Ethernet { .. },
+                ConnectionKind::Ethernet { .. }
+            ) | (ConnectionKind::Serial { .. }, ConnectionKind::Serial { .. })
+        )
     }
 }
 
@@ -400,7 +430,6 @@ struct SourceWindow {
     visible: bool,
     connected: bool,
     connection_kind: ConnectionKind,
-    connection_details: ConnectionDetails,
 }
 
 impl SourceWindow {
@@ -430,29 +459,24 @@ impl SourceWindow {
         let SourceWindow {
             connected,
             connection_kind,
-            connection_details,
             ..
         } = self;
         ui.label("Select Source:");
         ui.horizontal_top(|ui| {
-            ui.radio_value(connection_kind, ConnectionKind::Ethernet, "Ethernet");
-            ui.radio_value(connection_kind, ConnectionKind::Serial, "Serial");
+            ui.radio_value(
+                connection_kind,
+                ConnectionKind::default_ethernet(),
+                "Ethernet",
+            );
+            ui.radio_value(connection_kind, ConnectionKind::default_serial(), "Serial");
         });
 
         ui.separator();
 
-        match *connection_kind {
-            ConnectionKind::Ethernet => {
-                if !matches!(connection_details, ConnectionDetails::Ethernet { .. }) {
-                    *connection_details = ConnectionDetails::Ethernet {
-                        port: mavlink::DEFAULT_ETHERNET_PORT,
-                    };
-                }
-                let ConnectionDetails::Ethernet { port } = connection_details else {
-                    error!("UNREACHABLE: Connection kind is not Ethernet");
-                    unreachable!("Connection kind is not Ethernet");
-                };
-
+        // flag to check if the connection is valid
+        let mut connection_valid = true;
+        match connection_kind {
+            ConnectionKind::Ethernet { port } => {
                 egui::Grid::new("grid")
                     .num_columns(2)
                     .spacing([10.0, 5.0])
@@ -462,41 +486,41 @@ impl SourceWindow {
                         ui.end_row();
                     });
             }
-            ConnectionKind::Serial => {
-                if !matches!(connection_details, ConnectionDetails::Serial { .. }) {
-                    *connection_details = ConnectionDetails::Serial {
-                        // Default to the first STM32 serial port if available, otherwise
-                        // default to the first serial port available
-                        port: get_first_stm32_serial_port().unwrap_or(
-                            list_all_serial_ports()
-                                .ok()
-                                .and_then(|ports| ports.first().cloned())
-                                .unwrap_or_default(),
-                        ),
-                        baud_rate: 115200,
-                    };
-                }
-                let ConnectionDetails::Serial { port, baud_rate } = connection_details else {
-                    error!("UNREACHABLE: Connection kind is not Serial");
-                    unreachable!("Connection kind is not Serial");
-                };
-
+            ConnectionKind::Serial { port, baud_rate } => {
                 egui::Grid::new("grid")
                     .num_columns(2)
                     .spacing([10.0, 5.0])
                     .show(ui, |ui| {
                         ui.label("Serial Port:");
-                        ComboBox::from_id_salt("serial_port")
-                            .selected_text(port.clone())
-                            .show_ui(ui, |ui| {
-                                for available_port in list_all_serial_ports().unwrap_or_default() {
-                                    ui.selectable_value(
-                                        port,
-                                        available_port.clone(),
-                                        available_port,
-                                    );
-                                }
-                            });
+                        match port {
+                            Some(port) => {
+                                ComboBox::from_id_salt("serial_port")
+                                    .selected_text(port.as_ref())
+                                    .show_ui(ui, |ui| {
+                                        for available_port in
+                                            SerialPortCandidate::list_all_usb_ports().log_unwrap()
+                                        {
+                                            ui.selectable_value(
+                                                port,
+                                                available_port.clone(),
+                                                available_port.as_ref(),
+                                            );
+                                        }
+                                    });
+                            }
+                            None => {
+                                warn!("USER ERROR: No serial port found");
+                                ui.label(
+                                    RichText::new("No port found")
+                                        .color(Color32::RED)
+                                        .underline()
+                                        .strong(),
+                                );
+                                // invalid the connection
+                                connection_valid = false;
+                            }
+                        }
+
                         ui.end_row();
                         ui.label("Baud Rate:");
                         ui.add(
@@ -517,15 +541,17 @@ impl SourceWindow {
                 .horizontal(|mut strip| {
                     strip.cell(|ui| {
                         let btn1 = Button::new("Connect");
-                        ui.add_enabled_ui(!*connected, |ui| {
+                        ui.add_enabled_ui(!*connected & connection_valid, |ui| {
                             if ui.add_sized(ui.available_size(), btn1).clicked() {
-                                match connection_details {
-                                    ConnectionDetails::Ethernet { port } => {
+                                match connection_kind {
+                                    ConnectionKind::Ethernet { port } => {
                                         message_broker.listen_from_ethernet_port(*port);
                                     }
-                                    ConnectionDetails::Serial { port, baud_rate } => {
-                                        message_broker
-                                            .listen_from_serial_port(port.clone(), *baud_rate);
+                                    ConnectionKind::Serial { port, baud_rate } => {
+                                        message_broker.listen_from_serial_port(
+                                            port.as_ref().log_unwrap().as_ref().to_owned(),
+                                            *baud_rate,
+                                        );
                                     }
                                 }
                                 *can_be_closed = true;

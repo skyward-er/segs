@@ -2,10 +2,10 @@
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::panic)]
 
+mod communication;
 mod error;
 mod mavlink;
 mod message_broker;
-mod serial;
 mod ui;
 mod utils;
 
