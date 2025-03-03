@@ -1,15 +1,16 @@
 use egui::{Color32, Response, Sense, Stroke, Ui, Vec2, Widget};
 
-use crate::{error::ErrInstrument, msg_broker};
+use crate::error::ErrInstrument;
 
 pub struct ReceptionLed {
     pub active: bool,
+    pub frequency: f64,
 }
 
 impl ReceptionLed {
     /// Create a new `ReceptionLed` widget based on the given state.
-    pub fn new(active: bool) -> Self {
-        Self { active }
+    pub fn new(active: bool, frequency: f64) -> Self {
+        Self { active, frequency }
     }
 }
 
@@ -37,8 +38,7 @@ impl ReceptionLed {
 
     fn show_label(&self, ui: &mut Ui) -> Response {
         if self.active {
-            let freq = msg_broker!().reception_frequency();
-            let text = format!("{} Hz", freq);
+            let text = format!("{} Hz", self.frequency);
             ui.label(text)
         } else {
             ui.label("N/A")

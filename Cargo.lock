@@ -786,15 +786,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-channel"
-version = "0.5.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06ba6d68e24814cb8de6bb986db8222d3a027d15872cabc0d18817bc3c0e4471"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-queue"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2911,7 +2902,6 @@ name = "segs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "crossbeam-channel",
  "eframe",
  "egui",
  "egui_extras",
@@ -2920,7 +2910,6 @@ dependencies = [
  "egui_tiles",
  "enum_dispatch",
  "mavlink-bindgen",
- "parking_lot",
  "ring-channel",
  "serde",
  "serde_json",
@@ -3395,7 +3384,6 @@ dependencies = [
  "backtrace",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "socket2",
  "windows-sys 0.52.0",

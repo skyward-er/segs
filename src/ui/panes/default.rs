@@ -58,4 +58,14 @@ impl PaneBehavior for DefaultPane {
     fn contains_pointer(&self) -> bool {
         self.contains_pointer
     }
+
+    fn update(&mut self, _messages: &[crate::mavlink::TimedMessage]) {}
+
+    fn get_message_subscription(&self) -> Option<u32> {
+        None
+    }
+
+    fn should_send_message_history(&self) -> bool {
+        false
+    }
 }
