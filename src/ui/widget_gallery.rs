@@ -3,7 +3,7 @@ use egui_tiles::TileId;
 use strum::{EnumMessage, IntoEnumIterator};
 
 use super::{
-    composable_view::PaneAction,
+    app::PaneAction,
     panes::{Pane, PaneKind},
 };
 

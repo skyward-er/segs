@@ -9,7 +9,7 @@ use strum_macros::{self, EnumIter, EnumMessage};
 
 use crate::mavlink::TimedMessage;
 
-use super::composable_view::PaneResponse;
+use super::app::PaneResponse;
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Pane {

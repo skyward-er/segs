@@ -1,4 +1,4 @@
-mod composable_view;
+mod app;
 mod panes;
 mod persistency;
 mod shortcuts;
@@ -6,4 +6,4 @@ mod utils;
 mod widget_gallery;
 mod widgets;
 
-pub use composable_view::ComposableView;
+pub use app::App;

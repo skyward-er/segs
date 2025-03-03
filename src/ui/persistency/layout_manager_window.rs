@@ -8,7 +8,7 @@ use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_file::FileDialog;
 use tracing::{debug, error};
 
-use crate::{error::ErrInstrument, ui::composable_view::ComposableViewState};
+use crate::{error::ErrInstrument, ui::app::AppState};
 
 use super::LayoutManager;
 
@@ -39,7 +39,7 @@ impl LayoutManagerWindow {
         &mut self,
         ctx: &Context,
         layout_manager: &mut LayoutManager,
-        state: &mut ComposableViewState,
+        state: &mut AppState,
     ) {
         let LayoutManagerWindow {
             visible: window_visible,
@@ -92,7 +92,7 @@ impl LayoutManagerWindow {
 fn show_layouts_table(
     ui: &mut Ui,
     layout_manager: &mut LayoutManager,
-    state: &mut ComposableViewState,
+    state: &mut AppState,
     selection: &mut Option<PathBuf>,
     changed: bool,
 ) {
@@ -173,7 +173,7 @@ fn show_layouts_table(
 fn show_action_buttons(
     builder: StripBuilder,
     layout_manager: &mut LayoutManager,
-    state: &mut ComposableViewState,
+    state: &mut AppState,
     file_dialog: &mut Option<FileDialog>,
     text_input: &mut String,
     selection: &mut Option<PathBuf>,
@@ -188,7 +188,7 @@ fn show_action_buttons(
                 Button::new("Load empty"),
             );
             if open_empty_resp.clicked() {
-                *state = ComposableViewState::default();
+                *state = AppState::default();
                 selection.take();
             }
 

@@ -16,7 +16,7 @@ use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::Subscribe
 
 use error::ErrInstrument;
 use mavlink::ReflectionContext;
-use ui::ComposableView;
+use ui::App;
 
 /// ReflectionContext singleton, used to get access to the Mavlink message definitions
 static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
@@ -48,6 +48,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         APP_NAME, // This is the app id, used for example by Wayland
         native_options,
-        Box::new(|ctx| Ok(Box::new(ComposableView::new(APP_NAME, ctx)))),
+        Box::new(|ctx| Ok(Box::new(App::new(APP_NAME, ctx)))),
     )
 }

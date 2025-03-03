@@ -1,7 +1,7 @@
 use egui::Label;
 use serde::{Deserialize, Serialize};
 
-use crate::ui::composable_view::PaneResponse;
+use crate::ui::app::PaneResponse;
 
 use super::PaneBehavior;
 

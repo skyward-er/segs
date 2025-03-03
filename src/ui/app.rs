@@ -26,11 +26,11 @@ use std::{
 };
 use tracing::{debug, error, trace};
 
-pub struct ComposableView {
+pub struct App {
     /// Persistent state of the app
-    state: ComposableViewState,
+    state: AppState,
     layout_manager: LayoutManager,
-    behavior: ComposableBehavior,
+    behavior: AppBehavior,
     maximized_pane: Option<TileId>,
     // == Message handling ==
     message_broker: MessageBroker,
@@ -42,7 +42,7 @@ pub struct ComposableView {
 }
 
 // An app must implement the `App` trait to define how the ui is built
-impl eframe::App for ComposableView {
+impl eframe::App for App {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.process_messages();
@@ -254,7 +254,7 @@ impl eframe::App for ComposableView {
     }
 }
 
-impl ComposableView {
+impl App {
     pub fn new(app_name: &str, ctx: &CreationContext) -> Self {
         let mut layout_manager = if let Some(storage) = ctx.storage {
             LayoutManager::new(app_name, storage)
@@ -262,7 +262,7 @@ impl ComposableView {
             LayoutManager::default()
         };
 
-        let mut state = ComposableViewState::default();
+        let mut state = AppState::default();
 
         // Load the selected layout if valid and existing
         if let Some(layout) = layout_manager.current_layout().cloned() {
@@ -281,7 +281,7 @@ impl ComposableView {
                 ctx.egui_ctx.clone(),
             ),
             widget_gallery: WidgetGallery::default(),
-            behavior: ComposableBehavior::default(),
+            behavior: AppBehavior::default(),
             maximized_pane: None,
             message_bundle: MessageBundle::default(),
             sources_window: SourceWindow::default(),
@@ -333,11 +333,11 @@ impl ComposableView {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ComposableViewState {
+pub struct AppState {
     pub panes_tree: Tree<Pane>,
 }
 
-impl Default for ComposableViewState {
+impl Default for AppState {
     fn default() -> Self {
         let mut tiles = Tiles::default();
         let root = tiles.insert_pane(Pane::default());
@@ -347,10 +347,10 @@ impl Default for ComposableViewState {
     }
 }
 
-impl ComposableViewState {
+impl AppState {
     pub fn from_file(path: &PathBuf) -> anyhow::Result<Self> {
         fs::read_to_string(path)
-            .and_then(|json| serde_json::from_str::<ComposableViewState>(&json).map_err(Into::into))
+            .and_then(|json| serde_json::from_str::<AppState>(&json).map_err(Into::into))
             .map_err(|e| anyhow::anyhow!("Error deserializing layout: {}", e))
     }
 
@@ -547,13 +547,13 @@ impl SourceWindow {
     }
 }
 
-/// Behavior for the tree of panes in the composable view
+/// Behavior for the tree of panes in the app
 #[derive(Default)]
-pub struct ComposableBehavior {
+pub struct AppBehavior {
     pub action: Option<PaneAction>,
 }
 
-impl Behavior<Pane> for ComposableBehavior {
+impl Behavior<Pane> for AppBehavior {
     fn pane_ui(
         &mut self,
         ui: &mut egui::Ui,

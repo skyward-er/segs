@@ -9,14 +9,14 @@ use tracing::{info, trace, warn};
 
 use crate::error::ErrInstrument;
 
-use super::super::composable_view::ComposableViewState;
+use super::super::app::AppState;
 
 static LAYOUTS_DIR: &str = "layouts";
 static SELECTED_LAYOUT_KEY: &str = "selected_layout";
 
 #[derive(Default)]
 pub struct LayoutManager {
-    layouts: BTreeMap<PathBuf, ComposableViewState>,
+    layouts: BTreeMap<PathBuf, AppState>,
     layouts_path: PathBuf,
     current_layout: Option<PathBuf>,
 }
@@ -45,7 +45,7 @@ impl LayoutManager {
         &self.layouts_path
     }
 
-    pub fn layouts(&self) -> &BTreeMap<PathBuf, ComposableViewState> {
+    pub fn layouts(&self) -> &BTreeMap<PathBuf, AppState> {
         &self.layouts
     }
 
@@ -65,7 +65,7 @@ impl LayoutManager {
             self.layouts = files
                 .flatten()
                 .map(|path| path.path())
-                .flat_map(|path| match ComposableViewState::from_file(&path) {
+                .flat_map(|path| match AppState::from_file(&path) {
                     Ok(layout) => {
                         let path: PathBuf = path
                             .file_stem()
@@ -82,12 +82,12 @@ impl LayoutManager {
         }
     }
 
-    pub fn get_layout(&self, name: impl Into<PathBuf>) -> Option<&ComposableViewState> {
+    pub fn get_layout(&self, name: impl Into<PathBuf>) -> Option<&AppState> {
         self.layouts.get(&name.into())
     }
 
     #[profiling::function]
-    pub fn save_layout(&mut self, name: &str, state: &ComposableViewState) -> anyhow::Result<()> {
+    pub fn save_layout(&mut self, name: &str, state: &AppState) -> anyhow::Result<()> {
         let path = self.layouts_path.join(name).with_extension("json");
         state.to_file(&path)?;
         self.reload_layouts();
@@ -98,7 +98,7 @@ impl LayoutManager {
     pub fn load_layout(
         &mut self,
         path: impl AsRef<Path>,
-        state: &mut ComposableViewState,
+        state: &mut AppState,
     ) -> anyhow::Result<()> {
         let layout = self
             .layouts
@@ -117,7 +117,7 @@ impl LayoutManager {
         Ok(())
     }
 
-    // pub fn display_selected_layout(&mut self, state: &mut ComposableViewState) {
+    // pub fn display_selected_layout(&mut self, state: &mut AppState) {
     //     if let Some(selection) = self.selection.as_ref() {
     //         if let Some(selected_layout) = self.layouts.get(selection) {
     //             *state = selected_layout.clone();
@@ -126,7 +126,7 @@ impl LayoutManager {
     //     }
     // }
 
-    // pub fn save_current_layout(&mut self, state: &ComposableViewState, name: &String) {
+    // pub fn save_current_layout(&mut self, state: &AppState, name: &String) {
     //     let layouts_path = &self.layouts_path;
     //     let path = layouts_path.join(name).with_extension("json");
     //     state.to_file(&path);

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::ui::{
-    composable_view::{PaneAction, PaneResponse},
+    app::{PaneAction, PaneResponse},
     utils::{SizingMemo, vertically_centered},
 };
 

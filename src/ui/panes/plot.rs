@@ -3,7 +3,7 @@ mod source_window;
 use super::PaneBehavior;
 use crate::{
     mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage, extract_from_message},
-    ui::composable_view::PaneResponse,
+    ui::app::PaneResponse,
 };
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoints};
