@@ -48,6 +48,7 @@ impl ReceptionLed {
 }
 
 impl Widget for ReceptionLed {
+    #[profiling::function]
     fn ui(self, ui: &mut Ui) -> Response {
         ui.horizontal(|ui| {
             ui.label("Receiving at:");

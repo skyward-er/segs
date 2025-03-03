@@ -16,11 +16,7 @@ egui_extras = "0.31"
 egui_plot = "0.31"
 egui_file = "0.22"
 # =========== Asynchronous ===========
-tokio = { version = "1.41", features = [
-    "rt-multi-thread",
-    "net",
-    "sync",
-] }
+tokio = { version = "1.41", features = ["rt-multi-thread", "net", "sync"] }
 # =========== Mavlink ===========
 skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
     "reflection",
@@ -44,3 +40,5 @@ anyhow = "1.0"
 ring-channel = "0.12.0"
 thiserror = "2.0.7"
 uuid = { version = "1.12.1", features = ["serde", "v7"] }
+profiling = { version = "1.0", features = ["profile-with-tracy"] }
+tracing-tracy = "0.11.4"

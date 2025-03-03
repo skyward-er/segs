@@ -12,18 +12,18 @@ use reception_queue::ReceptionQueue;
 
 use crate::{
     error::ErrInstrument,
-    mavlink::{byte_parser, Message, TimedMessage},
+    mavlink::{Message, TimedMessage, byte_parser},
     utils::RingBuffer,
 };
 use anyhow::{Context, Result};
-use ring_channel::{ring_channel, RingReceiver, RingSender};
+use ring_channel::{RingReceiver, RingSender, ring_channel};
 use std::{
     collections::HashMap,
     io::Write,
     num::NonZeroUsize,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };

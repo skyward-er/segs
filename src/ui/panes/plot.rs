@@ -2,14 +2,14 @@ mod source_window;
 
 use super::PaneBehavior;
 use crate::{
-    mavlink::{extract_from_message, MessageData, TimedMessage, ROCKET_FLIGHT_TM_DATA},
+    mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage, extract_from_message},
     ui::composable_view::PaneResponse,
 };
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoints};
 use egui_tiles::TileId;
 use serde::{Deserialize, Serialize};
-use source_window::{sources_window, SourceSettings};
+use source_window::{SourceSettings, sources_window};
 use std::iter::zip;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -37,6 +37,7 @@ impl PartialEq for Plot2DPane {
 }
 
 impl PaneBehavior for Plot2DPane {
+    #[profiling::function]
     fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
@@ -86,6 +87,7 @@ impl PaneBehavior for Plot2DPane {
         self.contains_pointer
     }
 
+    #[profiling::function]
     fn update(&mut self, messages: &[TimedMessage]) {
         if !self.state_valid {
             self.line_data.clear();

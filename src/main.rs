@@ -4,15 +4,15 @@
 
 mod error;
 mod mavlink;
-mod serial;
 mod message_broker;
+mod serial;
 mod ui;
 mod utils;
 
 use std::sync::LazyLock;
 
 use tokio::runtime::Runtime;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use error::ErrInstrument;
 use mavlink::ReflectionContext;
@@ -28,6 +28,7 @@ fn main() -> Result<(), eframe::Error> {
     let env_filter = EnvFilter::builder().from_env_lossy();
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
+        .with(tracing_tracy::TracyLayer::default())
         .init();
 
     // Start Tokio runtime (TODO: decide whether to use Tokio or a simpler thread-based approach)

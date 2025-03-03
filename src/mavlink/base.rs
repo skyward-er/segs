@@ -38,6 +38,7 @@ impl TimedMessage {
 }
 
 /// Extract fields from a MavLink message using string keys
+#[profiling::function]
 pub fn extract_from_message<K, T>(
     message: &MavMessage,
     fields: impl IntoIterator<Item = K>,

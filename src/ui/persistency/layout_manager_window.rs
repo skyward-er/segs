@@ -34,6 +34,7 @@ impl LayoutManagerWindow {
         }
     }
 
+    #[profiling::function]
     pub fn show(
         &mut self,
         ctx: &Context,

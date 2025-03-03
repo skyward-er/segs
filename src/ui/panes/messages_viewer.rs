@@ -18,6 +18,7 @@ impl PartialEq for MessagesViewerPane {
 }
 
 impl PaneBehavior for MessagesViewerPane {
+    #[profiling::function]
     fn ui(&mut self, ui: &mut egui::Ui, _tile_id: egui_tiles::TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
         let label = ui.add_sized(ui.available_size(), Label::new("This is a label"));

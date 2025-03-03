@@ -82,6 +82,7 @@ impl eframe::App for ComposableView {
             match action {
                 PaneAction::SplitH => {
                     if let Some(hovered_tile) = hovered_pane {
+                        profiling::scope!("split_h");
                         if self.maximized_pane.is_none() {
                             debug!("Called SplitH on tile {:?}", hovered_tile);
                             let hovered_tile_pane = panes_tree
@@ -102,6 +103,7 @@ impl eframe::App for ComposableView {
                     }
                 }
                 PaneAction::SplitV => {
+                    profiling::scope!("split_v");
                     if self.maximized_pane.is_none() {
                         if let Some(hovered_tile) = hovered_pane {
                             debug!("Called SplitV on tile {:?}", hovered_tile);
@@ -240,6 +242,9 @@ impl eframe::App for ComposableView {
             self.behavior.action = Some(action);
         }
 
+        // Used for the profiler
+        profiling::finish_frame!();
+
         // UNCOMMENT THIS TO ENABLE CONTINOUS MODE
         // ctx.request_repaint();
     }
@@ -285,6 +290,7 @@ impl ComposableView {
     }
 
     /// Retrieves new messages from the message broker and dispatches them to the panes.
+    #[profiling::function]
     fn process_messages(&mut self) {
         let start = Instant::now();
 
@@ -398,6 +404,7 @@ struct SourceWindow {
 }
 
 impl SourceWindow {
+    #[profiling::function]
     fn show_window(&mut self, ui: &mut egui::Ui, message_broker: &mut MessageBroker) {
         let mut window_is_open = self.visible;
         let mut can_be_closed = false;

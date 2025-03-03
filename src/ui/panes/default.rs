@@ -4,7 +4,7 @@ use tracing::debug;
 
 use crate::ui::{
     composable_view::{PaneAction, PaneResponse},
-    utils::{vertically_centered, SizingMemo},
+    utils::{SizingMemo, vertically_centered},
 };
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -22,6 +22,7 @@ impl PartialEq for DefaultPane {
 }
 
 impl PaneBehavior for DefaultPane {
+    #[profiling::function]
     fn ui(&mut self, ui: &mut egui::Ui, tile_id: egui_tiles::TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 

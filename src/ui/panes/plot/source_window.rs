@@ -1,12 +1,13 @@
 use crate::{
-    mavlink::{MavMessage, Message},
     MAVLINK_PROFILE,
+    mavlink::{MavMessage, Message},
 };
 
 use crate::error::ErrInstrument;
 
 use super::{LineSettings, MsgSources};
 
+#[profiling::function]
 pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut SourceSettings) {
     // extract the msg name from the id to show it in the combo box
     let msg_name = MAVLINK_PROFILE

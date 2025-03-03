@@ -58,6 +58,7 @@ impl LayoutManager {
     }
 
     /// Scans the layout directory and reloads the layouts
+    #[profiling::function]
     pub fn reload_layouts(&mut self) {
         if let Ok(files) = self.layouts_path.read_dir() {
             trace!("Reloading layouts from {:?}", self.layouts_path);
@@ -85,6 +86,7 @@ impl LayoutManager {
         self.layouts.get(&name.into())
     }
 
+    #[profiling::function]
     pub fn save_layout(&mut self, name: &str, state: &ComposableViewState) -> anyhow::Result<()> {
         let path = self.layouts_path.join(name).with_extension("json");
         state.to_file(&path)?;
@@ -92,6 +94,7 @@ impl LayoutManager {
         Ok(())
     }
 
+    #[profiling::function]
     pub fn load_layout(
         &mut self,
         path: impl AsRef<Path>,
