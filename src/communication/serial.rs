@@ -6,6 +6,7 @@
 
 use std::{
     collections::VecDeque,
+    io::Read,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -14,9 +15,14 @@ use std::{
 };
 
 use anyhow::Context;
+use ring_channel::{RingReceiver, RingSender};
 use serialport::{SerialPort, SerialPortInfo, SerialPortType};
-use skyward_mavlink::mavlink::error::MessageReadError;
-use tracing::error;
+use skyward_mavlink::mavlink::{
+    MavFrame,
+    error::{MessageReadError, MessageWriteError},
+    read_v1_msg, write_v1_msg,
+};
+use tracing::{debug, error, trace};
 
 use crate::{
     error::ErrInstrument,
@@ -26,132 +32,103 @@ use crate::{
     },
 };
 
-const MAX_STORED_MSGS: usize = 100; // 192 bytes each = 19.2 KB
+use super::{Connectable, ConnectionError, MessageTransceiver, Transceivers};
+
 const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
 
-/// Represents a candidate serial port device.
-#[derive(Debug, Clone)]
-pub struct SerialPortCandidate {
-    port_name: String,
-    info: SerialPortInfo,
+/// Get a list of all serial USB ports available on the system
+pub fn list_all_usb_ports() -> anyhow::Result<Vec<SerialPortInfo>> {
+    let ports = serialport::available_ports().context("No serial ports found!")?;
+    Ok(ports
+        .into_iter()
+        .filter(|p| matches!(p.port_type, SerialPortType::UsbPort(_)))
+        .collect())
 }
 
-impl PartialEq for SerialPortCandidate {
-    fn eq(&self, other: &Self) -> bool {
-        self.port_name == other.port_name
-    }
-}
-
-impl SerialPortCandidate {
-    /// Connects to the serial port with the given baud rate.
-    pub fn connect(self, baud_rate: u32) -> Result<SerialConnection, serialport::Error> {
-        let serial_port = serialport::new(&self.port_name, baud_rate)
-            .timeout(std::time::Duration::from_millis(SERIAL_PORT_TIMEOUT_MS))
-            .open()?;
-        Ok(SerialConnection {
-            serial_port_reader: Arc::new(Mutex::new(PeekReader::new(serial_port))),
-            stored_msgs: Arc::new(Mutex::new(VecDeque::with_capacity(MAX_STORED_MSGS))),
-            running_flag: Arc::new(AtomicBool::new(false)),
-            thread_handle: None,
-        })
-    }
-
-    /// Get a list of all serial USB ports available on the system
-    pub fn list_all_usb_ports() -> anyhow::Result<Vec<Self>> {
-        let ports = serialport::available_ports().context("No serial ports found!")?;
-        Ok(ports
-            .into_iter()
-            .filter(|p| matches!(p.port_type, SerialPortType::UsbPort(_)))
-            .map(|p| SerialPortCandidate {
-                port_name: p.port_name.clone(),
-                info: p,
-            })
-            .collect())
-    }
-
-    /// Finds the first USB serial port with "STM32" or "ST-LINK" in its product name.
-    /// Renamed from get_first_stm32_serial_port.
-    pub fn find_first_stm32_port() -> Option<Self> {
-        let ports = Self::list_all_usb_ports().log_unwrap();
-        for port in ports {
-            if let serialport::SerialPortType::UsbPort(info) = &port.info.port_type {
-                if let Some(p) = &info.product {
-                    if p.contains("STM32") || p.contains("ST-LINK") {
-                        return Some(port);
-                    }
+/// Finds the first USB serial port with "STM32" or "ST-LINK" in its product name.
+/// Renamed from get_first_stm32_serial_port.
+pub fn find_first_stm32_port() -> Option<SerialPortInfo> {
+    let ports = list_all_usb_ports().log_unwrap();
+    for port in ports {
+        if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
+            if let Some(p) = &info.product {
+                if p.contains("STM32") || p.contains("ST-LINK") {
+                    return Some(port);
                 }
             }
         }
-        None
+    }
+    None
+}
+
+#[derive(Debug, Clone)]
+pub struct SerialConfiguration {
+    pub port_name: String,
+    pub baud_rate: u32,
+}
+
+impl Connectable for SerialConfiguration {
+    type Connected = SerialTransceiver;
+
+    fn connect(self) -> Result<Self::Connected, ConnectionError> {
+        let port = serialport::new(&self.port_name, self.baud_rate)
+            .timeout(std::time::Duration::from_millis(SERIAL_PORT_TIMEOUT_MS))
+            .open()?;
+        debug!(
+            "Connected to serial port {} with baud rate {}",
+            self.port_name, self.baud_rate
+        );
+        Ok(SerialTransceiver {
+            serial_reader: Mutex::new(PeekReader::new(port.try_clone()?)),
+            serial_writer: Mutex::new(port),
+        })
     }
 }
 
-impl AsRef<String> for SerialPortCandidate {
-    fn as_ref(&self) -> &String {
-        &self.port_name
+impl From<serialport::Error> for ConnectionError {
+    fn from(e: serialport::Error) -> Self {
+        let serialport::Error { kind, description } = e.clone();
+        match kind {
+            serialport::ErrorKind::NoDevice => ConnectionError::WrongConfiguration(description),
+            serialport::ErrorKind::InvalidInput => ConnectionError::WrongConfiguration(description),
+            serialport::ErrorKind::Unknown => ConnectionError::Unknown(description),
+            serialport::ErrorKind::Io(e) => ConnectionError::Io(e.into()),
+        }
     }
 }
 
 /// Manages a connection to a serial port.
-pub struct SerialConnection {
-    serial_port_reader: Arc<Mutex<PeekReader<Box<dyn SerialPort>>>>,
-    stored_msgs: Arc<Mutex<VecDeque<TimedMessage>>>,
-    running_flag: Arc<AtomicBool>,
-    thread_handle: Option<JoinHandle<()>>,
+pub struct SerialTransceiver {
+    serial_reader: Mutex<PeekReader<Box<dyn SerialPort>>>,
+    serial_writer: Mutex<Box<dyn SerialPort>>,
 }
 
-impl SerialConnection {
-    /// Starts receiving messages asynchronously.
-    pub fn start_receiving(&mut self) {
-        let running_flag = self.running_flag.clone();
-        let serial_port = self.serial_port_reader.clone();
-        let stored_msgs = self.stored_msgs.clone();
-        let thread_handle = std::thread::spawn(move || {
-            while running_flag.load(Ordering::Relaxed) {
-                let res: Result<(MavHeader, MavMessage), MessageReadError> =
-                    read_versioned_msg(&mut serial_port.lock().log_unwrap(), MavlinkVersion::V1);
-                match res {
-                    Ok((_, msg)) => {
-                        // Store the message in the buffer.
-                        stored_msgs
-                            .lock()
-                            .log_unwrap()
-                            .push_back(TimedMessage::just_received(msg));
-                    }
-                    Err(MessageReadError::Io(e)) => {
-                        // Ignore timeouts.
-                        if e.kind() == std::io::ErrorKind::TimedOut {
-                            continue;
-                        } else {
-                            error!("Error reading message: {:?}", e);
-                            running_flag.store(false, Ordering::Relaxed);
-                        }
-                    }
-                    Err(e) => {
-                        error!("Error reading message: {:?}", e);
-                    }
-                };
+impl MessageTransceiver for SerialTransceiver {
+    fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
+        loop {
+            let res: Result<(_, MavMessage), MessageReadError> =
+                read_v1_msg(&mut self.serial_reader.lock().log_unwrap());
+            match res {
+                Ok((_, msg)) => {
+                    return Ok(TimedMessage::just_received(msg));
+                }
+                Err(MessageReadError::Io(e)) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    // Ignore timeouts.
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
-        });
-        self.thread_handle.replace(thread_handle);
-    }
-
-    /// Stops receiving messages.
-    pub fn stop_receiving(&mut self) {
-        self.running_flag.store(false, Ordering::Relaxed);
-        if let Some(handle) = self.thread_handle.take() {
-            handle.join().log_unwrap();
         }
     }
 
-    /// Retrieves and clears the stored messages.
-    pub fn retrieve_messages(&self) -> Vec<TimedMessage> {
-        self.stored_msgs.lock().log_unwrap().drain(..).collect()
-    }
-
-    /// Transmits a message over the serial connection.
-    pub fn transmit_message(&mut self, msg: &[u8]) {
-        todo!()
+    fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
+        let MavFrame { header, msg, .. } = msg;
+        let written = write_v1_msg(&mut *self.serial_writer.lock().log_unwrap(), header, &msg)?;
+        debug!("Sent message: {:?}", msg);
+        trace!("Sent {} bytes via serial", written);
+        Ok(written)
     }
 }
 
