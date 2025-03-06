@@ -22,7 +22,8 @@ use super::{
 /// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
-    pub port: u16,
+    pub recv_port: u16,
+    pub send_port: u16,
 }
 
 impl Connectable for EthernetConfiguration {
@@ -31,8 +32,13 @@ impl Connectable for EthernetConfiguration {
     /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))?;
-        debug!("Connected to Ethernet port on port {}", self.port);
+        let recv_addr = format!("0.0.0.0:{}", self.recv_port);
+        let send_addr = format!("255.255.255.255:{}", self.send_port);
+        let socket = UdpSocket::bind(recv_addr)?;
+        debug!("Bound to Ethernet port on port {}", self.recv_port);
+        socket.set_broadcast(true)?;
+        socket.connect(send_addr)?;
+        debug!("Connected to Ethernet port on port {}", self.send_port);
         Ok(EthernetTransceiver { socket })
     }
 }

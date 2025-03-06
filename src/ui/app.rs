@@ -11,6 +11,7 @@ use tracing::{debug, error, trace};
 
 use crate::{
     error::ErrInstrument,
+    mavlink::MavMessage,
     message_broker::{MessageBroker, MessageBundle},
 };
 
@@ -43,7 +44,7 @@ pub struct App {
 impl eframe::App for App {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.process_messages();
+        self.process_incoming_messages();
 
         let panes_tree = &mut self.state.panes_tree;
 
@@ -240,6 +241,9 @@ impl eframe::App for App {
             self.behavior.action = Some(action);
         }
 
+        // Process outgoing messages
+        self.process_outgoing_messages();
+
         // Used for the profiler
         profiling::finish_frame!();
 
@@ -286,11 +290,11 @@ impl App {
 
     /// Retrieves new messages from the message broker and dispatches them to the panes.
     #[profiling::function]
-    fn process_messages(&mut self) {
+    fn process_incoming_messages(&mut self) {
         let start = Instant::now();
 
         self.message_broker
-            .process_messages(&mut self.message_bundle);
+            .process_incoming_messages(&mut self.message_bundle);
 
         // Skip updating the panes if there are no messages
         let count = self.message_bundle.count();
@@ -324,6 +328,26 @@ impl App {
             start.elapsed()
         );
         self.message_bundle.reset();
+    }
+
+    /// Sends outgoing messages from the panes to the message broker.
+    #[profiling::function]
+    fn process_outgoing_messages(&mut self) {
+        let outgoing: Vec<MavMessage> = self
+            .state
+            .panes_tree
+            .tiles
+            .iter_mut()
+            .filter_map(|(_, tile)| {
+                if let Tile::Pane(pane) = tile {
+                    Some(pane.drain_outgoing_messages())
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        self.message_broker.process_outgoing_messages(outgoing);
     }
 }
 

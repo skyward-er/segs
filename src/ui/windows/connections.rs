@@ -70,13 +70,19 @@ impl ConnectionsWindow {
         }
 
         match connection_config {
-            ConnectionConfig::Ethernet(EthernetConfiguration { port }) => {
+            ConnectionConfig::Ethernet(EthernetConfiguration {
+                recv_port,
+                send_port,
+            }) => {
                 egui::Grid::new("grid")
                     .num_columns(2)
                     .spacing([10.0, 5.0])
                     .show(ui, |ui| {
-                        ui.label("Ethernet Port:");
-                        ui.add(egui::DragValue::new(port).range(0..=65535).speed(10));
+                        ui.label("Ethernet Receiving Port:");
+                        ui.add(egui::DragValue::new(recv_port).range(0..=65535).speed(10));
+                        ui.end_row();
+                        ui.label("Ethernet Sending Port:");
+                        ui.add(egui::DragValue::new(send_port).range(0..=65535).speed(10));
                         ui.end_row();
                     });
             }
@@ -177,7 +183,8 @@ pub enum ConnectionConfig {
 
 fn default_ethernet() -> EthernetConfiguration {
     EthernetConfiguration {
-        port: DEFAULT_ETHERNET_PORT,
+        recv_port: DEFAULT_ETHERNET_PORT,
+        send_port: DEFAULT_ETHERNET_PORT,
     }
 }
 

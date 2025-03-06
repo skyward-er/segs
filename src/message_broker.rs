@@ -10,17 +10,23 @@ mod reception_queue;
 pub use message_bundle::MessageBundle;
 use reception_queue::ReceptionQueue;
 
-use crate::{
-    communication::{Connection, ConnectionError, TransceiverConfigExt},
-    error::ErrInstrument,
-    mavlink::{Message, TimedMessage},
-};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
     time::Duration,
 };
+
 use tracing::error;
+
+use crate::{
+    communication::{Connection, ConnectionError, TransceiverConfigExt},
+    error::ErrInstrument,
+    mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, Message, TimedMessage},
+};
+
+const RECEPTION_QUEUE_INTERVAL: Duration = Duration::from_secs(1);
+const SEGS_SYSTEM_ID: u8 = 1;
+const SEGS_COMPONENT_ID: u8 = 1;
 
 /// The MessageBroker struct contains the state of the message broker.
 ///
@@ -43,7 +49,7 @@ impl MessageBroker {
         Self {
             messages: HashMap::new(),
             // TODO: make this configurable
-            last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(Duration::from_secs(1)))),
+            last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(RECEPTION_QUEUE_INTERVAL))),
             connection: None,
             ctx,
         }
@@ -88,7 +94,8 @@ impl MessageBroker {
 
     /// Processes incoming network messages. New messages are added to the
     /// given `MessageBundle`.
-    pub fn process_messages(&mut self, bundle: &mut MessageBundle) {
+    #[profiling::function]
+    pub fn process_incoming_messages(&mut self, bundle: &mut MessageBundle) {
         // process messages only if the connection is open
         if let Some(connection) = &self.connection {
             // check for communication errors, and log them
@@ -112,6 +119,30 @@ impl MessageBroker {
                     error!("Error while receiving messages: {:?}", e);
                     // TODO: user error handling, until them silently close the connection
                     self.close_connection();
+                }
+            }
+        }
+    }
+
+    /// Processes outgoing messages.
+    /// WARNING: This methods blocks the UI, thus a detailed profiling is needed.
+    /// FIXME
+    #[profiling::function]
+    pub fn process_outgoing_messages(&mut self, messages: Vec<MavMessage>) {
+        if let Some(connection) = &self.connection {
+            for msg in messages {
+                let header = MavHeader {
+                    system_id: SEGS_SYSTEM_ID,
+                    component_id: SEGS_COMPONENT_ID,
+                    ..Default::default()
+                };
+                let frame = MavFrame {
+                    header,
+                    msg,
+                    protocol_version: MavlinkVersion::V1,
+                };
+                if let Err(e) = connection.send_message(frame) {
+                    error!("Error while transmitting message: {:?}", e);
                 }
             }
         }

@@ -7,7 +7,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
 
-use crate::mavlink::TimedMessage;
+use crate::mavlink::{MavMessage, TimedMessage};
 
 use super::app::PaneResponse;
 
@@ -37,6 +37,11 @@ pub trait PaneBehavior {
     fn get_message_subscription(&self) -> Option<u32>;
     /// Checks whether the full message history should be sent to the pane.
     fn should_send_message_history(&self) -> bool;
+
+    /// Drains the outgoing messages from the pane.
+    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+        Vec::new()
+    }
 }
 
 impl PaneBehavior for Pane {
@@ -58,6 +63,10 @@ impl PaneBehavior for Pane {
 
     fn should_send_message_history(&self) -> bool {
         self.pane.should_send_message_history()
+    }
+
+    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+        self.pane.drain_outgoing_messages()
     }
 }
 

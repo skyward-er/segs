@@ -114,6 +114,8 @@ mod sealed {
         }
     }
 
+    impl<T: Connectable> TransceiverConfigSealed for T {}
+
     /// Enum representing the different types of transceivers.
     #[enum_dispatch]
     pub(super) enum Transceivers {
@@ -125,7 +127,6 @@ mod sealed {
 /// Trait to abstract common configuration types.
 pub trait TransceiverConfig: sealed::TransceiverConfigSealed {}
 impl<T: sealed::TransceiverConfigSealed> TransceiverConfig for T {}
-impl<T: sealed::Connectable> sealed::TransceiverConfigSealed for T {}
 
 /// Extension trait to open a connection directly from a configuration.
 pub trait TransceiverConfigExt: sealed::Connectable {
@@ -165,6 +166,14 @@ impl Connection {
     pub fn send_message(&self, msg: MavFrame<MavMessage>) -> Result<(), CommunicationError> {
         self.transceiver.transmit_message(msg)?;
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connection")
+            .field("running_flag", &self.running_flag)
+            .finish()
     }
 }
 
