@@ -6,8 +6,6 @@
 
 use std::time::Instant;
 
-use skyward_mavlink::mavlink::peek_reader::PeekReader;
-
 // Re-export from the mavlink crate
 pub use skyward_mavlink::{
     mavlink::*, orion::*,
@@ -59,12 +57,4 @@ where
             serde_json::from_value::<T>(value.clone()).map_err(MavlinkError::from)
         })
         .collect())
-}
-
-/// Read a stream of bytes and return an iterator of MavLink messages
-pub fn byte_parser<'a>(
-    reader: impl std::io::Read + 'a,
-) -> impl Iterator<Item = (MavHeader, MavMessage)> + 'a {
-    let mut reader = PeekReader::new(reader);
-    std::iter::from_fn(move || read_v1_msg(&mut reader).ok())
 }

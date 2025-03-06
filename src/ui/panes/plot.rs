@@ -2,6 +2,7 @@ mod source_window;
 
 use super::PaneBehavior;
 use crate::{
+    error::ErrInstrument,
     mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage, extract_from_message},
     ui::app::PaneResponse,
 };
@@ -98,8 +99,8 @@ impl PaneBehavior for Plot2DPane {
         } = &self.settings;
 
         for msg in messages {
-            let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).unwrap();
+            let x: f64 = extract_from_message(&msg.message, [x_field]).log_unwrap()[0];
+            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).log_unwrap();
 
             if self.line_data.len() < ys.len() {
                 self.line_data.resize(ys.len(), Vec::new());

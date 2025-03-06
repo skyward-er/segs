@@ -1,6 +1,4 @@
-use std::collections::binary_heap::PeekMut;
 
-use skyward_mavlink::mavlink::peek_reader::PeekReader;
 
 #[derive(Debug)]
 pub struct RingBuffer<const G: usize> {

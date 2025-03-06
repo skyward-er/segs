@@ -8,14 +8,14 @@ use super::{
 };
 use crate::{
     communication::{
-        Connection, ConnectionError, TransceiverConfigExt,
+        ConnectionError,
         ethernet::EthernetConfiguration,
         serial::{
             DEFAULT_BAUD_RATE, SerialConfiguration, find_first_stm32_port, list_all_usb_ports,
         },
     },
     error::ErrInstrument,
-    mavlink::{self, DEFAULT_ETHERNET_PORT},
+    mavlink::DEFAULT_ETHERNET_PORT,
     message_broker::{MessageBroker, MessageBundle},
     ui::panes::PaneKind,
 };
@@ -24,10 +24,8 @@ use egui::{Align2, Button, Color32, ComboBox, Key, Modifiers, RichText, Sides, V
 use egui_extras::{Size, StripBuilder};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
-use serialport::SerialPortInfo;
 use std::{
     fs,
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -283,10 +281,7 @@ impl App {
         Self {
             state,
             layout_manager,
-            message_broker: MessageBroker::new(
-                NonZeroUsize::new(50).log_unwrap(),
-                ctx.egui_ctx.clone(),
-            ),
+            message_broker: MessageBroker::new(ctx.egui_ctx.clone()),
             widget_gallery: WidgetGallery::default(),
             behavior: AppBehavior::default(),
             maximized_pane: None,

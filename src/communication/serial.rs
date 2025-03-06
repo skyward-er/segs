@@ -4,35 +4,23 @@
 //! listing all available serial ports and finding the first serial port that
 //! contains "STM32" or "ST-LINK" in its product name.
 
-use std::{
-    collections::VecDeque,
-    io::Read,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread::JoinHandle,
-};
+use std::sync::Mutex;
 
 use anyhow::Context;
-use ring_channel::{RingReceiver, RingSender};
 use serialport::{SerialPort, SerialPortInfo, SerialPortType};
 use skyward_mavlink::mavlink::{
     MavFrame,
     error::{MessageReadError, MessageWriteError},
     read_v1_msg, write_v1_msg,
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 
 use crate::{
     error::ErrInstrument,
-    mavlink::{
-        MavHeader, MavMessage, MavlinkVersion, TimedMessage, peek_reader::PeekReader,
-        read_versioned_msg,
-    },
+    mavlink::{MavMessage, TimedMessage, peek_reader::PeekReader},
 };
 
-use super::{Connectable, ConnectionError, MessageTransceiver, Transceivers};
+use super::{Connectable, ConnectionError, MessageTransceiver};
 
 const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_BAUD_RATE: u32 = 115200;
@@ -80,7 +68,7 @@ impl Connectable for SerialConfiguration {
             self.port_name, self.baud_rate
         );
         Ok(SerialTransceiver {
-            serial_reader: Mutex::new(PeekReader::new(port.try_clone()?)),
+            serial_reader: Mutex::new(Box::new(PeekReader::new(port.try_clone()?))),
             serial_writer: Mutex::new(port),
         })
     }
@@ -100,7 +88,8 @@ impl From<serialport::Error> for ConnectionError {
 
 /// Manages a connection to a serial port.
 pub struct SerialTransceiver {
-    serial_reader: Mutex<PeekReader<Box<dyn SerialPort>>>,
+    serial_reader: Mutex<Box<PeekReader<Box<dyn SerialPort>>>>,
+    #[allow(dead_code)]
     serial_writer: Mutex<Box<dyn SerialPort>>,
 }
 

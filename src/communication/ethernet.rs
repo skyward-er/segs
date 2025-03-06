@@ -1,32 +1,17 @@
-use std::{
-    collections::VecDeque,
-    io::Read,
-    net::UdpSocket,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread::JoinHandle,
-};
+use std::net::UdpSocket;
 
-use anyhow::Context;
-use ring_channel::{RingReceiver, RingSender};
 use skyward_mavlink::mavlink::{
     MavFrame,
     error::{MessageReadError, MessageWriteError},
     read_v1_msg, write_v1_msg,
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 
-use crate::{
-    error::ErrInstrument,
-    mavlink::{
-        MAX_MSG_SIZE, MavHeader, MavMessage, MavlinkVersion, TimedMessage, peek_reader::PeekReader,
-        read_versioned_msg,
-    },
-};
+use crate::mavlink::{
+        MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekReader,
+    };
 
-use super::{Connectable, ConnectionError, MessageTransceiver, Transceivers};
+use super::{Connectable, ConnectionError, MessageTransceiver};
 
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
