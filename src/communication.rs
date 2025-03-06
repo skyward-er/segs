@@ -1,6 +1,6 @@
 mod error;
-mod ethernet;
-mod serial;
+pub mod ethernet;
+pub mod serial;
 
 use std::{
     num::NonZero,
@@ -28,21 +28,21 @@ use serial::SerialTransceiver;
 
 // Re-exports
 pub use error::{CommunicationError, ConnectionError};
-pub use ethernet::EthernetConfiguration;
-pub use serial::{SerialConfiguration, find_first_stm32_port, list_all_usb_ports};
 
 const MAX_STORED_MSGS: usize = 100; // 192 bytes each = 19.2 KB
 
-pub trait TransceiverConfigExt: Connectable + Sized {
-    fn open_connection(self) -> Result<Connection, ConnectionError> {
-        Ok(self.connect()?.open_connection())
+pub trait TransceiverConfigExt: Connectable {
+    fn open_connection(&self) -> Result<Connection, ConnectionError> {
+        Ok(self.connect()?.connect_transceiver())
     }
 }
+
+impl<T: Connectable> TransceiverConfigExt for T {}
 
 trait Connectable {
     type Connected: MessageTransceiver;
 
-    fn connect(self) -> Result<Self::Connected, ConnectionError>;
+    fn connect(&self) -> Result<Self::Connected, ConnectionError>;
 }
 
 #[enum_dispatch(Transceivers)]
@@ -55,9 +55,9 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError>;
 
     /// Opens a connection to the transceiver and returns a handle to it.
-    fn open_connection(self) -> Connection {
+    fn connect_transceiver(self) -> Connection {
         let running_flag = Arc::new(AtomicBool::new(true));
-        let (tx, rx) = ring_channel(NonZero::new(MAX_STORED_MSGS).unwrap());
+        let (tx, rx) = ring_channel(NonZero::new(MAX_STORED_MSGS).log_unwrap());
         let endpoint_inner = Arc::new(self.into());
         let thread_handle;
 
@@ -68,7 +68,8 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
                 while running_flag.load(Ordering::Relaxed) {
                     match endpoint_inner.wait_for_message() {
                         Ok(msg) => {
-                            tx.send(msg);
+                            tx.send(msg)
+                                .map_err(|_| CommunicationError::ConnectionClosed)?;
                         }
                         Err(MessageReadError::Io(e)) => {
                             tracing::error!("Failed to read message: {e:#?}");

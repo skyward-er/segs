@@ -21,7 +21,7 @@ use tracing::{debug, error, trace};
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        MavHeader, MavMessage, MavlinkVersion, TimedMessage, peek_reader::PeekReader,
+        MAX_MSG_SIZE, MavHeader, MavMessage, MavlinkVersion, TimedMessage, peek_reader::PeekReader,
         read_versioned_msg,
     },
 };
@@ -36,25 +36,24 @@ pub struct EthernetConfiguration {
 impl Connectable for EthernetConfiguration {
     type Connected = EthernetTransceiver;
 
-    fn connect(self) -> Result<Self::Connected, ConnectionError> {
-        let socket = std::net::UdpSocket::bind(format!("0.0.0.0:{}", self.port))?;
+    fn connect(&self) -> Result<Self::Connected, ConnectionError> {
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))?;
         debug!("Connected to Ethernet port on port {}", self.port);
-        let reader = Mutex::new(PeekReader::new(VecDeque::new()));
-        Ok(EthernetTransceiver { socket, reader })
+        Ok(EthernetTransceiver { socket })
     }
 }
 
 /// Manages a connection to a Ethernet port.
 pub struct EthernetTransceiver {
     socket: UdpSocket,
-    reader: Mutex<PeekReader<VecDeque<u8>>>,
 }
 
 impl MessageTransceiver for EthernetTransceiver {
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
-        let mut reader = self.reader.lock().log_unwrap();
-        let read = self.socket.recv(reader.reader_mut().make_contiguous())?;
+        let mut buf = [0; MAX_MSG_SIZE];
+        let read = self.socket.recv(&mut buf)?;
         trace!("Received {} bytes", read);
+        let mut reader = PeekReader::new(&buf[..read]);
         let (_, res) = read_v1_msg(&mut reader)?;
         debug!("Received message: {:?}", res);
         Ok(TimedMessage::just_received(res))

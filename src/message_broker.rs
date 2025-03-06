@@ -11,11 +11,11 @@ pub use message_bundle::MessageBundle;
 use reception_queue::ReceptionQueue;
 
 use crate::{
+    communication::{Connection, ConnectionError, TransceiverConfigExt},
     error::ErrInstrument,
     mavlink::{Message, TimedMessage, byte_parser},
     utils::RingBuffer,
 };
-use anyhow::{Context, Result};
 use ring_channel::{RingReceiver, RingSender, ring_channel};
 use std::{
     collections::HashMap,
@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{net::UdpSocket, task::JoinHandle};
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 
 /// Maximum size of the UDP buffer
 const UDP_BUFFER_SIZE: usize = 65527;
@@ -37,20 +37,13 @@ const UDP_BUFFER_SIZE: usize = 65527;
 ///
 /// It is responsible for receiving messages from the Mavlink listener and
 /// dispatching them to the views that are interested in them.
-#[derive(Debug)]
 pub struct MessageBroker {
     /// A map of all messages received so far, indexed by message ID
     messages: HashMap<u32, Vec<TimedMessage>>,
     /// instant queue used for frequency calculation and reception time
     last_receptions: Arc<Mutex<ReceptionQueue>>,
-    /// Flag to stop the listener
-    running_flag: Arc<AtomicBool>,
-    /// Listener message sender
-    tx: RingSender<TimedMessage>,
-    /// Broker message receiver
-    rx: RingReceiver<TimedMessage>,
-    /// Task handle for the listener
-    task: Option<JoinHandle<Result<()>>>,
+    /// Connection to the Mavlink listener
+    connection: Option<Connection>,
     /// Egui context
     ctx: egui::Context,
 }
@@ -58,116 +51,123 @@ pub struct MessageBroker {
 impl MessageBroker {
     /// Creates a new `MessageBroker` with the given channel size and Egui context.
     pub fn new(channel_size: NonZeroUsize, ctx: egui::Context) -> Self {
-        let (tx, rx) = ring_channel(channel_size);
         Self {
             messages: HashMap::new(),
             // TODO: make this configurable
             last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(Duration::from_secs(1)))),
-            tx,
-            rx,
+            connection: None,
             ctx,
-            running_flag: Arc::new(AtomicBool::new(false)),
-            task: None,
         }
+    }
+
+    /// Start a listener task that listens to incoming messages from the given
+    /// medium (Serial or Ethernet) and stores them in a ring buffer.
+    pub fn open_connection(
+        &mut self,
+        config: impl TransceiverConfigExt,
+    ) -> Result<(), ConnectionError> {
+        self.connection = Some(config.open_connection()?);
+        Ok(())
     }
 
     /// Stop the listener task from listening to incoming messages, if it is
     /// running.
-    pub fn stop_listening(&mut self) {
-        self.running_flag.store(false, Ordering::Relaxed);
-        if let Some(t) = self.task.take() {
-            t.abort()
-        }
+    pub fn close_connection(&mut self) {
+        self.connection.take();
     }
 
-    /// Start a listener task that listens to incoming messages from the given
-    /// Ethernet port, and accumulates them in a ring buffer, read only when
-    /// views request a refresh.
-    pub fn listen_from_ethernet_port(&mut self, port: u16) {
-        // Stop the current listener if it exists
-        self.stop_listening();
-        self.running_flag.store(true, Ordering::Relaxed);
-        let last_receptions = Arc::clone(&self.last_receptions);
-
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
-
-        let bind_address = format!("0.0.0.0:{}", port);
-        let mut buf = Box::new([0; UDP_BUFFER_SIZE]);
-        let running_flag = self.running_flag.clone();
-
-        debug!("Spawning listener task at {}", bind_address);
-        let handle = tokio::spawn(async move {
-            let socket = UdpSocket::bind(bind_address)
-                .await
-                .context("Failed to bind socket")?;
-            debug!("Listening on UDP");
-
-            while running_flag.load(Ordering::Relaxed) {
-                let (len, _) = socket
-                    .recv_from(buf.as_mut_slice())
-                    .await
-                    .context("Failed to receive message")?;
-                for (_, mav_message) in byte_parser(&buf[..len]) {
-                    trace!("Received message: {:?}", mav_message);
-                    tx.send(TimedMessage::just_received(mav_message))
-                        .context("Failed to send message")?;
-                    last_receptions.lock().unwrap().push(Instant::now());
-                    ctx.request_repaint();
-                }
-            }
-
-            Ok::<(), anyhow::Error>(())
-        });
-        self.task = Some(handle);
+    pub fn is_connected(&self) -> bool {
+        self.connection.is_some()
     }
 
-    /// Start a listener task that listens to incoming messages from the given
-    /// serial port and stores them in a ring buffer.
-    pub fn listen_from_serial_port(&mut self, port: String, baud_rate: u32) {
-        // Stop the current listener if it exists
-        self.stop_listening();
-        self.running_flag.store(true, Ordering::Relaxed);
-        let last_receptions = Arc::clone(&self.last_receptions);
+    // /// Start a listener task that listens to incoming messages from the given
+    // /// Ethernet port, and accumulates them in a ring buffer, read only when
+    // /// views request a refresh.
+    // pub fn listen_from_ethernet_port(&mut self, port: u16) {
+    //     // Stop the current listener if it exists
+    //     self.stop_listening();
+    //     self.running_flag.store(true, Ordering::Relaxed);
+    //     let last_receptions = Arc::clone(&self.last_receptions);
 
-        let tx = self.tx.clone();
-        let ctx = self.ctx.clone();
+    //     let tx = self.tx.clone();
+    //     let ctx = self.ctx.clone();
 
-        let running_flag = self.running_flag.clone();
+    //     let bind_address = format!("0.0.0.0:{}", port);
+    //     let mut buf = Box::new([0; UDP_BUFFER_SIZE]);
+    //     let running_flag = self.running_flag.clone();
 
-        debug!("Spawning listener task at {}", port);
-        let handle = tokio::task::spawn_blocking(move || {
-            let mut serial_port = serialport::new(port, baud_rate)
-                .timeout(std::time::Duration::from_millis(100))
-                .open()
-                .context("Failed to open serial port")?;
-            debug!("Listening on serial port");
+    //     debug!("Spawning listener task at {}", bind_address);
+    //     let handle = tokio::spawn(async move {
+    //         let socket = UdpSocket::bind(bind_address)
+    //             .await
+    //             .context("Failed to bind socket")?;
+    //         debug!("Listening on UDP");
 
-            let mut ring_buf = RingBuffer::<1024>::new();
-            let mut temp_buf = [0; 512];
-            // need to do a better error handling for this (need toast errors)
-            while running_flag.load(Ordering::Relaxed) {
-                let result = serial_port
-                    .read(&mut temp_buf)
-                    .log_expect("Failed to read from serial port");
-                debug!("Read {} bytes from serial port", result);
-                trace!("data read from serial: {:?}", &temp_buf[..result]);
-                ring_buf
-                    .write(&temp_buf[..result])
-                    .log_expect("Failed to write to ring buffer, check buffer size");
-                for (_, mav_message) in byte_parser(&mut ring_buf) {
-                    debug!("Received message: {:?}", mav_message);
-                    tx.send(TimedMessage::just_received(mav_message))
-                        .context("Failed to send message")?;
-                    last_receptions.lock().unwrap().push(Instant::now());
-                    ctx.request_repaint();
-                }
-            }
+    //         while running_flag.load(Ordering::Relaxed) {
+    //             let (len, _) = socket
+    //                 .recv_from(buf.as_mut_slice())
+    //                 .await
+    //                 .context("Failed to receive message")?;
+    //             for (_, mav_message) in byte_parser(&buf[..len]) {
+    //                 trace!("Received message: {:?}", mav_message);
+    //                 tx.send(TimedMessage::just_received(mav_message))
+    //                     .context("Failed to send message")?;
+    //                 last_receptions.lock().unwrap().push(Instant::now());
+    //                 ctx.request_repaint();
+    //             }
+    //         }
 
-            Ok::<(), anyhow::Error>(())
-        });
-        self.task = Some(handle);
-    }
+    //         Ok::<(), anyhow::Error>(())
+    //     });
+    //     self.task = Some(handle);
+    // }
+
+    // /// Start a listener task that listens to incoming messages from the given
+    // /// serial port and stores them in a ring buffer.
+    // pub fn listen_from_serial_port(&mut self, port: String, baud_rate: u32) {
+    //     // Stop the current listener if it exists
+    //     self.stop_listening();
+    //     self.running_flag.store(true, Ordering::Relaxed);
+    //     let last_receptions = Arc::clone(&self.last_receptions);
+
+    //     let tx = self.tx.clone();
+    //     let ctx = self.ctx.clone();
+
+    //     let running_flag = self.running_flag.clone();
+
+    //     debug!("Spawning listener task at {}", port);
+    //     let handle = tokio::task::spawn_blocking(move || {
+    //         let mut serial_port = serialport::new(port, baud_rate)
+    //             .timeout(std::time::Duration::from_millis(100))
+    //             .open()
+    //             .context("Failed to open serial port")?;
+    //         debug!("Listening on serial port");
+
+    //         let mut ring_buf = RingBuffer::<1024>::new();
+    //         let mut temp_buf = [0; 512];
+    //         // need to do a better error handling for this (need toast errors)
+    //         while running_flag.load(Ordering::Relaxed) {
+    //             let result = serial_port
+    //                 .read(&mut temp_buf)
+    //                 .log_expect("Failed to read from serial port");
+    //             debug!("Read {} bytes from serial port", result);
+    //             trace!("data read from serial: {:?}", &temp_buf[..result]);
+    //             ring_buf
+    //                 .write(&temp_buf[..result])
+    //                 .log_expect("Failed to write to ring buffer, check buffer size");
+    //             for (_, mav_message) in byte_parser(&mut ring_buf) {
+    //                 debug!("Received message: {:?}", mav_message);
+    //                 tx.send(TimedMessage::just_received(mav_message))
+    //                     .context("Failed to send message")?;
+    //                 last_receptions.lock().unwrap().push(Instant::now());
+    //                 ctx.request_repaint();
+    //             }
+    //         }
+
+    //         Ok::<(), anyhow::Error>(())
+    //     });
+    //     self.task = Some(handle);
+    // }
 
     /// Returns the time since the last message was received.
     pub fn time_since_last_reception(&self) -> Option<Duration> {
@@ -189,14 +189,28 @@ impl MessageBroker {
     /// Processes incoming network messages. New messages are added to the
     /// given `MessageBundle`.
     pub fn process_messages(&mut self, bundle: &mut MessageBundle) {
-        while let Ok(message) = self.rx.try_recv() {
-            bundle.insert(message.clone());
+        // process messages only if the connection is open
+        if let Some(connection) = &self.connection {
+            // check for communication errors, and log them
+            match connection.retrieve_messages() {
+                Ok(messages) => {
+                    for message in messages {
+                        bundle.insert(message.clone());
 
-            // Store the message in the broker
-            self.messages
-                .entry(message.message.message_id())
-                .or_default()
-                .push(message);
+                        // Store the message in the broker
+                        self.messages
+                            .entry(message.message.message_id())
+                            .or_default()
+                            .push(message);
+                    }
+                    self.ctx.request_repaint();
+                }
+                Err(e) => {
+                    error!("Error while receiving messages: {:?}", e);
+                    // TODO: user error handling, until them silently close the connection
+                    self.close_connection();
+                }
+            }
         }
     }
 

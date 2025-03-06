@@ -35,6 +35,7 @@ use crate::{
 use super::{Connectable, ConnectionError, MessageTransceiver, Transceivers};
 
 const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
+pub const DEFAULT_BAUD_RATE: u32 = 115200;
 
 /// Get a list of all serial USB ports available on the system
 pub fn list_all_usb_ports() -> anyhow::Result<Vec<SerialPortInfo>> {
@@ -70,7 +71,7 @@ pub struct SerialConfiguration {
 impl Connectable for SerialConfiguration {
     type Connected = SerialTransceiver;
 
-    fn connect(self) -> Result<Self::Connected, ConnectionError> {
+    fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let port = serialport::new(&self.port_name, self.baud_rate)
             .timeout(std::time::Duration::from_millis(SERIAL_PORT_TIMEOUT_MS))
             .open()?;
