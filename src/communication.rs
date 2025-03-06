@@ -32,6 +32,14 @@ pub use serial::SerialConfiguration;
 
 const MAX_STORED_MSGS: usize = 1000; // 192 bytes each = 192 KB
 
+pub trait TransceiverConfig: TransceiverConfigSealed {}
+
+trait TransceiverConfigSealed {}
+
+impl<T: TransceiverConfigSealed> TransceiverConfig for T {}
+
+impl<T: Connectable> TransceiverConfigSealed for T {}
+
 pub trait TransceiverConfigExt: Connectable {
     fn open_connection(&self) -> Result<Connection, ConnectionError> {
         Ok(self.connect()?.connect_transceiver())
@@ -56,6 +64,7 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError>;
 
     /// Opens a connection to the transceiver and returns a handle to it.
+    #[profiling::function]
     fn connect_transceiver(self) -> Connection {
         let running_flag = Arc::new(AtomicBool::new(true));
         let (tx, rx) = ring_channel(NonZero::new(MAX_STORED_MSGS).log_unwrap());
@@ -108,6 +117,7 @@ pub struct Connection {
 
 impl Connection {
     /// Retrieves and clears the stored messages.
+    #[profiling::function]
     pub fn retrieve_messages(&self) -> Result<Vec<TimedMessage>, CommunicationError> {
         // otherwise retrieve all messages from the buffer and return them
         let mut stored_msgs = Vec::new();
@@ -129,6 +139,7 @@ impl Connection {
     }
 
     /// Send a message over the serial connection.
+    #[profiling::function]
     pub fn send_message(&self, msg: MavFrame<MavMessage>) -> Result<(), CommunicationError> {
         self.endpoint.transmit_message(msg)?;
         Ok(())

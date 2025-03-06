@@ -1,4 +1,5 @@
 mod app;
+mod cache;
 mod panes;
 mod persistency;
 mod shortcuts;

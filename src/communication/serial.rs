@@ -4,9 +4,9 @@
 //! listing all available serial ports and finding the first serial port that
 //! contains "STM32" or "ST-LINK" in its product name.
 
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Duration};
 
-use anyhow::Context;
+use egui::Id;
 use serialport::{SerialPort, SerialPortInfo, SerialPortType};
 use skyward_mavlink::mavlink::{
     MavFrame,
@@ -26,8 +26,9 @@ const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_BAUD_RATE: u32 = 115200;
 
 /// Get a list of all serial USB ports available on the system
-pub fn list_all_usb_ports() -> anyhow::Result<Vec<SerialPortInfo>> {
-    let ports = serialport::available_ports().context("No serial ports found!")?;
+#[profiling::function]
+pub fn list_all_usb_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
+    let ports = serialport::available_ports()?;
     Ok(ports
         .into_iter()
         .filter(|p| matches!(p.port_type, SerialPortType::UsbPort(_)))
@@ -36,18 +37,19 @@ pub fn list_all_usb_ports() -> anyhow::Result<Vec<SerialPortInfo>> {
 
 /// Finds the first USB serial port with "STM32" or "ST-LINK" in its product name.
 /// Renamed from get_first_stm32_serial_port.
-pub fn find_first_stm32_port() -> Option<SerialPortInfo> {
-    let ports = list_all_usb_ports().log_unwrap();
+#[profiling::function]
+pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Error> {
+    let ports = list_all_usb_ports()?;
     for port in ports {
         if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
             if let Some(p) = &info.product {
                 if p.contains("STM32") || p.contains("ST-LINK") {
-                    return Some(port);
+                    return Ok(Some(port));
                 }
             }
         }
     }
-    None
+    Ok(None)
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +61,7 @@ pub struct SerialConfiguration {
 impl Connectable for SerialConfiguration {
     type Connected = SerialTransceiver;
 
+    #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let port = serialport::new(&self.port_name, self.baud_rate)
             .timeout(std::time::Duration::from_millis(SERIAL_PORT_TIMEOUT_MS))
@@ -94,6 +97,7 @@ pub struct SerialTransceiver {
 }
 
 impl MessageTransceiver for SerialTransceiver {
+    #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
         loop {
             let res: Result<(_, MavMessage), MessageReadError> =
@@ -113,6 +117,7 @@ impl MessageTransceiver for SerialTransceiver {
         }
     }
 
+    #[profiling::function]
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
         let MavFrame { header, msg, .. } = msg;
         let written = write_v1_msg(&mut *self.serial_writer.lock().log_unwrap(), header, &msg)?;

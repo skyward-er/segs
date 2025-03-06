@@ -7,9 +7,7 @@ use skyward_mavlink::mavlink::{
 };
 use tracing::{debug, trace};
 
-use crate::mavlink::{
-        MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekReader,
-    };
+use crate::mavlink::{MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekReader};
 
 use super::{Connectable, ConnectionError, MessageTransceiver};
 
@@ -21,6 +19,7 @@ pub struct EthernetConfiguration {
 impl Connectable for EthernetConfiguration {
     type Connected = EthernetTransceiver;
 
+    #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))?;
         debug!("Connected to Ethernet port on port {}", self.port);
@@ -34,6 +33,7 @@ pub struct EthernetTransceiver {
 }
 
 impl MessageTransceiver for EthernetTransceiver {
+    #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
         let mut buf = [0; MAX_MSG_SIZE];
         let read = self.socket.recv(&mut buf)?;
@@ -44,6 +44,7 @@ impl MessageTransceiver for EthernetTransceiver {
         Ok(TimedMessage::just_received(res))
     }
 
+    #[profiling::function]
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
         let MavFrame { header, msg, .. } = msg;
         let mut write_buf = Vec::new();
