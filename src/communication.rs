@@ -1,9 +1,15 @@
+//! Main communication module.
+//!
+//! Provides a unified interface for handling message transmission and reception
+//! through different physical connection types (e.g., serial, Ethernet).
+//! It also manages connections and message buffering.
+
 mod error;
 pub mod ethernet;
 pub mod serial;
 
 use std::{
-    num::NonZero,
+    num::NonZeroUsize,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -30,50 +36,54 @@ pub use error::{CommunicationError, ConnectionError};
 pub use ethernet::EthernetConfiguration;
 pub use serial::SerialConfiguration;
 
-const MAX_STORED_MSGS: usize = 1000; // 192 bytes each = 192 KB
+const MAX_STORED_MSGS: usize = 1000; // e.g., 192 bytes each = 192 KB
 
+/// Trait to abstract common configuration types.
 pub trait TransceiverConfig: TransceiverConfigSealed {}
-
 trait TransceiverConfigSealed {}
-
 impl<T: TransceiverConfigSealed> TransceiverConfig for T {}
-
 impl<T: Connectable> TransceiverConfigSealed for T {}
 
+/// Extension trait to open a connection directly from a configuration.
 pub trait TransceiverConfigExt: Connectable {
+    /// Opens a connection and returns a handle to it.
     fn open_connection(&self) -> Result<Connection, ConnectionError> {
-        Ok(self.connect()?.connect_transceiver())
+        Ok(self.connect()?.open_listening_connection())
     }
 }
-
 impl<T: Connectable> TransceiverConfigExt for T {}
 
+/// Trait representing an entity that can be connected.
 trait Connectable {
     type Connected: MessageTransceiver;
 
+    /// Establishes a connection based on the configuration.
     fn connect(&self) -> Result<Self::Connected, ConnectionError>;
 }
 
+/// Trait representing a message transceiver.
+/// This trait abstracts the common operations for message transmission and reception.
+/// It also provides a default implementation for opening a listening connection, while
+/// being transparent to the actual Transceiver type.
 #[enum_dispatch(Transceivers)]
 trait MessageTransceiver: Send + Sync + Into<Transceivers> {
-    /// Reads a message from the serial port, blocking until a valid message is received.
-    /// This method ignores timeout errors and continues trying.
+    /// Blocks until a valid message is received.
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError>;
 
-    /// Transmits a message over the serial connection.
+    /// Transmits a message using the connection.
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError>;
 
-    /// Opens a connection to the transceiver and returns a handle to it.
+    /// Opens a listening connection and spawns a thread for message handling.
     #[profiling::function]
-    fn connect_transceiver(self) -> Connection {
+    fn open_listening_connection(self) -> Connection {
         let running_flag = Arc::new(AtomicBool::new(true));
-        let (tx, rx) = ring_channel(NonZero::new(MAX_STORED_MSGS).log_unwrap());
+        let (tx, rx) = ring_channel(NonZeroUsize::new(MAX_STORED_MSGS).log_unwrap());
         let endpoint_inner = Arc::new(self.into());
 
         {
             let running_flag = running_flag.clone();
             let endpoint_inner = endpoint_inner.clone();
-            // detach the thread, to see errors rely on logs
+            // Detached thread for message handling; errors are logged.
             let _ = std::thread::spawn(move || {
                 while running_flag.load(Ordering::Relaxed) {
                     match endpoint_inner.wait_for_message() {
@@ -96,40 +106,36 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
         }
 
         Connection {
-            endpoint: endpoint_inner,
+            transceiver: endpoint_inner,
             rx_ring_channel: rx,
             running_flag,
         }
     }
 }
 
+/// Enum representing the different types of transceivers.
 #[enum_dispatch]
 enum Transceivers {
     Serial(SerialTransceiver),
     Ethernet(EthernetTransceiver),
 }
 
+/// Represents an active connection with buffered messages.
 pub struct Connection {
-    endpoint: Arc<Transceivers>,
+    transceiver: Arc<Transceivers>,
     rx_ring_channel: RingReceiver<TimedMessage>,
     running_flag: Arc<AtomicBool>,
 }
 
 impl Connection {
-    /// Retrieves and clears the stored messages.
+    /// Retrieves and clears stored messages.
     #[profiling::function]
     pub fn retrieve_messages(&self) -> Result<Vec<TimedMessage>, CommunicationError> {
-        // otherwise retrieve all messages from the buffer and return them
         let mut stored_msgs = Vec::new();
         loop {
             match self.rx_ring_channel.try_recv() {
-                Ok(msg) => {
-                    // Store the message in the buffer.
-                    stored_msgs.push(msg);
-                }
-                Err(TryRecvError::Empty) => {
-                    break;
-                }
+                Ok(msg) => stored_msgs.push(msg),
+                Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     return Err(CommunicationError::ConnectionClosed);
                 }
@@ -138,10 +144,10 @@ impl Connection {
         Ok(stored_msgs)
     }
 
-    /// Send a message over the serial connection.
+    /// Sends a message over the connection.
     #[profiling::function]
     pub fn send_message(&self, msg: MavFrame<MavMessage>) -> Result<(), CommunicationError> {
-        self.endpoint.transmit_message(msg)?;
+        self.transceiver.transmit_message(msg)?;
         Ok(())
     }
 }

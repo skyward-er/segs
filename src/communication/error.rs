@@ -1,6 +1,11 @@
+//! Error handling for communication modules.
+//!
+//! Contains definitions for errors that can occur during serial or Ethernet communication.
+
 use skyward_mavlink::mavlink::error::MessageWriteError;
 use thiserror::Error;
 
+/// Represents communication errors.
 #[derive(Debug, Error)]
 pub enum CommunicationError {
     #[error("IO error: {0}")]
@@ -9,6 +14,7 @@ pub enum CommunicationError {
     ConnectionClosed,
 }
 
+/// Represents errors during connection setup.
 #[derive(Debug, Error)]
 pub enum ConnectionError {
     #[error("Wrong configuration: {0}")]

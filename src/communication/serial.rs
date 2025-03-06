@@ -1,12 +1,10 @@
-//! Serial port utilities
+//! Serial port utilities module.
 //!
-//! This module provides utilities for working with serial ports, such as
-//! listing all available serial ports and finding the first serial port that
-//! contains "STM32" or "ST-LINK" in its product name.
+//! Provides functions for listing USB serial ports, finding a STM32 port,
+//! and handling serial connections including message transmission and reception.
 
-use std::{sync::Mutex, time::Duration};
+use std::sync::Mutex;
 
-use egui::Id;
 use serialport::{SerialPort, SerialPortInfo, SerialPortType};
 use skyward_mavlink::mavlink::{
     MavFrame,
@@ -25,7 +23,10 @@ use super::{Connectable, ConnectionError, MessageTransceiver};
 const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_BAUD_RATE: u32 = 115200;
 
-/// Get a list of all serial USB ports available on the system
+/// Returns a list of all USB serial ports available on the system.
+///
+/// # Returns
+/// * `Ok(Vec<SerialPortInfo>)` if ports are found or an error otherwise.
 #[profiling::function]
 pub fn list_all_usb_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
     let ports = serialport::available_ports()?;
@@ -35,8 +36,10 @@ pub fn list_all_usb_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
         .collect())
 }
 
-/// Finds the first USB serial port with "STM32" or "ST-LINK" in its product name.
-/// Renamed from get_first_stm32_serial_port.
+/// Finds the first USB serial port whose product name contains "STM32" or "ST-LINK".
+///
+/// # Returns
+/// * `Ok(Some(SerialPortInfo))` if a matching port is found, `Ok(None)` otherwise.
 #[profiling::function]
 pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Error> {
     let ports = list_all_usb_ports()?;
@@ -52,6 +55,7 @@ pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Err
     Ok(None)
 }
 
+/// Configuration for a serial connection.
 #[derive(Debug, Clone)]
 pub struct SerialConfiguration {
     pub port_name: String,
@@ -61,6 +65,7 @@ pub struct SerialConfiguration {
 impl Connectable for SerialConfiguration {
     type Connected = SerialTransceiver;
 
+    /// Connects using the serial port configuration.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let port = serialport::new(&self.port_name, self.baud_rate)
@@ -97,6 +102,7 @@ pub struct SerialTransceiver {
 }
 
 impl MessageTransceiver for SerialTransceiver {
+    /// Blocks until a valid message is received from the serial port.
     #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
         loop {
@@ -107,7 +113,6 @@ impl MessageTransceiver for SerialTransceiver {
                     return Ok(TimedMessage::just_received(msg));
                 }
                 Err(MessageReadError::Io(e)) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    // Ignore timeouts.
                     continue;
                 }
                 Err(e) => {
@@ -117,6 +122,7 @@ impl MessageTransceiver for SerialTransceiver {
         }
     }
 
+    /// Transmits a message via the serial connection.
     #[profiling::function]
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
         let MavFrame { header, msg, .. } = msg;

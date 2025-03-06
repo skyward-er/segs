@@ -1,3 +1,8 @@
+//! Ethernet utilities module.
+//!
+//! Provides functionality to connect via Ethernet using UDP, allowing message
+//! transmission and reception over a network.
+
 use std::net::UdpSocket;
 
 use skyward_mavlink::mavlink::{
@@ -11,6 +16,7 @@ use crate::mavlink::{MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekRe
 
 use super::{Connectable, ConnectionError, MessageTransceiver};
 
+/// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
     pub port: u16,
@@ -19,6 +25,7 @@ pub struct EthernetConfiguration {
 impl Connectable for EthernetConfiguration {
     type Connected = EthernetTransceiver;
 
+    /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", self.port))?;
@@ -27,12 +34,13 @@ impl Connectable for EthernetConfiguration {
     }
 }
 
-/// Manages a connection to a Ethernet port.
+/// Manages a connection over Ethernet.
 pub struct EthernetTransceiver {
     socket: UdpSocket,
 }
 
 impl MessageTransceiver for EthernetTransceiver {
+    /// Waits for a message over Ethernet, blocking until a valid message arrives.
     #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
         let mut buf = [0; MAX_MSG_SIZE];
@@ -44,6 +52,7 @@ impl MessageTransceiver for EthernetTransceiver {
         Ok(TimedMessage::just_received(res))
     }
 
+    /// Transmits a message using the UDP socket.
     #[profiling::function]
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
         let MavFrame { header, msg, .. } = msg;
