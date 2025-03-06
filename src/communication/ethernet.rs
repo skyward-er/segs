@@ -14,7 +14,10 @@ use tracing::{debug, trace};
 
 use crate::mavlink::{MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekReader};
 
-use super::{Connectable, ConnectionError, MessageTransceiver};
+use super::{
+    ConnectionError,
+    sealed::{Connectable, MessageTransceiver},
+};
 
 /// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]

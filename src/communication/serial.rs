@@ -18,7 +18,10 @@ use crate::{
     mavlink::{MavMessage, TimedMessage, peek_reader::PeekReader},
 };
 
-use super::{Connectable, ConnectionError, MessageTransceiver};
+use super::{
+    ConnectionError,
+    sealed::{Connectable, MessageTransceiver},
+};
 
 const SERIAL_PORT_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_BAUD_RATE: u32 = 115200;
