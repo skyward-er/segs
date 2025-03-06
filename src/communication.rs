@@ -8,7 +8,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    thread::JoinHandle,
 };
 
 use enum_dispatch::enum_dispatch;
@@ -28,8 +27,10 @@ use serial::SerialTransceiver;
 
 // Re-exports
 pub use error::{CommunicationError, ConnectionError};
+pub use ethernet::EthernetConfiguration;
+pub use serial::SerialConfiguration;
 
-const MAX_STORED_MSGS: usize = 100; // 192 bytes each = 19.2 KB
+const MAX_STORED_MSGS: usize = 1000; // 192 bytes each = 192 KB
 
 pub trait TransceiverConfigExt: Connectable {
     fn open_connection(&self) -> Result<Connection, ConnectionError> {
@@ -59,12 +60,12 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
         let running_flag = Arc::new(AtomicBool::new(true));
         let (tx, rx) = ring_channel(NonZero::new(MAX_STORED_MSGS).log_unwrap());
         let endpoint_inner = Arc::new(self.into());
-        let thread_handle;
 
         {
             let running_flag = running_flag.clone();
             let endpoint_inner = endpoint_inner.clone();
-            thread_handle = std::thread::spawn(move || {
+            // detach the thread, to see errors rely on logs
+            let _ = std::thread::spawn(move || {
                 while running_flag.load(Ordering::Relaxed) {
                     match endpoint_inner.wait_for_message() {
                         Ok(msg) => {
@@ -89,7 +90,6 @@ trait MessageTransceiver: Send + Sync + Into<Transceivers> {
             endpoint: endpoint_inner,
             rx_ring_channel: rx,
             running_flag,
-            thread_handle,
         }
     }
 }
@@ -104,7 +104,6 @@ pub struct Connection {
     endpoint: Arc<Transceivers>,
     rx_ring_channel: RingReceiver<TimedMessage>,
     running_flag: Arc<AtomicBool>,
-    thread_handle: JoinHandle<Result<(), CommunicationError>>,
 }
 
 impl Connection {

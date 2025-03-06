@@ -8,9 +8,10 @@ use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_file::FileDialog;
 use tracing::{debug, error};
 
-use crate::{error::ErrInstrument, ui::app::AppState};
-
-use super::LayoutManager;
+use crate::{
+    error::ErrInstrument,
+    ui::{app::AppState, persistency::LayoutManager},
+};
 
 #[derive(Default)]
 pub struct LayoutManagerWindow {
