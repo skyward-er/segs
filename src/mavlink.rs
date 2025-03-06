@@ -13,5 +13,3 @@ pub use reflection::ReflectionContext;
 
 /// Default port for the Ethernet connection
 pub const DEFAULT_ETHERNET_PORT: u16 = 42069;
-/// Maximum size of a Mavlink message
-pub const MAX_MSG_SIZE: usize = 280;

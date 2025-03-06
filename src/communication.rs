@@ -15,9 +15,8 @@ use std::sync::{
 
 use ring_channel::{RingReceiver, TryRecvError};
 use sealed::MessageTransceiver;
-use skyward_mavlink::mavlink::MavFrame;
 
-use crate::mavlink::{MavMessage, TimedMessage};
+use crate::mavlink::{MavConnection, MavFrame, MavMessage, TimedMessage};
 
 // Re-exports
 pub use error::{CommunicationError, ConnectionError};
@@ -25,6 +24,8 @@ pub use ethernet::EthernetConfiguration;
 pub use serial::SerialConfiguration;
 
 const MAX_STORED_MSGS: usize = 1000; // e.g., 192 bytes each = 192 KB
+
+pub(super) type BoxedConnection = Box<dyn MavConnection<MavMessage> + Send + Sync>;
 
 mod sealed {
     use std::{

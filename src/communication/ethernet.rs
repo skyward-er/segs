@@ -3,19 +3,16 @@
 //! Provides functionality to connect via Ethernet using UDP, allowing message
 //! transmission and reception over a network.
 
-use std::net::UdpSocket;
-
 use skyward_mavlink::mavlink::{
-    MavFrame,
+    self,
     error::{MessageReadError, MessageWriteError},
-    read_v1_msg, write_v1_msg,
 };
 use tracing::{debug, trace};
 
-use crate::mavlink::{MAX_MSG_SIZE, MavMessage, TimedMessage, peek_reader::PeekReader};
+use crate::mavlink::{MavFrame, MavMessage, MavlinkVersion, TimedMessage};
 
 use super::{
-    ConnectionError,
+    BoxedConnection, ConnectionError,
     sealed::{Connectable, MessageTransceiver},
 };
 
@@ -31,48 +28,39 @@ impl Connectable for EthernetConfiguration {
     /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let recv_addr = format!("0.0.0.0:{}", self.port);
-        let server_socket = UdpSocket::bind(recv_addr)?;
-        debug!("Bound to Ethernet port on port {}", self.port);
-        let send_addr = "0.0.0.0:0";
-        let cast_addr = format!("255.255.255.255:{}", self.port);
-        let client_socket = UdpSocket::bind(send_addr)?;
-        client_socket.set_broadcast(true)?;
-        client_socket.connect(&cast_addr)?;
-        debug!("Created Ethernet connection to {}", cast_addr);
+        let incoming_addr = format!("udpin:0.0.0.0:{}", self.port);
+        let outgoing_addr = format!("udpbcast:255.255.255.255:{}", self.port);
+        let mut incoming_conn: BoxedConnection = mavlink::connect(&incoming_addr)?;
+        let mut outgoing_conn: BoxedConnection = mavlink::connect(&outgoing_addr)?;
+        incoming_conn.set_protocol_version(MavlinkVersion::V1);
+        outgoing_conn.set_protocol_version(MavlinkVersion::V1);
+        debug!("Ethernet connections set up on port {}", self.port);
         Ok(EthernetTransceiver {
-            server_socket,
-            client_socket,
+            incoming_conn,
+            outgoing_conn,
         })
     }
 }
 
 /// Manages a connection over Ethernet.
 pub struct EthernetTransceiver {
-    server_socket: UdpSocket,
-    client_socket: UdpSocket,
+    incoming_conn: BoxedConnection,
+    outgoing_conn: BoxedConnection,
 }
 
 impl MessageTransceiver for EthernetTransceiver {
     /// Waits for a message over Ethernet, blocking until a valid message arrives.
     #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
-        let mut buf = [0; MAX_MSG_SIZE];
-        let read = self.server_socket.recv(&mut buf)?;
-        trace!("Received {} bytes", read);
-        let mut reader = PeekReader::new(&buf[..read]);
-        let (_, res) = read_v1_msg(&mut reader)?;
-        debug!("Received message: {:?}", res);
-        Ok(TimedMessage::just_received(res))
+        let (_, msg) = self.incoming_conn.recv()?;
+        debug!("Received message: {:?}", &msg);
+        Ok(TimedMessage::just_received(msg))
     }
 
     /// Transmits a message using the UDP socket.
     #[profiling::function]
     fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
-        let MavFrame { header, msg, .. } = msg;
-        let mut write_buf = Vec::new();
-        write_v1_msg(&mut write_buf, header, &msg)?;
-        let written = self.client_socket.send(&write_buf)?;
+        let written = self.outgoing_conn.send_frame(&msg)?;
         debug!("Sent message: {:?}", msg);
         trace!("Sent {} bytes via Ethernet", written);
         Ok(written)
