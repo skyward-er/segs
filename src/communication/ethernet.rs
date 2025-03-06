@@ -22,8 +22,7 @@ use super::{
 /// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
-    pub recv_port: u16,
-    pub send_port: u16,
+    pub port: u16,
 }
 
 impl Connectable for EthernetConfiguration {
@@ -32,20 +31,26 @@ impl Connectable for EthernetConfiguration {
     /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let recv_addr = format!("0.0.0.0:{}", self.recv_port);
-        let send_addr = format!("255.255.255.255:{}", self.send_port);
-        let socket = UdpSocket::bind(recv_addr)?;
-        debug!("Bound to Ethernet port on port {}", self.recv_port);
-        socket.set_broadcast(true)?;
-        socket.connect(send_addr)?;
-        debug!("Connected to Ethernet port on port {}", self.send_port);
-        Ok(EthernetTransceiver { socket })
+        let recv_addr = format!("0.0.0.0:{}", self.port);
+        let server_socket = UdpSocket::bind(recv_addr)?;
+        debug!("Bound to Ethernet port on port {}", self.port);
+        let send_addr = "0.0.0.0:0";
+        let cast_addr = format!("255.255.255.255:{}", self.port);
+        let client_socket = UdpSocket::bind(send_addr)?;
+        client_socket.set_broadcast(true)?;
+        client_socket.connect(&cast_addr)?;
+        debug!("Created Ethernet connection to {}", cast_addr);
+        Ok(EthernetTransceiver {
+            server_socket,
+            client_socket,
+        })
     }
 }
 
 /// Manages a connection over Ethernet.
 pub struct EthernetTransceiver {
-    socket: UdpSocket,
+    server_socket: UdpSocket,
+    client_socket: UdpSocket,
 }
 
 impl MessageTransceiver for EthernetTransceiver {
@@ -53,7 +58,7 @@ impl MessageTransceiver for EthernetTransceiver {
     #[profiling::function]
     fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
         let mut buf = [0; MAX_MSG_SIZE];
-        let read = self.socket.recv(&mut buf)?;
+        let read = self.server_socket.recv(&mut buf)?;
         trace!("Received {} bytes", read);
         let mut reader = PeekReader::new(&buf[..read]);
         let (_, res) = read_v1_msg(&mut reader)?;
@@ -67,7 +72,7 @@ impl MessageTransceiver for EthernetTransceiver {
         let MavFrame { header, msg, .. } = msg;
         let mut write_buf = Vec::new();
         write_v1_msg(&mut write_buf, header, &msg)?;
-        let written = self.socket.send(&write_buf)?;
+        let written = self.client_socket.send(&write_buf)?;
         debug!("Sent message: {:?}", msg);
         trace!("Sent {} bytes via Ethernet", written);
         Ok(written)
