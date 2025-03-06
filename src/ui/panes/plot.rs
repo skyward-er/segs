@@ -42,19 +42,6 @@ impl PaneBehavior for Plot2DPane {
     fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
-        let mut settings = SourceSettings::new(&mut self.settings, &mut self.line_settings);
-        egui::Window::new("Plot Settings")
-            .id(ui.auto_id_with("plot_settings")) // TODO: fix this issue with ids
-            .auto_sized()
-            .collapsible(true)
-            .movable(true)
-            .open(&mut self.settings_visible)
-            .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
-
-        if settings.are_sources_changed() {
-            self.state_valid = false;
-        }
-
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
         egui_plot::Plot::new("plot")
@@ -80,6 +67,19 @@ impl PaneBehavior for Plot2DPane {
                     .response()
                     .context_menu(|ui| show_menu(ui, &mut self.settings_visible));
             });
+
+        let mut settings = SourceSettings::new(&mut self.settings, &mut self.line_settings);
+        egui::Window::new("Plot Settings")
+            .id(ui.auto_id_with("plot_settings")) // TODO: fix this issue with ids
+            .auto_sized()
+            .collapsible(true)
+            .movable(true)
+            .open(&mut self.settings_visible)
+            .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
+
+        if settings.are_sources_changed() {
+            self.state_valid = false;
+        }
 
         response
     }
