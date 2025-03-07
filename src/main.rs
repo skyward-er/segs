@@ -2,10 +2,10 @@
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::panic)]
 
+mod communication;
 mod error;
 mod mavlink;
 mod message_broker;
-mod serial;
 mod ui;
 mod utils;
 
@@ -26,8 +26,15 @@ static APP_NAME: &str = "segs";
 fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
     let env_filter = EnvFilter::builder().from_env_lossy();
+    let file_appender = tracing_appender::rolling::daily("logs/", "segs.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(non_blocking),
+        )
         .with(tracing_tracy::TracyLayer::default())
         .init();
 

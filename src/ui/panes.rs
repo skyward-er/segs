@@ -7,7 +7,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
 
-use crate::mavlink::TimedMessage;
+use crate::mavlink::{MavMessage, TimedMessage};
 
 use super::app::PaneResponse;
 
@@ -26,17 +26,28 @@ impl Pane {
 pub trait PaneBehavior {
     /// Renders the UI of the pane.
     fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse;
+
     /// Whether the pane contains the pointer.
     fn contains_pointer(&self) -> bool;
 
     /// Updates the pane state. This method is called before `ui` to allow the
     /// pane to update its state based on the messages received.
-    fn update(&mut self, messages: &[TimedMessage]);
+    fn update(&mut self, _messages: &[TimedMessage]) {}
 
     /// Returns the ID of the messages this pane is interested in, if any.
-    fn get_message_subscription(&self) -> Option<u32>;
+    fn get_message_subscription(&self) -> Option<u32> {
+        None
+    }
+
     /// Checks whether the full message history should be sent to the pane.
-    fn should_send_message_history(&self) -> bool;
+    fn should_send_message_history(&self) -> bool {
+        false
+    }
+
+    /// Drains the outgoing messages from the pane.
+    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+        Vec::new()
+    }
 }
 
 impl PaneBehavior for Pane {
@@ -58,6 +69,10 @@ impl PaneBehavior for Pane {
 
     fn should_send_message_history(&self) -> bool {
         self.pane.should_send_message_history()
+    }
+
+    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+        self.pane.drain_outgoing_messages()
     }
 }
 

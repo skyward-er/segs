@@ -2,6 +2,7 @@ mod source_window;
 
 use super::PaneBehavior;
 use crate::{
+    error::ErrInstrument,
     mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage, extract_from_message},
     ui::app::PaneResponse,
 };
@@ -41,19 +42,6 @@ impl PaneBehavior for Plot2DPane {
     fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
         let mut response = PaneResponse::default();
 
-        let mut settings = SourceSettings::new(&mut self.settings, &mut self.line_settings);
-        egui::Window::new("Plot Settings")
-            .id(ui.auto_id_with("plot_settings")) // TODO: fix this issue with ids
-            .auto_sized()
-            .collapsible(true)
-            .movable(true)
-            .open(&mut self.settings_visible)
-            .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
-
-        if settings.are_sources_changed() {
-            self.state_valid = false;
-        }
-
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
         egui_plot::Plot::new("plot")
@@ -80,6 +68,19 @@ impl PaneBehavior for Plot2DPane {
                     .context_menu(|ui| show_menu(ui, &mut self.settings_visible));
             });
 
+        let mut settings = SourceSettings::new(&mut self.settings, &mut self.line_settings);
+        egui::Window::new("Plot Settings")
+            .id(ui.auto_id_with("plot_settings")) // TODO: fix this issue with ids
+            .auto_sized()
+            .collapsible(true)
+            .movable(true)
+            .open(&mut self.settings_visible)
+            .show(ui.ctx(), |ui| sources_window(ui, &mut settings));
+
+        if settings.are_sources_changed() {
+            self.state_valid = false;
+        }
+
         response
     }
 
@@ -98,8 +99,8 @@ impl PaneBehavior for Plot2DPane {
         } = &self.settings;
 
         for msg in messages {
-            let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0];
-            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).unwrap();
+            let x: f64 = extract_from_message(&msg.message, [x_field]).log_unwrap()[0];
+            let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).log_unwrap();
 
             if self.line_data.len() < ys.len() {
                 self.line_data.resize(ys.len(), Vec::new());

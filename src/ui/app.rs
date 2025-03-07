@@ -1,30 +1,29 @@
-use super::{
-    panes::{Pane, PaneBehavior},
-    persistency::{LayoutManager, LayoutManagerWindow},
-    shortcuts,
-    utils::maximized_pane_ui,
-    widget_gallery::WidgetGallery,
-    widgets::reception_led::ReceptionLed,
-};
-use crate::{
-    error::ErrInstrument,
-    mavlink,
-    message_broker::{MessageBroker, MessageBundle},
-    serial::{get_first_stm32_serial_port, list_all_serial_ports},
-    ui::panes::PaneKind,
-};
 use eframe::CreationContext;
-use egui::{Align2, Button, ComboBox, Key, Modifiers, Sides, Vec2};
-use egui_extras::{Size, StripBuilder};
+use egui::{Button, Key, Modifiers, Sides};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use tracing::{debug, error, trace};
+
+use crate::{
+    error::ErrInstrument,
+    mavlink::MavMessage,
+    message_broker::{MessageBroker, MessageBundle},
+};
+
+use super::{
+    panes::{Pane, PaneBehavior, PaneKind},
+    persistency::LayoutManager,
+    shortcuts,
+    utils::maximized_pane_ui,
+    widget_gallery::WidgetGallery,
+    widgets::reception_led::ReceptionLed,
+    windows::{ConnectionsWindow, LayoutManagerWindow},
+};
 
 pub struct App {
     /// Persistent state of the app
@@ -37,7 +36,7 @@ pub struct App {
     message_bundle: MessageBundle,
     // == Windows ==
     widget_gallery: WidgetGallery,
-    sources_window: SourceWindow,
+    sources_window: ConnectionsWindow,
     layout_manager_window: LayoutManagerWindow,
 }
 
@@ -45,7 +44,7 @@ pub struct App {
 impl eframe::App for App {
     // The update function is called each time the UI needs repainting!
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.process_messages();
+        self.process_incoming_messages();
 
         let panes_tree = &mut self.state.panes_tree;
 
@@ -242,6 +241,9 @@ impl eframe::App for App {
             self.behavior.action = Some(action);
         }
 
+        // Process outgoing messages
+        self.process_outgoing_messages();
+
         // Used for the profiler
         profiling::finish_frame!();
 
@@ -276,26 +278,23 @@ impl App {
         Self {
             state,
             layout_manager,
-            message_broker: MessageBroker::new(
-                NonZeroUsize::new(50).log_unwrap(),
-                ctx.egui_ctx.clone(),
-            ),
+            message_broker: MessageBroker::new(ctx.egui_ctx.clone()),
             widget_gallery: WidgetGallery::default(),
             behavior: AppBehavior::default(),
             maximized_pane: None,
             message_bundle: MessageBundle::default(),
-            sources_window: SourceWindow::default(),
+            sources_window: ConnectionsWindow::default(),
             layout_manager_window: LayoutManagerWindow::default(),
         }
     }
 
     /// Retrieves new messages from the message broker and dispatches them to the panes.
     #[profiling::function]
-    fn process_messages(&mut self) {
+    fn process_incoming_messages(&mut self) {
         let start = Instant::now();
 
         self.message_broker
-            .process_messages(&mut self.message_bundle);
+            .process_incoming_messages(&mut self.message_bundle);
 
         // Skip updating the panes if there are no messages
         let count = self.message_bundle.count();
@@ -329,6 +328,26 @@ impl App {
             start.elapsed()
         );
         self.message_bundle.reset();
+    }
+
+    /// Sends outgoing messages from the panes to the message broker.
+    #[profiling::function]
+    fn process_outgoing_messages(&mut self) {
+        let outgoing: Vec<MavMessage> = self
+            .state
+            .panes_tree
+            .tiles
+            .iter_mut()
+            .filter_map(|(_, tile)| {
+                if let Tile::Pane(pane) = tile {
+                    Some(pane.drain_outgoing_messages())
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect();
+        self.message_broker.process_outgoing_messages(outgoing);
     }
 }
 
@@ -371,179 +390,6 @@ impl AppState {
             .map_err(|e| anyhow::anyhow!("Error writing layout: {}", e))?;
 
         Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Default)]
-enum ConnectionKind {
-    #[default]
-    Ethernet,
-    Serial,
-}
-
-#[derive(Debug)]
-enum ConnectionDetails {
-    Ethernet { port: u16 },
-    Serial { port: String, baud_rate: u32 },
-}
-
-impl Default for ConnectionDetails {
-    fn default() -> Self {
-        ConnectionDetails::Ethernet {
-            port: mavlink::DEFAULT_ETHERNET_PORT,
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-struct SourceWindow {
-    visible: bool,
-    connected: bool,
-    connection_kind: ConnectionKind,
-    connection_details: ConnectionDetails,
-}
-
-impl SourceWindow {
-    #[profiling::function]
-    fn show_window(&mut self, ui: &mut egui::Ui, message_broker: &mut MessageBroker) {
-        let mut window_is_open = self.visible;
-        let mut can_be_closed = false;
-        egui::Window::new("Sources")
-            .id(ui.id())
-            .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
-            .max_width(200.0)
-            .collapsible(false)
-            .resizable(false)
-            .open(&mut window_is_open)
-            .show(ui.ctx(), |ui| {
-                self.ui(ui, &mut can_be_closed, message_broker);
-            });
-        self.visible = window_is_open && !can_be_closed;
-    }
-
-    fn ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        can_be_closed: &mut bool,
-        message_broker: &mut MessageBroker,
-    ) {
-        let SourceWindow {
-            connected,
-            connection_kind,
-            connection_details,
-            ..
-        } = self;
-        ui.label("Select Source:");
-        ui.horizontal_top(|ui| {
-            ui.radio_value(connection_kind, ConnectionKind::Ethernet, "Ethernet");
-            ui.radio_value(connection_kind, ConnectionKind::Serial, "Serial");
-        });
-
-        ui.separator();
-
-        match *connection_kind {
-            ConnectionKind::Ethernet => {
-                if !matches!(connection_details, ConnectionDetails::Ethernet { .. }) {
-                    *connection_details = ConnectionDetails::Ethernet {
-                        port: mavlink::DEFAULT_ETHERNET_PORT,
-                    };
-                }
-                let ConnectionDetails::Ethernet { port } = connection_details else {
-                    error!("UNREACHABLE: Connection kind is not Ethernet");
-                    unreachable!("Connection kind is not Ethernet");
-                };
-
-                egui::Grid::new("grid")
-                    .num_columns(2)
-                    .spacing([10.0, 5.0])
-                    .show(ui, |ui| {
-                        ui.label("Ethernet Port:");
-                        ui.add(egui::DragValue::new(port).range(0..=65535).speed(10));
-                        ui.end_row();
-                    });
-            }
-            ConnectionKind::Serial => {
-                if !matches!(connection_details, ConnectionDetails::Serial { .. }) {
-                    *connection_details = ConnectionDetails::Serial {
-                        // Default to the first STM32 serial port if available, otherwise
-                        // default to the first serial port available
-                        port: get_first_stm32_serial_port().unwrap_or(
-                            list_all_serial_ports()
-                                .ok()
-                                .and_then(|ports| ports.first().cloned())
-                                .unwrap_or_default(),
-                        ),
-                        baud_rate: 115200,
-                    };
-                }
-                let ConnectionDetails::Serial { port, baud_rate } = connection_details else {
-                    error!("UNREACHABLE: Connection kind is not Serial");
-                    unreachable!("Connection kind is not Serial");
-                };
-
-                egui::Grid::new("grid")
-                    .num_columns(2)
-                    .spacing([10.0, 5.0])
-                    .show(ui, |ui| {
-                        ui.label("Serial Port:");
-                        ComboBox::from_id_salt("serial_port")
-                            .selected_text(port.clone())
-                            .show_ui(ui, |ui| {
-                                for available_port in list_all_serial_ports().unwrap_or_default() {
-                                    ui.selectable_value(
-                                        port,
-                                        available_port.clone(),
-                                        available_port,
-                                    );
-                                }
-                            });
-                        ui.end_row();
-                        ui.label("Baud Rate:");
-                        ui.add(
-                            egui::DragValue::new(baud_rate)
-                                .range(110..=256000)
-                                .speed(100),
-                        );
-                        ui.end_row();
-                    });
-            }
-        };
-
-        ui.separator();
-
-        ui.allocate_ui(Vec2::new(ui.available_width(), 20.0), |ui| {
-            StripBuilder::new(ui)
-                .sizes(Size::remainder(), 2) // top cell
-                .horizontal(|mut strip| {
-                    strip.cell(|ui| {
-                        let btn1 = Button::new("Connect");
-                        ui.add_enabled_ui(!*connected, |ui| {
-                            if ui.add_sized(ui.available_size(), btn1).clicked() {
-                                match connection_details {
-                                    ConnectionDetails::Ethernet { port } => {
-                                        message_broker.listen_from_ethernet_port(*port);
-                                    }
-                                    ConnectionDetails::Serial { port, baud_rate } => {
-                                        message_broker
-                                            .listen_from_serial_port(port.clone(), *baud_rate);
-                                    }
-                                }
-                                *can_be_closed = true;
-                                *connected = true;
-                            }
-                        });
-                    });
-                    strip.cell(|ui| {
-                        let btn2 = Button::new("Disconnect");
-                        ui.add_enabled_ui(*connected, |ui| {
-                            if ui.add_sized(ui.available_size(), btn2).clicked() {
-                                message_broker.stop_listening();
-                                *connected = false;
-                            }
-                        });
-                    });
-                });
-        });
     }
 }
 
