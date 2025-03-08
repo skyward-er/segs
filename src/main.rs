@@ -15,7 +15,7 @@ use tokio::runtime::Runtime;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use error::ErrInstrument;
-use mavlink::ReflectionContext;
+use mavlink::reflection::ReflectionContext;
 use ui::App;
 
 /// ReflectionContext singleton, used to get access to the Mavlink message definitions

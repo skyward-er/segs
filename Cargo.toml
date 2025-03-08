@@ -18,12 +18,20 @@ egui_file = "0.22"
 # =========== Asynchronous ===========
 tokio = { version = "1.41", features = ["rt-multi-thread", "net", "sync"] }
 # =========== Mavlink ===========
-skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
+# skyward_mavlink = { git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git", branch = "rust-strum", features = [
+#     "reflection",
+#     "orion",
+#     "serde",
+# ] }
+skyward_mavlink = { path = "../mavlink-skyward-lib/mavlink_rust", features = [
     "reflection",
     "orion",
     "serde",
 ] }
-mavlink-bindgen = { version = "0.13.1", features = ["serde"] }
+# mavlink-bindgen = { version = "0.14", features = ["serde"] }
+mavlink-bindgen = { path = "../rust-mavlink/mavlink-bindgen", features = [
+    "serde",
+] }
 serialport = "4.7.0"
 # ========= Persistency =========
 serde = { version = "1.0", features = ["derive"] }

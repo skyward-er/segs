@@ -29,7 +29,7 @@ impl Connectable for EthernetConfiguration {
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
         let incoming_addr = format!("udpin:0.0.0.0:{}", self.port);
-        let outgoing_addr = format!("udpbcast:255.255.255.255:{}", self.port);
+        let outgoing_addr = format!("udpcast:255.255.255.255:{}", self.port);
         let mut incoming_conn: BoxedConnection = mavlink::connect(&incoming_addr)?;
         let mut outgoing_conn: BoxedConnection = mavlink::connect(&outgoing_addr)?;
         incoming_conn.set_protocol_version(MavlinkVersion::V1);

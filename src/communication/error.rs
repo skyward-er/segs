@@ -21,8 +21,6 @@ pub enum ConnectionError {
     WrongConfiguration(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Unknown error")]
-    Unknown(String),
 }
 
 impl From<MessageWriteError> for CommunicationError {
