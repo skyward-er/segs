@@ -1,7 +1,11 @@
 //! Module for caching expensive UI calls using egui's temporary memory storage.
 //! It provides utilities for caching the results of functions to avoid frequent recalculations.
 
-use std::time::{Duration, Instant};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    time::{Duration, Instant},
+};
 
 use egui::Context;
 use serialport::SerialPortInfo;
@@ -89,4 +93,70 @@ pub fn cached_first_stm32_port(ctx: &Context) -> Result<Option<SerialPortInfo>, 
         communication::serial::find_first_stm32_port,
         SERIAL_PORT_REFRESH_INTERVAL,
     )
+}
+
+/// ChangeTracker manages the tracking of state changes using an integrity digest.
+///
+/// The `integrity_digest` field holds a 64-bit unsigned integer that represents
+/// a summary (or hash) of the current state. This can be used to verify that the
+/// cached UI state remains consistent, and to quickly detect any modifications.
+pub struct ChangeTracker {
+    integrity_digest: u64,
+}
+
+impl ChangeTracker {
+    /// Records the initial state of a hashable value by computing its hash digest.
+    ///
+    /// This method takes a reference to any value that implements the `Hash` trait,
+    /// computes its hash using the default hasher, and stores the resulting digest in a
+    /// newly created `ChangeTracker` instance. This digest serves as a reference point
+    /// for future state comparisons.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: A reference to the value whose state is to be recorded.
+    ///
+    /// # Returns
+    ///
+    /// A `ChangeTracker` initialized with the computed hash digest.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let initial_tracker = ChangeTracker::record_initial_state(&state);
+    /// ```
+    pub fn record_initial_state<T: Hash>(state: &T) -> Self {
+        let mut hasher = DefaultHasher::new();
+        state.hash(&mut hasher);
+        let integrity_digest = hasher.finish();
+        Self { integrity_digest }
+    }
+
+    /// Checks whether the hash of the current state differs from the initially recorded state.
+    ///
+    /// This method computes the hash digest of the current state (which must implement the
+    /// `Hash` trait) and compares it with the digest stored in the `ChangeTracker`. If the digests
+    /// differ, it indicates that the state has changed since the initial recording.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: A reference to the current state to be checked for changes.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the current state's hash digest does not match the initially recorded digest,
+    /// indicating a change; `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if tracker.has_changed(&state) {
+    ///     println!("The state has changed.");
+    /// }
+    /// ```
+    pub fn has_changed<T: Hash>(&self, state: &T) -> bool {
+        let mut hasher = DefaultHasher::new();
+        state.hash(&mut hasher);
+        self.integrity_digest != hasher.finish()
+    }
 }

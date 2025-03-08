@@ -105,7 +105,7 @@ pub struct IndexedField<'a> {
     field: &'a MavField,
 }
 
-impl<'a> IndexedField<'a> {
+impl IndexedField<'_> {
     pub fn msg(&self) -> &MavMessage {
         self.msg
     }
@@ -234,7 +234,7 @@ impl<'b> FieldLike<'_, 'b> for &str {
                     .iter()
                     .find(|f| f.name == *self)
                     .map(|f| IndexedField {
-                        id: msg.fields.iter().position(|f2| f2 == f).unwrap(),
+                        id: msg.fields.iter().position(|f2| f2 == f).log_unwrap(),
                         msg,
                         field: f,
                     })
