@@ -2005,14 +2005,26 @@ dependencies = [
 
 [[package]]
 name = "mavlink-bindgen"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f83b15a4ad504e29cabfb03fdc97250a22d2354a5404d80fc48dbf02e06acf5f"
+version = "0.14.0"
 dependencies = [
  "crc-any",
  "lazy_static",
  "proc-macro2",
- "quick-xml 0.26.0",
+ "quick-xml 0.36.2",
+ "quote",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "mavlink-bindgen"
+version = "0.14.0"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=b7446436b3c96ca4c40d28b54eeed346e7bf021e#b7446436b3c96ca4c40d28b54eeed346e7bf021e"
+dependencies = [
+ "crc-any",
+ "lazy_static",
+ "proc-macro2",
+ "quick-xml 0.36.2",
  "quote",
  "serde",
  "thiserror 1.0.69",
@@ -2020,9 +2032,8 @@ dependencies = [
 
 [[package]]
 name = "mavlink-core"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e64d975ca3cf0ad8a7c278553f91d77de15fcde9b79bf6bc542e209dd0c7dee"
+version = "0.14.0"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=b7446436b3c96ca4c40d28b54eeed346e7bf021e#b7446436b3c96ca4c40d28b54eeed346e7bf021e"
 dependencies = [
  "byteorder",
  "crc-any",
@@ -2698,21 +2709,21 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.36.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -2752,7 +2763,7 @@ checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
- "zerocopy 0.8.21",
+ "zerocopy 0.8.23",
 ]
 
 [[package]]
@@ -2976,7 +2987,7 @@ dependencies = [
  "egui_plot",
  "egui_tiles",
  "enum_dispatch",
- "mavlink-bindgen",
+ "mavlink-bindgen 0.14.0",
  "profiling",
  "rand 0.9.0",
  "ring-channel",
@@ -3025,9 +3036,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.139"
+version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44f86c3acccc9c65b153fe1b85a3be07fe5515274ec9f0653b4a0875731c72a6"
+checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
  "itoa",
  "memchr",
@@ -3150,11 +3161,10 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "skyward_mavlink"
-version = "0.1.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=rust-strum#0a67d0afc508c38faecc611a58819479686bee27"
+version = "0.1.1"
 dependencies = [
  "bitflags 2.9.0",
- "mavlink-bindgen",
+ "mavlink-bindgen 0.14.0 (git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=b7446436b3c96ca4c40d28b54eeed346e7bf021e)",
  "mavlink-core",
  "num-derive",
  "num-traits",
@@ -4696,11 +4706,11 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.21"
+version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf01143b2dd5d134f11f545cf9f1431b13b749695cb33bcce051e7568f99478"
+checksum = "fd97444d05a4328b90e75e503a34bad781f14e28a823ad3557f0750df1ebcbc6"
 dependencies = [
- "zerocopy-derive 0.8.21",
+ "zerocopy-derive 0.8.23",
 ]
 
 [[package]]
@@ -4716,9 +4726,9 @@ dependencies = [
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.21"
+version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712c8386f4f4299382c9abee219bee7084f78fb939d88b6840fcc1320d5f6da2"
+checksum = "6352c01d0edd5db859a63e2605f4ea3183ddbd15e2c4a9e7d32184df75e4f154"
 dependencies = [
  "proc-macro2",
  "quote",
