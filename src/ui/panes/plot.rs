@@ -8,14 +8,14 @@ use crate::{
         Message, MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage,
         reflection::{self, FieldLike},
     },
-    ui::app::PaneResponse,
+    ui::{app::PaneResponse, cache::ChangeTracker},
 };
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoint, PlotPoints};
 use egui_tiles::TileId;
 use mavlink_bindgen::parser::MavType;
 use serde::{Deserialize, Serialize};
-use source_window::{ChangeTracker, sources_window};
+use source_window::sources_window;
 use std::{hash::Hash, iter::zip};
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -170,14 +170,6 @@ impl PlotSettings {
         &self.x_field
     }
 
-    fn get_y_fields(&self) -> Vec<&FieldWithID> {
-        self.y_fields.iter().map(|(field, _)| field).collect()
-    }
-
-    // fn get_mut_msg_id(&mut self) -> &mut u32 {
-    //     &mut self.msg_sources.plot_message_id
-    // }
-
     fn get_mut_x_field(&mut self) -> &mut FieldWithID {
         &mut self.x_field
     }
@@ -193,10 +185,6 @@ impl PlotSettings {
     fn fields_len(&self) -> usize {
         self.y_fields.len()
     }
-
-    // fn is_msg_id_changed(&self) -> bool {
-    //     self.msg_sources.plot_message_id != self.old_msg_sources.plot_message_id
-    // }
 
     fn contains_field(&self, field: &FieldWithID) -> bool {
         self.y_fields.iter().any(|(f, _)| f == field)
@@ -259,12 +247,6 @@ impl Hash for LineSettings {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.width.to_bits().hash(state);
         self.color.hash(state);
-    }
-}
-
-impl LineSettings {
-    fn new(width: f32, color: Color32) -> Self {
-        Self { width, color }
     }
 }
 

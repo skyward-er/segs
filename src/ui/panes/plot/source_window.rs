@@ -1,9 +1,7 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
+use crate::{
+    MAVLINK_PROFILE,
+    ui::{cache::ChangeTracker, panes::plot::FieldWithID},
 };
-
-use crate::{MAVLINK_PROFILE, ui::panes::plot::FieldWithID};
 
 use crate::error::ErrInstrument;
 
@@ -78,7 +76,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         .spacing([10.0, 2.5])
         .show(ui, |ui| {
             for (i, (field, line_settings)) in
-                plot_settings.get_mut_y_fields().into_iter().enumerate()
+                plot_settings.get_mut_y_fields().iter_mut().enumerate()
             {
                 let LineSettings { width, color } = line_settings;
                 let widget_label = if plot_lines_len > 1 {
@@ -114,98 +112,3 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         plot_settings.add_field(next_field.to_owned());
     }
 }
-
-pub struct ChangeTracker {
-    integrity_digest: u64,
-}
-
-impl ChangeTracker {
-    pub fn record_initial_state<T: Hash>(state: &T) -> Self {
-        let mut hasher = DefaultHasher::new();
-        state.hash(&mut hasher);
-        let integrity_digest = hasher.finish();
-        Self { integrity_digest }
-    }
-
-    pub fn has_changed<T: Hash>(&self, state: &T) -> bool {
-        let mut hasher = DefaultHasher::new();
-        state.hash(&mut hasher);
-        self.integrity_digest != hasher.finish()
-    }
-}
-
-// pub struct SourceSettings<'a> {
-//     msg_sources: &'a mut PlotSettings,
-// }
-
-// impl<'a> SourceSettings<'a> {
-//     pub fn new(
-//         msg_sources: &'a mut PlotSettings,
-//         line_settings: &'a mut Vec<LineSettings>,
-//     ) -> Self {
-//         Self {
-//             old_msg_sources: msg_sources.clone(),
-//             msg_sources,
-//             line_settings,
-//         }
-//     }
-
-//     pub fn are_sources_changed(&self) -> bool {
-//         self.msg_sources != &self.old_msg_sources
-//     }
-
-//     pub fn fields_empty(&self) -> bool {
-//         self.msg_sources.y_field_ids.is_empty()
-//     }
-
-//     fn get_msg_id(&self) -> u32 {
-//         self.msg_sources.plot_message_id
-//     }
-
-//     fn get_x_field_id(&self) -> usize {
-//         self.msg_sources.x_field_id
-//     }
-
-//     fn get_mut_msg_id(&mut self) -> &mut u32 {
-//         &mut self.msg_sources.plot_message_id
-//     }
-
-//     fn get_mut_x_field_id(&mut self) -> &mut usize {
-//         &mut self.msg_sources.x_field_id
-//     }
-
-//     fn set_x_field_id(&mut self, field_id: usize) {
-//         self.msg_sources.x_field_id = field_id;
-//     }
-
-//     fn fields_len(&self) -> usize {
-//         self.msg_sources.y_field_ids.len()
-//     }
-
-//     fn is_msg_id_changed(&self) -> bool {
-//         self.msg_sources.plot_message_id != self.old_msg_sources.plot_message_id
-//     }
-
-//     fn contains_field(&self, field_id: usize) -> bool {
-//         self.msg_sources.y_field_ids.contains(&field_id)
-//     }
-
-//     fn sync_fields_with_lines(&mut self) {
-//         self.msg_sources.y_field_ids = self
-//             .line_settings
-//             .iter()
-//             .map(|ls| ls.field_id.clone())
-//             .collect();
-//     }
-
-//     fn add_field(&mut self, field_id: usize) {
-//         self.line_settings.push(LineSettings::new(field_id));
-//         self.msg_sources.y_field_ids.push(field_id);
-//     }
-
-//     fn clear_fields(&mut self) {
-//         self.msg_sources.y_field_ids.clear();
-//         self.line_settings.clear();
-//         self.msg_sources.x_field_id = 0;
-//     }
-// }
