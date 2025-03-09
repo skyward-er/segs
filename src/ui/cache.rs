@@ -13,6 +13,8 @@ use serialport::SerialPortInfo;
 use crate::{communication, error::ErrInstrument};
 
 const SERIAL_PORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
+const SHORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
+const INDEF_REFRESH_INTERVAL: Duration = Duration::MAX;
 
 /// Internal helper function that caches the result of a given function call for a specified duration.
 ///
@@ -42,7 +44,9 @@ where
 
 /// A trait to extend egui's Context with a caching function.
 pub trait CacheCall {
-    /// Calls the provided function and caches its result.
+    /// Calls the provided function and caches its result. Every time this
+    /// function is called, it will return the cached value if it is still
+    /// valid.
     ///
     /// # Arguments
     /// * `id` - A unique identifier for the cached value.
@@ -52,6 +56,26 @@ pub trait CacheCall {
     where
         F: Fn() -> T,
         T: Clone + Send + Sync + 'static;
+
+    fn call_cached_short<F, T, H>(&self, hashable: &H, fun: F) -> T
+    where
+        F: Fn() -> T,
+        T: Clone + Send + Sync + 'static,
+        H: Hash,
+    {
+        let id = egui::Id::new(hashable);
+        self.call_cached(id, fun, SHORT_REFRESH_INTERVAL)
+    }
+
+    fn call_cached_indef<F, T, H>(&self, hashable: &H, fun: F) -> T
+    where
+        F: Fn() -> T,
+        T: Clone + Send + Sync + 'static,
+        H: Hash,
+    {
+        let id = egui::Id::new(hashable);
+        self.call_cached(id, fun, INDEF_REFRESH_INTERVAL)
+    }
 }
 
 impl CacheCall for egui::Context {
@@ -63,36 +87,6 @@ impl CacheCall for egui::Context {
     {
         call(self, id, fun, expiration_duration)
     }
-}
-
-/// Returns a cached list of all available USB ports.
-///
-/// # Arguments
-/// * `ctx` - The egui context used for caching.
-///
-/// # Returns
-/// * A Result containing a vector of `SerialPortInfo` or a `serialport::Error`.
-pub fn cached_list_all_usb_ports(ctx: &Context) -> Result<Vec<SerialPortInfo>, serialport::Error> {
-    ctx.call_cached(
-        egui::Id::new("list_usb_ports"),
-        communication::serial::list_all_usb_ports,
-        SERIAL_PORT_REFRESH_INTERVAL,
-    )
-}
-
-/// Returns the first cached STM32 port found, if any.
-///
-/// # Arguments
-/// * `ctx` - The egui context used for caching.
-///
-/// # Returns
-/// * A Result containing an Option of `SerialPortInfo` or a `serialport::Error`.
-pub fn cached_first_stm32_port(ctx: &Context) -> Result<Option<SerialPortInfo>, serialport::Error> {
-    ctx.call_cached(
-        egui::Id::new("list_usb_ports"),
-        communication::serial::find_first_stm32_port,
-        SERIAL_PORT_REFRESH_INTERVAL,
-    )
 }
 
 /// ChangeTracker manages the tracking of state changes using an integrity digest.

@@ -2006,19 +2006,6 @@ dependencies = [
 [[package]]
 name = "mavlink-bindgen"
 version = "0.14.0"
-dependencies = [
- "crc-any",
- "lazy_static",
- "proc-macro2",
- "quick-xml 0.36.2",
- "quote",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "mavlink-bindgen"
-version = "0.14.0"
 source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=b7446436b3c96ca4c40d28b54eeed346e7bf021e#b7446436b3c96ca4c40d28b54eeed346e7bf021e"
 dependencies = [
  "crc-any",
@@ -2987,7 +2974,7 @@ dependencies = [
  "egui_plot",
  "egui_tiles",
  "enum_dispatch",
- "mavlink-bindgen 0.14.0",
+ "mavlink-bindgen",
  "profiling",
  "rand 0.9.0",
  "ring-channel",
@@ -3162,9 +3149,10 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 [[package]]
 name = "skyward_mavlink"
 version = "0.1.1"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=rust-strum#8f0700acc0def0cdb2d2ae490e0703fd6c820643"
 dependencies = [
  "bitflags 2.9.0",
- "mavlink-bindgen 0.14.0 (git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=b7446436b3c96ca4c40d28b54eeed346e7bf021e)",
+ "mavlink-bindgen",
  "mavlink-core",
  "num-derive",
  "num-traits",

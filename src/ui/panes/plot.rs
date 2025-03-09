@@ -61,7 +61,7 @@ impl PaneBehavior for Plot2DPane {
                 {
                     plot_ui.line(
                         Line::new(PlotPoints::from(
-                            &points[points.len().saturating_sub(100)..],
+                            &points[points.len().saturating_sub(100)..], // FIXME: don't show just the last 100 points
                         ))
                         .color(settings.color)
                         .width(settings.width)
