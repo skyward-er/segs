@@ -7,10 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use egui::Context;
-use serialport::SerialPortInfo;
-
-use crate::{communication, error::ErrInstrument};
+use crate::error::ErrInstrument;
 
 const SERIAL_PORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
 const SHORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);

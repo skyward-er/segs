@@ -5,16 +5,15 @@ use crate::{
     MAVLINK_PROFILE,
     error::ErrInstrument,
     mavlink::{
-        Message, MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage,
-        reflection::{self, FieldLike},
+        MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage,
+        reflection::{FieldLike, IndexedField},
     },
     ui::{app::PaneResponse, cache::ChangeTracker},
 };
 use egui::{Color32, Vec2b};
 use egui_plot::{Legend, Line, PlotPoint, PlotPoints};
 use egui_tiles::TileId;
-use mavlink_bindgen::parser::MavType;
-use serde::{Deserialize, Serialize};
+use serde::{self, Deserialize, Serialize, ser::SerializeStruct};
 use source_window::sources_window;
 use std::{hash::Hash, iter::zip};
 
@@ -65,7 +64,7 @@ impl PaneBehavior for Plot2DPane {
                         ))
                         .color(settings.color)
                         .width(settings.width)
-                        .name(&field.field.name),
+                        .name(&field.field().name),
                     );
                 }
                 plot_ui
@@ -104,10 +103,10 @@ impl PaneBehavior for Plot2DPane {
         } = &self.settings;
 
         for msg in messages {
-            let x: f64 = x_field.extract_from_message(&msg.message).log_unwrap();
+            let x: f64 = x_field.extract_as_f64(&msg.message).log_unwrap();
             let ys: Vec<f64> = y_fields
                 .iter()
-                .map(|(field, _)| field.extract_from_message(&msg.message).log_unwrap())
+                .map(|(field, _)| field.extract_as_f64(&msg.message).log_unwrap())
                 .collect();
 
             if self.line_data.len() < ys.len() {
@@ -115,7 +114,7 @@ impl PaneBehavior for Plot2DPane {
             }
 
             for (line, y) in zip(&mut self.line_data, ys) {
-                let point = if x_field.field.name == "timestamp" {
+                let point = if x_field.field().name == "timestamp" {
                     PlotPoint::new(x / 1e6, y)
                 } else {
                     PlotPoint::new(x, y)
@@ -146,15 +145,15 @@ fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool) {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct PlotSettings {
     plot_message_id: u32,
-    x_field: FieldWithID,
-    y_fields: Vec<(FieldWithID, LineSettings)>,
+    x_field: IndexedField,
+    y_fields: Vec<(IndexedField, LineSettings)>,
 }
 
 impl PlotSettings {
-    fn plot_lines(&self) -> &[(FieldWithID, LineSettings)] {
+    fn plot_lines(&self) -> &[(IndexedField, LineSettings)] {
         &self.y_fields
     }
 
@@ -166,19 +165,19 @@ impl PlotSettings {
         self.plot_message_id
     }
 
-    fn get_x_field(&self) -> &FieldWithID {
+    fn get_x_field(&self) -> &IndexedField {
         &self.x_field
     }
 
-    fn get_mut_x_field(&mut self) -> &mut FieldWithID {
+    fn get_mut_x_field(&mut self) -> &mut IndexedField {
         &mut self.x_field
     }
 
-    fn get_mut_y_fields(&mut self) -> &mut [(FieldWithID, LineSettings)] {
+    fn get_mut_y_fields(&mut self) -> &mut [(IndexedField, LineSettings)] {
         &mut self.y_fields[..]
     }
 
-    fn set_x_field(&mut self, field: FieldWithID) {
+    fn set_x_field(&mut self, field: IndexedField) {
         self.x_field = field;
     }
 
@@ -186,11 +185,11 @@ impl PlotSettings {
         self.y_fields.len()
     }
 
-    fn contains_field(&self, field: &FieldWithID) -> bool {
+    fn contains_field(&self, field: &IndexedField) -> bool {
         self.y_fields.iter().any(|(f, _)| f == field)
     }
 
-    fn add_field(&mut self, field: FieldWithID) {
+    fn add_field(&mut self, field: IndexedField) {
         let line_settings = LineSettings::default();
         self.y_fields.push((field, line_settings));
     }
@@ -198,8 +197,7 @@ impl PlotSettings {
     fn clear_fields(&mut self) {
         self.x_field = 0
             .to_mav_field(self.plot_message_id, &MAVLINK_PROFILE)
-            .log_unwrap()
-            .into();
+            .log_unwrap();
         self.y_fields.clear();
     }
 }
@@ -207,9 +205,9 @@ impl PlotSettings {
 impl Default for PlotSettings {
     fn default() -> Self {
         let msg_id = ROCKET_FLIGHT_TM_DATA::ID;
-        let x_field = FieldWithID::new(msg_id, 0).log_unwrap();
+        let x_field = 0.to_mav_field(msg_id, &MAVLINK_PROFILE).log_unwrap();
         let y_fields = vec![(
-            FieldWithID::new(msg_id, 1).log_unwrap(),
+            1.to_mav_field(msg_id, &MAVLINK_PROFILE).log_unwrap(),
             LineSettings::default(),
         )];
         Self {
@@ -250,65 +248,53 @@ impl Hash for LineSettings {
     }
 }
 
-/// A struct to hold a field and its ID in a message
-/// We use this and not `reflection::IndexedField` because we need to serialize it
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-struct FieldWithID {
-    id: usize,
-    field: reflection::MavField,
+impl Serialize for PlotSettings {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("PlotSettings", 3)?;
+        let y_fields: Vec<_> = self.y_fields.iter().map(|(f, s)| (f.id(), s)).collect();
+        state.serialize_field("msg_id", &self.plot_message_id)?;
+        state.serialize_field("x_field", &self.x_field.id())?;
+        state.serialize_field("y_fields", &y_fields)?;
+        state.end()
+    }
 }
 
-impl FieldWithID {
-    fn new(msg_id: u32, field_id: usize) -> Option<Self> {
-        Some(Self {
-            id: field_id,
-            field: field_id
-                .to_mav_field(msg_id, &MAVLINK_PROFILE)
-                .ok()?
-                .field()
-                .clone(),
+impl<'de> Deserialize<'de> for PlotSettings {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct FieldSettings {
+            field: usize,
+            settings: LineSettings,
+        }
+
+        #[derive(Deserialize)]
+        struct PlotSettingsData {
+            msg_id: u32,
+            x_field: usize,
+            y_fields: Vec<FieldSettings>,
+        }
+
+        let data = PlotSettingsData::deserialize(deserializer)?;
+        let x_field = data
+            .x_field
+            .to_mav_field(data.msg_id, &MAVLINK_PROFILE)
+            .log_unwrap();
+        let y_fields = data
+            .y_fields
+            .into_iter()
+            .map(|FieldSettings { field, settings }| {
+                (
+                    field
+                        .to_mav_field(data.msg_id, &MAVLINK_PROFILE)
+                        .log_unwrap(),
+                    settings,
+                )
+            })
+            .collect();
+        Ok(Self {
+            plot_message_id: data.msg_id,
+            x_field,
+            y_fields,
         })
-    }
-
-    fn extract_from_message(&self, message: &impl Message) -> Result<f64, String> {
-        macro_rules! downcast {
-            ($value: expr, $type: ty) => {
-                Ok(*$value
-                    .downcast::<$type>()
-                    .map_err(|_| "Type mismatch".to_string())? as f64)
-            };
-        }
-
-        let value = message
-            .get_field(self.id)
-            .ok_or("Field not found".to_string())?;
-        match self.field.mavtype {
-            MavType::UInt8 => downcast!(value, u8),
-            MavType::UInt16 => downcast!(value, u16),
-            MavType::UInt32 => downcast!(value, u32),
-            MavType::UInt64 => downcast!(value, u64),
-            MavType::Int8 => downcast!(value, i8),
-            MavType::Int16 => downcast!(value, i16),
-            MavType::Int32 => downcast!(value, i32),
-            MavType::Int64 => downcast!(value, i64),
-            MavType::Float => downcast!(value, f32),
-            MavType::Double => downcast!(value, f64),
-            _ => Err("Field type not supported".to_string()),
-        }
-    }
-}
-
-impl Hash for FieldWithID {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl From<reflection::IndexedField<'_>> for FieldWithID {
-    fn from(indexed_field: reflection::IndexedField<'_>) -> Self {
-        Self {
-            id: indexed_field.id(),
-            field: indexed_field.field().clone(),
-        }
     }
 }

@@ -1,7 +1,4 @@
-use crate::{
-    MAVLINK_PROFILE,
-    ui::{cache::ChangeTracker, panes::plot::FieldWithID},
-};
+use crate::{MAVLINK_PROFILE, ui::cache::ChangeTracker};
 
 use crate::error::ErrInstrument;
 
@@ -32,12 +29,9 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
     }
 
     // check fields and assign a default field_x and field_y once the msg is changed
-    let fields: Vec<FieldWithID> = MAVLINK_PROFILE
+    let fields = MAVLINK_PROFILE
         .get_plottable_fields(plot_settings.get_msg_id())
-        .log_expect("Invalid message id")
-        .into_iter()
-        .map(|f| f.into())
-        .collect::<Vec<_>>();
+        .log_expect("Invalid message id");
     // get the first field that is in the list of fields or the previous if valid
     let x_field = plot_settings.get_x_field();
     let new_field_x = fields
@@ -57,10 +51,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
 
     // if fields are valid, show the combo boxes for the x_axis
     egui::ComboBox::from_label("X Axis")
-        .selected_text(&x_field.field.name)
+        .selected_text(&x_field.field().name)
         .show_ui(ui, |ui| {
             for msg in fields.iter() {
-                ui.selectable_value(x_field, msg.to_owned(), &msg.field.name);
+                ui.selectable_value(x_field, msg.to_owned(), &msg.field().name);
             }
         });
 
@@ -85,10 +79,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
                     "Y Axis".to_owned()
                 };
                 egui::ComboBox::from_label(widget_label)
-                    .selected_text(&field.field.name)
+                    .selected_text(&field.field().name)
                     .show_ui(ui, |ui| {
                         for msg in fields.iter() {
-                            ui.selectable_value(field, msg.to_owned(), &msg.field.name);
+                            ui.selectable_value(field, msg.to_owned(), &msg.field().name);
                         }
                     });
                 ui.color_edit_button_srgba(color);
