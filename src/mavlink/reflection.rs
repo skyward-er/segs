@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 
 use mavlink_bindgen::parser::{MavProfile, MavType};
+use skyward_mavlink::mavlink::Message;
 
 use crate::error::ErrInstrument;
 
@@ -39,12 +40,12 @@ impl ReflectionContext {
     }
 
     /// Get the name of a message by its ID.
-    pub fn get_msg(&self, msg: impl MessageLike) -> Option<&MavMessage> {
+    pub fn get_msg(&'static self, msg: impl MessageLike) -> Option<&'static MavMessage> {
         msg.to_mav_message(self).ok()
     }
 
     /// Get all field names for a message by its ID.
-    pub fn get_fields(&self, message_id: impl MessageLike) -> Option<Vec<IndexedField<'_>>> {
+    pub fn get_fields(&'static self, message_id: impl MessageLike) -> Option<Vec<IndexedField>> {
         message_id.to_mav_message(self).ok().map(|msg| {
             msg.fields
                 .iter()
@@ -72,9 +73,9 @@ impl ReflectionContext {
 
     /// Get all plottable field names for a message by its ID.
     pub fn get_plottable_fields(
-        &self,
+        &'static self,
         message_id: impl MessageLike,
-    ) -> Option<Vec<IndexedField<'_>>> {
+    ) -> Option<Vec<IndexedField>> {
         let msg = message_id.to_mav_message(self).ok()?;
         msg.fields
             .iter()
@@ -98,14 +99,36 @@ impl ReflectionContext {
     }
 }
 
-#[derive(Clone)]
-pub struct IndexedField<'a> {
+#[derive(Debug, Clone)]
+pub struct IndexedField {
     id: usize,
-    msg: &'a MavMessage,
-    field: &'a MavField,
+    msg: &'static MavMessage,
+    field: &'static MavField,
 }
 
-impl IndexedField<'_> {
+macro_rules! extract_as_type {
+    ($as_type: ty, $func: ident, $($mav_ty: ident, $rust_ty: ty),+) => {
+        pub fn $func(&self, message: &impl Message) -> Result<$as_type, String> {
+            macro_rules! downcast {
+                ($value: expr, $type: ty) => {
+                    Ok(*$value
+                        .downcast::<$type>()
+                        .map_err(|_| "Type mismatch".to_string())? as $as_type)
+                };
+            }
+
+            let value = message
+                .get_field(self.id)
+                .ok_or("Field not found".to_string())?;
+            match self.field.mavtype {
+                $(MavType::$mav_ty => downcast!(value, $rust_ty),)+
+                _ => Err("Field type not supported".to_string()),
+            }
+        }
+    };
+}
+
+impl IndexedField {
     pub fn msg(&self) -> &MavMessage {
         self.msg
     }
@@ -127,16 +150,136 @@ impl IndexedField<'_> {
     }
 }
 
-pub trait MessageLike {
-    fn to_mav_message<'b>(&self, ctx: &'b ReflectionContext) -> Result<&'b MavMessage, String>;
+/// ### Extractors
+/// These methods allow to extract the value of a field from a message, casting
+/// it to the desired type.
+impl IndexedField {
+    #[rustfmt::skip]
+    extract_as_type!(f32, extract_as_f32,
+        UInt8, u8,
+        UInt16, u16,
+        UInt32, u32,
+        UInt64, u64,
+        Int8, i8,
+        Int16, i16,
+        Int32, i32,
+        Int64, i64,
+        Float, f32,
+        Double, f64
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(f64, extract_as_f64,
+        UInt8, u8,
+        UInt16, u16,
+        UInt32, u32,
+        UInt64, u64,
+        Int8, i8,
+        Int16, i16,
+        Int32, i32,
+        Int64, i64,
+        Float, f32,
+        Double, f64
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(u8, extract_as_u8,
+        UInt8, u8,
+        Char, char
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(u16, extract_as_u16,
+        UInt8, u8,
+        Int8, i8,
+        UInt16, u16
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(u32, extract_as_u32,
+        UInt8, u8,
+        Int8, i8,
+        UInt16, u16,
+        Int16, i16,
+        UInt32, u32
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(u64, extract_as_u64,
+        UInt8, u8,
+        Int8, i8,
+        UInt16, u16,
+        Int16, i16,
+        UInt32, u32,
+        Int32, i32,
+        UInt64, u64
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(i8, extract_as_i8,
+        Int8, i8
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(i16, extract_as_i16,
+        UInt8, u8,
+        Int8, i8,
+        Int16, i16
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(i32, extract_as_i32,
+        UInt8, u8,
+        Int8, i8,
+        UInt16, u16,
+        Int16, i16,
+        Int32, i32
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(i64, extract_as_i64,
+        UInt8, u8,
+        Int8, i8,
+        UInt16, u16,
+        Int16, i16,
+        UInt32, u32,
+        Int32, i32,
+        Int64, i64
+    );
+
+    #[rustfmt::skip]
+    extract_as_type!(char, extract_as_char,
+        UInt8, u8,
+        Char, char
+    );
 }
 
-pub trait FieldLike<'a, 'b> {
+impl std::hash::Hash for IndexedField {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.msg.id.hash(state);
+    }
+}
+
+impl PartialEq for IndexedField {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.msg.id == other.msg.id
+    }
+}
+
+pub trait MessageLike {
+    fn to_mav_message(
+        &self,
+        ctx: &'static ReflectionContext,
+    ) -> Result<&'static MavMessage, String>;
+}
+
+pub trait FieldLike {
     fn to_mav_field(
-        &'a self,
+        &self,
         msg_id: u32,
-        ctx: &'b ReflectionContext,
-    ) -> Result<IndexedField<'b>, String>;
+        ctx: &'static ReflectionContext,
+    ) -> Result<IndexedField, String>;
 }
 
 impl MessageLike for u32 {
@@ -158,12 +301,12 @@ impl MessageLike for &str {
     }
 }
 
-impl<'b> FieldLike<'_, 'b> for &MavField {
+impl FieldLike for &MavField {
     fn to_mav_field(
         &self,
         msg_id: u32,
-        ctx: &'b ReflectionContext,
-    ) -> Result<IndexedField<'b>, String> {
+        ctx: &'static ReflectionContext,
+    ) -> Result<IndexedField, String> {
         ctx.id_msg_map
             .get(&msg_id)
             .and_then(|msg| {
@@ -181,12 +324,8 @@ impl<'b> FieldLike<'_, 'b> for &MavField {
     }
 }
 
-impl<'b> FieldLike<'b, 'b> for IndexedField<'b> {
-    fn to_mav_field(
-        &self,
-        _msg_id: u32,
-        _ctx: &ReflectionContext,
-    ) -> Result<IndexedField<'_>, String> {
+impl FieldLike for IndexedField {
+    fn to_mav_field(&self, _msg_id: u32, _ctx: &ReflectionContext) -> Result<IndexedField, String> {
         Ok(IndexedField {
             id: self.id,
             msg: self.msg,
@@ -195,12 +334,12 @@ impl<'b> FieldLike<'b, 'b> for IndexedField<'b> {
     }
 }
 
-impl<'b> FieldLike<'_, 'b> for usize {
+impl FieldLike for usize {
     fn to_mav_field(
         &self,
         msg_id: u32,
-        ctx: &'b ReflectionContext,
-    ) -> Result<IndexedField<'b>, String> {
+        ctx: &'static ReflectionContext,
+    ) -> Result<IndexedField, String> {
         ctx.id_msg_map
             .get(&msg_id)
             .and_then(|msg| {
@@ -214,12 +353,12 @@ impl<'b> FieldLike<'_, 'b> for usize {
     }
 }
 
-impl<'b> FieldLike<'_, 'b> for &str {
+impl FieldLike for &str {
     fn to_mav_field(
         &self,
         msg_id: u32,
-        ctx: &'b ReflectionContext,
-    ) -> Result<IndexedField<'b>, String> {
+        ctx: &'static ReflectionContext,
+    ) -> Result<IndexedField, String> {
         ctx.id_msg_map
             .get(&msg_id)
             .and_then(|msg| {
