@@ -128,10 +128,7 @@ impl IndexedField<'_> {
 }
 
 pub trait MessageLike {
-    fn to_mav_message<'a, 'b>(
-        &'a self,
-        ctx: &'b ReflectionContext,
-    ) -> Result<&'b MavMessage, String>;
+    fn to_mav_message<'b>(&self, ctx: &'b ReflectionContext) -> Result<&'b MavMessage, String>;
 }
 
 pub trait FieldLike<'a, 'b> {
@@ -143,10 +140,7 @@ pub trait FieldLike<'a, 'b> {
 }
 
 impl MessageLike for u32 {
-    fn to_mav_message<'a, 'b>(
-        &'a self,
-        ctx: &'b ReflectionContext,
-    ) -> Result<&'b MavMessage, String> {
+    fn to_mav_message<'b>(&self, ctx: &'b ReflectionContext) -> Result<&'b MavMessage, String> {
         ctx.id_msg_map
             .get(self)
             .ok_or_else(|| format!("Message {} not found", self))
@@ -154,10 +148,7 @@ impl MessageLike for u32 {
 }
 
 impl MessageLike for &str {
-    fn to_mav_message<'a, 'b>(
-        &'a self,
-        ctx: &'b ReflectionContext,
-    ) -> Result<&'b MavMessage, String> {
+    fn to_mav_message<'b>(&self, ctx: &'b ReflectionContext) -> Result<&'b MavMessage, String> {
         ctx.mavlink_profile
             .messages
             .iter()
@@ -203,6 +194,7 @@ impl<'b> FieldLike<'b, 'b> for IndexedField<'b> {
         })
     }
 }
+
 impl<'b> FieldLike<'_, 'b> for usize {
     fn to_mav_field(
         &self,
@@ -221,6 +213,7 @@ impl<'b> FieldLike<'_, 'b> for usize {
             .ok_or_else(|| format!("Field {} not found in message {}", self, msg_id))
     }
 }
+
 impl<'b> FieldLike<'_, 'b> for &str {
     fn to_mav_field(
         &self,
