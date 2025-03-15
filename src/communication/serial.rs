@@ -54,7 +54,7 @@ pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Err
 pub mod cached {
     use egui::Context;
 
-    use crate::ui::cache::CacheCall;
+    use crate::ui::cache::RecentCallCache;
 
     use super::*;
 
