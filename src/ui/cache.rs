@@ -7,6 +7,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use egui::{Context, Id, Ui};
+
 use crate::error::ErrInstrument;
 
 const SERIAL_PORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
@@ -20,7 +22,7 @@ const INDEF_REFRESH_INTERVAL: Duration = Duration::MAX;
 /// * `id` - The unique identifier for the cached item.
 /// * `fun` - The function whose return value is to be cached.
 /// * `expiration_duration` - The duration after which the cache should be refreshed.
-fn call<T, F>(ctx: &egui::Context, id: egui::Id, fun: F, expiration_duration: Duration) -> T
+fn call<T, F>(ctx: &Context, id: Id, fun: F, expiration_duration: Duration) -> T
 where
     F: Fn() -> T,
     T: Clone + Send + Sync + 'static,
@@ -40,7 +42,7 @@ where
 }
 
 /// A trait to extend egui's Context with a caching function.
-pub trait CacheCall {
+pub trait RecentCallCache {
     /// Calls the provided function and caches its result. Every time this
     /// function is called, it will return the cached value if it is still
     /// valid.
@@ -49,7 +51,7 @@ pub trait CacheCall {
     /// * `id` - A unique identifier for the cached value.
     /// * `fun` - The function to be cached.
     /// * `expiration_duration` - The cache expiration duration.
-    fn call_cached<F, T>(&self, id: egui::Id, fun: F, expiration_duration: Duration) -> T
+    fn cached_function_call_for<F, T>(&self, id: Id, fun: F, expiration_duration: Duration) -> T
     where
         F: Fn() -> T,
         T: Clone + Send + Sync + 'static;
@@ -60,8 +62,8 @@ pub trait CacheCall {
         T: Clone + Send + Sync + 'static,
         H: Hash,
     {
-        let id = egui::Id::new(hashable);
-        self.call_cached(id, fun, SHORT_REFRESH_INTERVAL)
+        let id = Id::new(hashable);
+        self.cached_function_call_for(id, fun, SHORT_REFRESH_INTERVAL)
     }
 
     fn call_cached_indef<F, T, H>(&self, hashable: &H, fun: F) -> T
@@ -70,19 +72,59 @@ pub trait CacheCall {
         T: Clone + Send + Sync + 'static,
         H: Hash,
     {
-        let id = egui::Id::new(hashable);
-        self.call_cached(id, fun, INDEF_REFRESH_INTERVAL)
+        let id = Id::new(hashable);
+        self.cached_function_call_for(id, fun, INDEF_REFRESH_INTERVAL)
     }
 }
 
-impl CacheCall for egui::Context {
+impl RecentCallCache for Context {
     /// Implements the caching call using the internal `call` function.
-    fn call_cached<F, T>(&self, id: egui::Id, fun: F, expiration_duration: Duration) -> T
+    fn cached_function_call_for<F, T>(&self, id: Id, fun: F, expiration_duration: Duration) -> T
     where
         F: Fn() -> T,
         T: Clone + Send + Sync + 'static,
     {
         call(self, id, fun, expiration_duration)
+    }
+}
+
+impl RecentCallCache for &Ui {
+    /// Implements the caching call using the context of the UI.
+    fn cached_function_call_for<F, T>(&self, id: Id, fun: F, expiration_duration: Duration) -> T
+    where
+        F: Fn() -> T,
+        T: Clone + Send + Sync + 'static,
+    {
+        call(self.ctx(), id, fun, expiration_duration)
+    }
+}
+
+pub trait CacheWithCondition {
+    fn cache_result_if<F, T, H>(&self, hashable: H, condition: bool, fun: F) -> T
+    where
+        F: Fn() -> T,
+        T: Clone + Send + Sync + 'static,
+        H: Hash;
+}
+
+impl CacheWithCondition for Ui {
+    fn cache_result_if<F, T, H>(&self, hashable: H, condition: bool, fun: F) -> T
+    where
+        F: Fn() -> T,
+        T: Clone + Send + Sync + 'static,
+        H: Hash,
+    {
+        let id = self.next_auto_id().with(hashable);
+        self.memory_mut(|m| {
+            let value = m.data.get_temp::<T>(id);
+            if !condition || value.is_none() {
+                let value = fun();
+                m.data.insert_temp(id, value.clone());
+                value
+            } else {
+                value.log_unwrap()
+            }
+        })
     }
 }
 

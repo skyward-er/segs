@@ -1,4 +1,4 @@
-use crate::{MAVLINK_PROFILE, ui::cache::ChangeTracker};
+use crate::MAVLINK_PROFILE;
 
 use crate::error::ErrInstrument;
 
@@ -6,7 +6,7 @@ use super::{LineSettings, PlotSettings};
 
 #[profiling::function]
 pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
-    let settings_hash = ChangeTracker::record_initial_state(&plot_settings);
+    let data_settings_digest = plot_settings.data_digest();
 
     // extract the msg name from the id to show it in the combo box
     let msg_name = MAVLINK_PROFILE
@@ -24,7 +24,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         });
 
     // reset fields if the message is changed
-    if settings_hash.has_changed(plot_settings) {
+    if data_settings_digest != plot_settings.data_digest() {
         plot_settings.clear_fields();
     }
 
@@ -86,8 +86,13 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
                         }
                     });
                 ui.color_edit_button_srgba(color);
-                ui.add(egui::DragValue::new(width).speed(0.1).suffix(" pt"))
-                    .on_hover_text("Width of the line in points");
+                ui.add(
+                    egui::DragValue::new(width)
+                        .range(0.0..=10.0)
+                        .speed(0.02)
+                        .suffix(" pt"),
+                )
+                .on_hover_text("Width of the line in points");
                 ui.end_row();
             }
         });
