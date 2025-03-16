@@ -1,5 +1,3 @@
-
-
 #[derive(Debug)]
 pub struct RingBuffer<const G: usize> {
     buffer: Box<[u8; G]>,

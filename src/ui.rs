@@ -1,5 +1,5 @@
 mod app;
-mod cache;
+pub mod cache;
 mod panes;
 mod persistency;
 mod shortcuts;

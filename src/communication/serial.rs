@@ -51,6 +51,40 @@ pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Err
     Ok(None)
 }
 
+pub mod cached {
+    use egui::Context;
+
+    use crate::ui::cache::RecentCallCache;
+
+    use super::*;
+
+    /// Returns a cached list of all available USB ports.
+    ///
+    /// # Arguments
+    /// * `ctx` - The egui context used for caching.
+    ///
+    /// # Returns
+    /// * A Result containing a vector of `SerialPortInfo` or a `serialport::Error`.
+    pub fn cached_list_all_usb_ports(
+        ctx: &Context,
+    ) -> Result<Vec<SerialPortInfo>, serialport::Error> {
+        ctx.call_cached_short(&"list_usb_ports", list_all_usb_ports)
+    }
+
+    /// Returns the first cached STM32 port found, if any.
+    ///
+    /// # Arguments
+    /// * `ctx` - The egui context used for caching.
+    ///
+    /// # Returns
+    /// * A Result containing an Option of `SerialPortInfo` or a `serialport::Error`.
+    pub fn cached_first_stm32_port(
+        ctx: &Context,
+    ) -> Result<Option<SerialPortInfo>, serialport::Error> {
+        ctx.call_cached_short(&"find_first_stm32_port", find_first_stm32_port)
+    }
+}
+
 /// Configuration for a serial connection.
 #[derive(Debug, Clone)]
 pub struct SerialConfiguration {
