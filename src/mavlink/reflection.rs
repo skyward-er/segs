@@ -7,9 +7,10 @@
 use std::collections::HashMap;
 
 use mavlink_bindgen::parser::{MavProfile, MavType};
+use serde::ser::SerializeStruct;
 use skyward_mavlink::mavlink::Message;
 
-use crate::error::ErrInstrument;
+use crate::{MAVLINK_PROFILE, error::ErrInstrument};
 
 use super::MAVLINK_PROFILE_SERIALIZED;
 
@@ -264,6 +265,32 @@ impl std::hash::Hash for IndexedField {
 impl PartialEq for IndexedField {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id && self.msg.id == other.msg.id
+    }
+}
+
+impl serde::Serialize for IndexedField {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("IndexedField", 3)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("msg_id", &self.msg.id)?;
+        state.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for IndexedField {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct IndexedFieldDe {
+            id: usize,
+            msg_id: u32,
+        }
+
+        let de = IndexedFieldDe::deserialize(deserializer)?;
+        let field = de
+            .id
+            .to_mav_field(de.msg_id, &MAVLINK_PROFILE)
+            .map_err(|u| serde::de::Error::custom(format!("Invalid field: {}", u)))?;
+        Ok(field)
     }
 }
 

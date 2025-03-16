@@ -1,13 +1,30 @@
-use crate::MAVLINK_PROFILE;
+use std::time::Duration;
 
-use crate::error::ErrInstrument;
+use crate::{MAVLINK_PROFILE, error::ErrInstrument};
 
 use super::{LineSettings, PlotSettings};
 
 #[profiling::function]
 pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
-    let data_settings_digest = plot_settings.data_digest();
+    // select how many points are shown on the plot
+    let mut points_lifespan_sec = plot_settings.points_lifespan.as_secs();
+    ui.horizontal(|ui| {
+        let res1 = ui.add(egui::Label::new("Points Lifespan: "));
+        let res2 = ui.add(
+            egui::DragValue::new(&mut points_lifespan_sec)
+                .range(5..=1800)
+                .speed(1)
+                .suffix(" seconds"),
+        );
+        res1.union(res2)
+    })
+    .inner
+    .on_hover_text("How long the data is shown on the plot");
+    plot_settings.points_lifespan = Duration::from_secs(points_lifespan_sec);
 
+    ui.add_sized([250., 10.], egui::Separator::default());
+
+    let data_settings_digest = plot_settings.data_digest();
     // extract the msg name from the id to show it in the combo box
     let msg_name = MAVLINK_PROFILE
         .get_msg(plot_settings.plot_message_id)
@@ -30,10 +47,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
 
     // check fields and assign a default field_x and field_y once the msg is changed
     let fields = MAVLINK_PROFILE
-        .get_plottable_fields(plot_settings.get_msg_id())
+        .get_plottable_fields(plot_settings.plot_message_id)
         .log_expect("Invalid message id");
     // get the first field that is in the list of fields or the previous if valid
-    let x_field = plot_settings.get_x_field();
+    let x_field = &plot_settings.x_field;
     let new_field_x = fields
         .iter()
         .any(|f| f == x_field)
@@ -46,10 +63,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         return;
     };
     // update the field_x
-    plot_settings.set_x_field(new_field_x);
-    let x_field = plot_settings.get_mut_x_field();
+    plot_settings.x_field = new_field_x;
 
     // if fields are valid, show the combo boxes for the x_axis
+    let x_field = &mut plot_settings.x_field;
     egui::ComboBox::from_label("X Axis")
         .selected_text(&x_field.field().name)
         .show_ui(ui, |ui| {
@@ -59,19 +76,17 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         });
 
     // populate the plot_lines with the first field if it is empty and there are more than 1 fields
-    if plot_settings.fields_empty() && fields.len() > 1 {
+    if plot_settings.y_fields.is_empty() && fields.len() > 1 {
         plot_settings.add_field(fields[1].to_owned());
     }
 
     // check how many fields are left and how many are selected
-    let plot_lines_len = plot_settings.fields_len();
+    let plot_lines_len = plot_settings.y_fields.len();
     egui::Grid::new(ui.auto_id_with("y_axis"))
         .num_columns(3)
         .spacing([10.0, 2.5])
         .show(ui, |ui| {
-            for (i, (field, line_settings)) in
-                plot_settings.get_mut_y_fields().iter_mut().enumerate()
-            {
+            for (i, (field, line_settings)) in plot_settings.y_fields[..].iter_mut().enumerate() {
                 let LineSettings { width, color } = line_settings;
                 let widget_label = if plot_lines_len > 1 {
                     format!("Y Axis {}", i + 1)
@@ -104,9 +119,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
             .on_hover_text("Add another Y axis")
             .clicked()
     {
+        // get the first field that is not in the plot_lines
         let next_field = fields
             .iter()
-            .find(|f| !plot_settings.contains_field(f))
+            .find(|field| !plot_settings.y_fields.iter().any(|(f, _)| f == *field))
             .log_unwrap();
         plot_settings.add_field(next_field.to_owned());
     }

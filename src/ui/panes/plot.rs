@@ -19,6 +19,7 @@ use source_window::sources_window;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     iter::zip,
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -26,7 +27,7 @@ pub struct Plot2DPane {
     settings: PlotSettings,
     // UI settings
     #[serde(skip)]
-    line_data: Vec<Vec<PlotPoint>>,
+    line_data: Vec<TimeAwarePlotPoints>,
     #[serde(skip)]
     state_valid: bool,
     #[serde(skip)]
@@ -149,7 +150,9 @@ impl PaneBehavior for Plot2DPane {
                 response.set_drag_started();
             }
 
-            for ((field, settings), points) in zip(self.settings.plot_lines(), &self.line_data) {
+            for ((field, settings), TimeAwarePlotPoints { points, .. }) in
+                zip(&self.settings.y_fields, &self.line_data)
+            {
                 plot_ui.line(
                     Line::new(&points[..])
                         .color(settings.color)
@@ -188,8 +191,16 @@ impl PaneBehavior for Plot2DPane {
         }
 
         let PlotSettings {
-            x_field, y_fields, ..
+            x_field,
+            y_fields,
+            points_lifespan,
+            ..
         } = &self.settings;
+
+        // purge old data
+        for line in &mut self.line_data {
+            line.purge_old(*points_lifespan);
+        }
 
         for msg in messages {
             let x: f64 = x_field.extract_as_f64(&msg.message).log_unwrap();
@@ -199,11 +210,11 @@ impl PaneBehavior for Plot2DPane {
                 .collect();
 
             if self.line_data.len() < ys.len() {
-                self.line_data.resize(ys.len(), Vec::new());
+                self.line_data.resize(ys.len(), TimeAwarePlotPoints::new());
             }
 
-            for (line, y) in zip(&mut self.line_data, ys) {
-                line.push(PlotPoint::new(x, y));
+            for (points, y) in zip(&mut self.line_data, ys) {
+                points.push(msg.time, PlotPoint::new(x, y));
             }
         }
 
@@ -230,51 +241,21 @@ fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool, settings: &mut Plot
     ui.checkbox(&mut settings.axes_visible, "Show Axes");
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct PlotSettings {
-    plot_message_id: u32,
-    x_field: IndexedField,
-    y_fields: Vec<(IndexedField, LineSettings)>,
-    axes_visible: bool,
+    /// The message id to plot
+    pub(super) plot_message_id: u32,
+    /// The field to plot on the x-axis
+    pub(super) x_field: IndexedField,
+    /// The fields to plot, with their respective line settings
+    pub(super) y_fields: Vec<(IndexedField, LineSettings)>,
+    /// Whether to show the axes of the plot
+    pub(super) axes_visible: bool,
+    /// Points will be shown for this duration before being removed
+    pub(super) points_lifespan: Duration,
 }
 
 impl PlotSettings {
-    fn plot_lines(&self) -> &[(IndexedField, LineSettings)] {
-        &self.y_fields
-    }
-
-    fn fields_empty(&self) -> bool {
-        self.y_fields.is_empty()
-    }
-
-    fn get_msg_id(&self) -> u32 {
-        self.plot_message_id
-    }
-
-    fn get_x_field(&self) -> &IndexedField {
-        &self.x_field
-    }
-
-    fn get_mut_x_field(&mut self) -> &mut IndexedField {
-        &mut self.x_field
-    }
-
-    fn get_mut_y_fields(&mut self) -> &mut [(IndexedField, LineSettings)] {
-        &mut self.y_fields[..]
-    }
-
-    fn set_x_field(&mut self, field: IndexedField) {
-        self.x_field = field;
-    }
-
-    fn fields_len(&self) -> usize {
-        self.y_fields.len()
-    }
-
-    fn contains_field(&self, field: &IndexedField) -> bool {
-        self.y_fields.iter().any(|(f, _)| f == field)
-    }
-
     fn add_field(&mut self, field: IndexedField) {
         let line_settings = LineSettings::default();
         self.y_fields.push((field, line_settings));
@@ -310,6 +291,7 @@ impl Default for PlotSettings {
             x_field,
             y_fields,
             axes_visible: true,
+            points_lifespan: Duration::from_secs(600),
         }
     }
 }
@@ -336,69 +318,33 @@ impl Hash for LineSettings {
     }
 }
 
-mod plot_serde {
-    use serde::{Deserialize, Serialize};
+#[derive(Clone, Debug)]
+struct TimeAwarePlotPoints {
+    times: Vec<Instant>,
+    points: Vec<PlotPoint>,
+}
 
-    use super::*;
-
-    #[derive(Serialize, Deserialize)]
-    struct FieldSettings {
-        field: usize,
-        settings: LineSettings,
-    }
-
-    #[derive(Serialize, Deserialize)]
-    struct PlotSettingsData {
-        msg_id: u32,
-        x_field: usize,
-        y_fields: Vec<FieldSettings>,
-        axes_visible: bool,
-    }
-
-    impl Serialize for PlotSettings {
-        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let data = PlotSettingsData {
-                msg_id: self.plot_message_id,
-                x_field: self.x_field.id(),
-                y_fields: self
-                    .y_fields
-                    .iter()
-                    .map(|(field, settings)| FieldSettings {
-                        field: field.id(),
-                        settings: settings.clone(),
-                    })
-                    .collect(),
-                axes_visible: self.axes_visible,
-            };
-            data.serialize(serializer)
+impl TimeAwarePlotPoints {
+    fn new() -> Self {
+        Self {
+            times: Vec::new(),
+            points: Vec::new(),
         }
     }
 
-    impl<'de> Deserialize<'de> for PlotSettings {
-        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let data = PlotSettingsData::deserialize(deserializer)?;
-            let x_field = data
-                .x_field
-                .to_mav_field(data.msg_id, &MAVLINK_PROFILE)
-                .log_unwrap();
-            let y_fields = data
-                .y_fields
-                .into_iter()
-                .map(|FieldSettings { field, settings }| {
-                    (
-                        field
-                            .to_mav_field(data.msg_id, &MAVLINK_PROFILE)
-                            .log_unwrap(),
-                        settings,
-                    )
-                })
-                .collect();
-            Ok(Self {
-                plot_message_id: data.msg_id,
-                x_field,
-                y_fields,
-                axes_visible: data.axes_visible,
-            })
+    fn push(&mut self, time: Instant, point: PlotPoint) {
+        self.times.push(time);
+        self.points.push(point);
+    }
+
+    fn purge_old(&mut self, lifespan: Duration) {
+        while let Some(time) = self.times.first().copied() {
+            if time.elapsed() > lifespan {
+                self.times.remove(0);
+                self.points.remove(0);
+            } else {
+                break;
+            }
         }
     }
 }
