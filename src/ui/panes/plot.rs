@@ -11,7 +11,7 @@ use crate::{
     ui::app::PaneResponse,
     utils::units::UnitOfMeasure,
 };
-use egui::{Color32, Vec2b};
+use egui::{Color32, Vec2, Vec2b};
 use egui_plot::{AxisHints, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
 use egui_tiles::TileId;
 use serde::{self, Deserialize, Serialize};
@@ -135,6 +135,7 @@ impl PaneBehavior for Plot2DPane {
         let mut plot = egui_plot::Plot::new("plot")
             .x_grid_spacer(log_grid_spacer(4)) // 4 was an arbitrary choice
             .auto_bounds(Vec2b::TRUE)
+            .set_margin_fraction(Vec2::splat(0.))
             .legend(Legend::default())
             .label_formatter(cursor_formatter);
 
@@ -197,12 +198,11 @@ impl PaneBehavior for Plot2DPane {
             ..
         } = &self.settings;
 
-        // purge old data
-        for line in &mut self.line_data {
-            line.purge_old(*points_lifespan);
-        }
-
-        for msg in messages {
+        // iter on filtered messages based on lifespan set
+        for msg in messages
+            .iter()
+            .filter(|msg| points_lifespan > &msg.time.elapsed())
+        {
             let x: f64 = x_field.extract_as_f64(&msg.message).log_unwrap();
             let ys: Vec<f64> = y_fields
                 .iter()
@@ -216,6 +216,11 @@ impl PaneBehavior for Plot2DPane {
             for (points, y) in zip(&mut self.line_data, ys) {
                 points.push(msg.time, PlotPoint::new(x, y));
             }
+        }
+
+        // clear points older than lifespan set
+        for line in &mut self.line_data {
+            line.clear_older_than(*points_lifespan);
         }
 
         self.state_valid = true;
@@ -268,12 +273,16 @@ impl PlotSettings {
         self.y_fields.clear();
     }
 
+    /// Returns a digest of the data settings, used to check if the settings
+    /// have changed IMPORTANT: To trigger a redraw, hash the settings that need
+    /// to redraw the plot here
     fn data_digest(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.x_field.hash(&mut hasher);
         for (field, _) in &self.y_fields {
             field.hash(&mut hasher);
         }
+        self.points_lifespan.as_secs().hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -337,7 +346,7 @@ impl TimeAwarePlotPoints {
         self.points.push(point);
     }
 
-    fn purge_old(&mut self, lifespan: Duration) {
+    fn clear_older_than(&mut self, lifespan: Duration) {
         while let Some(time) = self.times.first().copied() {
             if time.elapsed() > lifespan {
                 self.times.remove(0);
