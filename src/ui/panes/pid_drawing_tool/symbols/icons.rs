@@ -1,16 +1,12 @@
 mod motor_valve;
 
-use egui::{ImageSource, Theme, Ui};
+use egui::{ImageSource, Theme};
 use glam::Vec2;
 use motor_valve::MotorValve;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
 
-use crate::{
-    mavlink::{MessageBroker, ViewId},
-    msg_broker,
-    ui::utils::glam_to_egui,
-};
+use crate::{mavlink::MavMessage, ui::utils::glam_to_egui};
 
 use super::SymbolBehavior;
 
@@ -167,6 +163,12 @@ impl SymbolBehavior for Icon {
             .paint_at(ui, image_rect);
     }
 
+    fn update(&mut self, message: &MavMessage) {
+        if let Icon::MotorValve(state) = self {
+            state.update(message)
+        }
+    }
+
     fn anchor_points(&self) -> Option<Vec<glam::Vec2>> {
         Some(
             match self {
@@ -207,32 +209,5 @@ impl SymbolBehavior for Icon {
             Icon::Vessel => (8.2, 15.2),
         }
         .into()
-    }
-}
-
-/// Single MavLink value source info
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
-#[serde(from = "SerialMavlinkValue")]
-struct MavlinkValue {
-    msg_id: u32,
-    field: String,
-
-    #[serde(skip)]
-    view_id: ViewId,
-}
-
-#[derive(Deserialize)]
-struct SerialMavlinkValue {
-    msg_id: u32,
-    field: String,
-}
-
-impl From<SerialMavlinkValue> for MavlinkValue {
-    fn from(value: SerialMavlinkValue) -> Self {
-        Self {
-            msg_id: value.msg_id,
-            field: value.field,
-            view_id: ViewId::new(),
-        }
     }
 }

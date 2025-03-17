@@ -1,12 +1,12 @@
-use egui::{epaint::PathStroke, Color32, Painter, Rect, Rounding, Stroke, Theme};
+use egui::{Color32, CornerRadius, Painter, Rect, Stroke, StrokeKind, Theme};
 use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
 
-use crate::ui::utils::glam_to_egui;
+use crate::{error::ErrInstrument, ui::utils::glam_to_egui};
 
 use super::{
-    grid::{GridInfo, CONNECTION_LINE_THICKNESS, CONNECTION_LINE_THRESHOLD, CONNECTION_POINT_SIZE},
     PidPane,
+    grid::{CONNECTION_LINE_THICKNESS, CONNECTION_LINE_THRESHOLD, CONNECTION_POINT_SIZE, GridInfo},
 };
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -111,11 +111,17 @@ impl Connection {
                 .iter()
                 .map(|p| pid.grid.grid_to_screen(*p))
                 .collect();
-            Connection::draw_segment(&pid.grid, painter, color, start, *points.first().unwrap());
+            Connection::draw_segment(
+                &pid.grid,
+                painter,
+                color,
+                start,
+                *points.first().log_unwrap(),
+            );
             for i in 0..(points.len() - 1) {
                 Connection::draw_segment(&pid.grid, painter, color, points[i], points[i + 1]);
             }
-            Connection::draw_segment(&pid.grid, painter, color, *points.last().unwrap(), end);
+            Connection::draw_segment(&pid.grid, painter, color, *points.last().log_unwrap(), end);
 
             if pid.editable {
                 for point in points {
@@ -124,9 +130,10 @@ impl Connection {
                             glam_to_egui(point).to_pos2(),
                             egui::Vec2::splat(CONNECTION_POINT_SIZE * pid.grid.size()),
                         ),
-                        Rounding::ZERO,
+                        CornerRadius::ZERO,
                         Color32::DARK_GRAY,
                         Stroke::NONE,
+                        StrokeKind::Middle,
                     );
                 }
             }
@@ -136,7 +143,7 @@ impl Connection {
     fn draw_segment(grid: &GridInfo, painter: &Painter, color: Color32, a: Vec2, b: Vec2) {
         painter.line_segment(
             [glam_to_egui(a).to_pos2(), glam_to_egui(b).to_pos2()],
-            PathStroke::new(CONNECTION_LINE_THICKNESS * grid.size(), color),
+            (CONNECTION_LINE_THICKNESS * grid.size(), color),
         );
     }
 }

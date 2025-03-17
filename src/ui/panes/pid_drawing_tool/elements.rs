@@ -1,14 +1,15 @@
-use std::f32::consts::PI;
+use std::f32::consts::FRAC_PI_2;
 
-use crate::{error::ErrInstrument, msg_broker, MSG_MANAGER};
-
-use super::{
-    grid::GridInfo,
-    symbols::{icons::Icon, Symbol, SymbolBehavior},
-};
 use egui::{Theme, Ui};
 use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
+
+use crate::mavlink::MavMessage;
+
+use super::{
+    grid::GridInfo,
+    symbols::{Symbol, SymbolBehavior},
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Element {
@@ -77,11 +78,11 @@ impl Element {
         match &mut self.symbol {
             Symbol::Icon(_) => {
                 if ui.button("Rotate 90° ⟲").clicked() {
-                    self.rotate(-PI / 2.0);
+                    self.rotate(-FRAC_PI_2);
                     ui.close_menu();
                 }
                 if ui.button("Rotate 90° ⟳").clicked() {
-                    self.rotate(PI / 2.0);
+                    self.rotate(FRAC_PI_2);
                     ui.close_menu();
                 }
             }
@@ -134,11 +135,9 @@ impl Element {
         let pos = grid.grid_to_screen(self.position);
         let size = grid.size();
         self.symbol.paint(ui, theme, pos, size, self.rotation);
+    }
 
-        if let Symbol::Icon(Icon::MotorValve(motor_valve)) = &mut self.symbol {
-            msg_broker!().refresh_view(motor_valve).log_expect("bruh");
-        } else if let Symbol::Label(label) = &mut self.symbol {
-            msg_broker!().refresh_view(label).log_expect("bruh");
-        }
+    pub fn update(&mut self, message: &MavMessage) {
+        self.symbol.update(message);
     }
 }

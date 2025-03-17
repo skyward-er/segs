@@ -1,7 +1,6 @@
 pub mod icons;
 mod labels;
 
-use crate::mavlink::ViewId;
 use egui::{Theme, Ui};
 use enum_dispatch::enum_dispatch;
 use glam::Vec2;
@@ -9,6 +8,8 @@ use icons::Icon;
 use labels::Label;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
+
+use crate::mavlink::MavMessage;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, Display, Debug)]
 #[enum_dispatch]
@@ -36,6 +37,8 @@ pub trait SymbolBehavior {
     /// Symbol size in grid coordinates
     fn size(&self) -> Vec2;
 
+    fn update(&mut self, message: &MavMessage);
+
     // /// Anchor point position relative to top right corner in grid units
     // pub fn anchor_points(&self) -> Vec<Vec2> {
     //     match self {
@@ -59,31 +62,4 @@ pub trait SymbolBehavior {
     // }
 
     fn context_menu(&mut self, ui: &mut Ui) {}
-}
-
-/// Single MavLink value source info
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
-#[serde(from = "SerialMavlinkValue")]
-struct MavlinkValue {
-    msg_id: u32,
-    field: String,
-
-    #[serde(skip)]
-    view_id: ViewId,
-}
-
-#[derive(Deserialize)]
-struct SerialMavlinkValue {
-    msg_id: u32,
-    field: String,
-}
-
-impl From<SerialMavlinkValue> for MavlinkValue {
-    fn from(value: SerialMavlinkValue) -> Self {
-        Self {
-            msg_id: value.msg_id,
-            field: value.field,
-            view_id: ViewId::new(),
-        }
-    }
 }

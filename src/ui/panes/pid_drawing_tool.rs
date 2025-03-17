@@ -12,9 +12,13 @@ use glam::Vec2;
 use grid::GridInfo;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use symbols::{icons::Icon, Symbol};
+use symbols::{Symbol, icons::Icon};
 
-use crate::ui::{composable_view::PaneResponse, utils::egui_to_glam};
+use crate::{
+    error::ErrInstrument,
+    mavlink::{GSE_TM_DATA, MessageData, TimedMessage},
+    ui::{app::PaneResponse, utils::egui_to_glam},
+};
 
 use super::PaneBehavior;
 
@@ -97,6 +101,18 @@ impl PaneBehavior for PidPane {
 
     fn contains_pointer(&self) -> bool {
         false
+    }
+
+    fn update(&mut self, messages: &[TimedMessage]) {
+        if let Some(msg) = messages.last() {
+            for element in &mut self.elements {
+                element.update(&msg.message);
+            }
+        }
+    }
+
+    fn get_message_subscription(&self) -> Option<u32> {
+        Some(GSE_TM_DATA::ID)
     }
 }
 
@@ -295,24 +311,24 @@ impl PidPane {
             .iter()
             .map(|p| p.x)
             .min_by(|a, b| a.total_cmp(b))
-            .unwrap();
+            .log_unwrap();
         let min_y = points
             .iter()
             .map(|p| p.y)
             .min_by(|a, b| a.total_cmp(b))
-            .unwrap();
+            .log_unwrap();
         let min = Vec2::new(min_x, min_y);
 
         let max_x = points
             .iter()
             .map(|p| p.x)
             .max_by(|a, b| a.total_cmp(b))
-            .unwrap();
+            .log_unwrap();
         let max_y = points
             .iter()
             .map(|p| p.y)
             .max_by(|a, b| a.total_cmp(b))
-            .unwrap();
+            .log_unwrap();
         let max = Vec2::new(max_x, max_y);
 
         self.grid.zero_pos = ui_center - min.midpoint(max) * self.grid.size();
@@ -326,7 +342,7 @@ impl PidPane {
             // Invalidate the cache to redraw the images
             for icon in Icon::iter() {
                 let img: egui::ImageSource = icon.get_image(theme);
-                ui.ctx().forget_image(img.uri().unwrap());
+                ui.ctx().forget_image(img.uri().log_unwrap());
             }
         }
     }
