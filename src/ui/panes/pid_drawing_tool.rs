@@ -188,7 +188,7 @@ impl PidPane {
             for y in (start_y..end_y).step_by(self.grid.size() as usize) {
                 let rect = egui::Rect::from_min_size(
                     egui::Pos2::new(x as f32, y as f32),
-                    egui::Vec2::new(1.0, 1.0),
+                    egui::Vec2::new(2.0, 2.0),
                 );
                 painter.rect_filled(rect, 0.0, dot_color);
             }
