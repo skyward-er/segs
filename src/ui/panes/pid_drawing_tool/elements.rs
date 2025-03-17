@@ -49,7 +49,6 @@ impl Element {
         // The bounding box is just the size
         let min_e = Vec2::ZERO;
         let max_e = self.symbol.size();
-        println!("size: {max_e:?}");
 
         // Check if the point is in the bounding box
         min_e.x <= p_e.x && p_e.x <= max_e.x && min_e.y <= p_e.y && p_e.y <= max_e.y

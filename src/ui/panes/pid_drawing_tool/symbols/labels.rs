@@ -71,7 +71,6 @@ impl SymbolBehavior for Label {
             StrokeKind::Middle,
         );
 
-        println!("Drawing label edit window {}", self.show_window);
         let mut show_window = self.show_window;
         egui::Window::new("Label")
             .id(ui.id())
