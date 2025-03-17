@@ -135,7 +135,7 @@ impl PidPane {
     fn dots_color(theme: Theme) -> Color32 {
         match theme {
             Theme::Dark => Color32::DARK_GRAY,
-            Theme::Light => Color32::BLACK,
+            Theme::Light => Color32::BLACK.gamma_multiply(0.2),
         }
     }
 
