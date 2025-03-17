@@ -19,11 +19,6 @@ const FONT_SIZE: f32 = 2.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Label {
-    text: String,
-    units: String,
-    #[serde(skip)]
-    show_window: bool,
-
     last_value: Option<f32>,
     mavlink_field: IndexedField,
     size: Vec2,
@@ -32,9 +27,6 @@ pub struct Label {
 impl Default for Label {
     fn default() -> Self {
         Self {
-            text: "0.00".to_string(),
-            units: "".to_string(),
-            show_window: false,
             mavlink_field: 6
                 .to_mav_field(GSE_TM_DATA::ID, &MAVLINK_PROFILE)
                 .log_unwrap(), // n2_vessel_1_pressure for GSE_TM_DATA
@@ -52,10 +44,15 @@ impl SymbolBehavior for Label {
             Theme::Dark => Color32::WHITE,
         };
 
+        let unit = self.mavlink_field.field().unit.as_deref().unwrap_or("");
+        let text = match self.last_value {
+            Some(value) => format!("{:.2} {}", value, unit),
+            None => "N/A".to_string(),
+        };
         let text_rect = painter.text(
             glam_to_egui(pos).to_pos2(),
             Align2::LEFT_TOP,
-            &self.text,
+            text,
             FontId::monospace(FONT_SIZE * size),
             color,
         );
@@ -70,25 +67,12 @@ impl SymbolBehavior for Label {
             Stroke::NONE,
             StrokeKind::Middle,
         );
-
-        let mut show_window = self.show_window;
-        egui::Window::new("Label")
-            .id(ui.id())
-            .auto_sized()
-            .collapsible(false)
-            .movable(true)
-            .open(&mut show_window)
-            .show(ui.ctx(), |ui| {
-                ui.text_edit_singleline(&mut self.units);
-            });
-        self.show_window = show_window;
     }
 
     fn update(&mut self, message: &MavMessage) {
         if message.message_id() == GSE_TM_DATA::ID {
             let value = self.mavlink_field.extract_as_f64(message).log_unwrap();
             self.last_value = Some(value as f32);
-            self.text = format!("{:.2}{}", value, self.units);
         }
     }
 
@@ -98,13 +82,5 @@ impl SymbolBehavior for Label {
 
     fn size(&self) -> Vec2 {
         self.size
-    }
-
-    fn context_menu(&mut self, ui: &mut Ui) {
-        println!("Label context menu");
-        if ui.button("Edit").clicked() {
-            self.show_window = true;
-            ui.close_menu();
-        }
     }
 }
