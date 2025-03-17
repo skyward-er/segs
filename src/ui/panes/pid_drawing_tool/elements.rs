@@ -65,14 +65,6 @@ impl Element {
         self.position = p_g - center_g;
     }
 
-    pub fn change_symbol(&mut self, symbol: Symbol) {
-        self.symbol = symbol;
-    }
-
-    pub fn get_symbol(&self) -> Symbol {
-        self.symbol.clone()
-    }
-
     pub fn context_menu(&mut self, ui: &mut Ui) {
         match &mut self.symbol {
             Symbol::Icon(_) => {

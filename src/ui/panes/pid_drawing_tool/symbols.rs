@@ -39,27 +39,6 @@ pub trait SymbolBehavior {
 
     fn update(&mut self, message: &MavMessage);
 
-    // /// Anchor point position relative to top right corner in grid units
-    // pub fn anchor_points(&self) -> Vec<Vec2> {
-    //     match self {
-    //         Symbol::Arrow => vec![(0.0, 2.0), (4.0, 2.0)],
-    //         Symbol::BurstDisk => vec![(0.0, 3.0), (4.0, 3.0)],
-    //         Symbol::CheckValve => vec![(0.0, 2.5), (10.0, 2.5)],
-    //         Symbol::FlexibleConnection => vec![(0.0, 3.0), (10.0, 3.0)],
-    //         Symbol::ManualValve => vec![(0.0, 2.5), (10.0, 2.5)],
-    //         Symbol::MotorValve(_) => vec![(0.0, 5.0), (10.0, 5.0)],
-    //         Symbol::PressureGauge => vec![(3.5, 7.0)],
-    //         Symbol::PressureRegulator => vec![(0.0, 7.0), (10.0, 7.0)],
-    //         Symbol::PressureTransducer => vec![(3.5, 7.0)],
-    //         Symbol::QuickConnector => vec![(0.0, 2.5), (6.0, 2.5)],
-    //         Symbol::ReliefValve => vec![(3.0, 10.0)],
-    //         Symbol::ThreeWayValve => vec![(0.0, 3.0), (10.0, 3.0), (5.0, 8.0)],
-    //         Symbol::Vessel => vec![(0.0, 7.6), (8.2, 7.6), (4.1, 0.0), (4.1, 15.1)],
-    //     }
-    //     .iter()
-    //     .map(|&p| p.into())
-    //     .collect()
-    // }
-
+    #[allow(unused_variables)]
     fn context_menu(&mut self, ui: &mut Ui) {}
 }
