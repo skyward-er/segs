@@ -203,9 +203,11 @@ impl PidPane {
         }
     }
 
-    fn draw_elements(&mut self, ui: &Ui, theme: Theme) {
+    fn draw_elements(&mut self, ui: &mut Ui, theme: Theme) {
         for element in &mut self.elements {
-            element.draw(&self.grid, ui, theme);
+            ui.scope(|ui| {
+                element.draw(&self.grid, ui, theme);
+            });
         }
     }
 
