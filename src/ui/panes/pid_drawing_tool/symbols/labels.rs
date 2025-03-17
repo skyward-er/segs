@@ -19,9 +19,11 @@ const FONT_SIZE: f32 = 2.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Label {
-    last_value: Option<f32>,
     mavlink_field: IndexedField,
     size: Vec2,
+
+    #[serde(skip)]
+    last_value: Option<f32>,
 }
 
 impl Default for Label {

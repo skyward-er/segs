@@ -14,6 +14,7 @@ pub struct MotorValve {
     mavlink_field: IndexedField,
 
     /// false = closed, true = open
+    #[serde(skip)]
     pub last_value: Option<bool>,
 }
 
