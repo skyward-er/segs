@@ -261,6 +261,9 @@ impl App {
         // Load the image loaders
         egui_extras::install_image_loaders(&ctx.egui_ctx);
 
+        // Install the fonts
+        super::font::add_font(&ctx.egui_ctx);
+
         let mut layout_manager = if let Some(storage) = ctx.storage {
             LayoutManager::new(app_name, storage)
         } else {
