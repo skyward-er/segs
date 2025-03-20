@@ -1,5 +1,6 @@
 mod default;
 mod messages_viewer;
+mod pid_drawing_tool;
 pub mod plot;
 
 use egui_tiles::TileId;
@@ -11,7 +12,7 @@ use crate::mavlink::{MavMessage, TimedMessage};
 
 use super::app::PaneResponse;
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct Pane {
     pub pane: PaneKind,
 }
@@ -87,6 +88,9 @@ pub enum PaneKind {
 
     #[strum(message = "Plot 2D")]
     Plot2D(plot::Plot2DPane),
+
+    #[strum(message = "Pid")]
+    PidOld(pid_drawing_tool::PidPane),
 }
 
 impl Default for PaneKind {

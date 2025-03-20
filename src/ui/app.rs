@@ -258,6 +258,12 @@ impl eframe::App for App {
 
 impl App {
     pub fn new(app_name: &str, ctx: &CreationContext) -> Self {
+        // Load the image loaders
+        egui_extras::install_image_loaders(&ctx.egui_ctx);
+
+        // Install the fonts
+        super::font::add_font(&ctx.egui_ctx);
+
         let mut layout_manager = if let Some(storage) = ctx.storage {
             LayoutManager::new(app_name, storage)
         } else {
@@ -422,7 +428,7 @@ impl Behavior<Pane> for AppBehavior {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PaneResponse {
     pub action_called: Option<PaneAction>,
     pub drag_response: egui_tiles::UiResponse,
