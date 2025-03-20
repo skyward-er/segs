@@ -246,7 +246,7 @@ impl PidPane {
     }
 
     fn draw_context_menu(&mut self, ui: &mut Ui, pointer_pos: Vec2) {
-        ui.set_max_width(170.0); // To make sure we wrap long text
+        ui.set_max_width(180.0); // To make sure we wrap long text
 
         if !self.editable {
             if ui.button("Enable editing").clicked() {

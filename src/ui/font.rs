@@ -1,8 +1,8 @@
 use egui::epaint::text::{FontInsert, InsertFontFamily};
 
-pub const ROBOTO: &[u8] = include_bytes!(concat!(
+pub const NOTO: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/fonts/Roboto-VariableFont_wdth,wght.ttf"
+    "/fonts/NotoSans-VariableFont_wdth,wght.ttf"
 ));
 
 pub const JETBRAINS: &[u8] = include_bytes!(concat!(
@@ -13,7 +13,7 @@ pub const JETBRAINS: &[u8] = include_bytes!(concat!(
 pub fn add_font(ctx: &egui::Context) {
     ctx.add_font(FontInsert::new(
         "noto_sans",
-        egui::FontData::from_static(ROBOTO),
+        egui::FontData::from_static(NOTO),
         vec![InsertFontFamily {
             family: egui::FontFamily::Proportional,
             priority: egui::epaint::text::FontPriority::Highest,
