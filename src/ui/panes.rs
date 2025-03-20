@@ -1,7 +1,8 @@
 mod default;
 mod messages_viewer;
 mod pid_drawing_tool;
-pub mod plot;
+mod plot;
+mod valve_control;
 
 use egui_tiles::TileId;
 use enum_dispatch::enum_dispatch;
@@ -91,6 +92,9 @@ pub enum PaneKind {
 
     #[strum(message = "Pid")]
     Pid(pid_drawing_tool::PidPane),
+
+    #[strum(message = "Valve Control")]
+    ValveControl(valve_control::ValveControlPane),
 }
 
 impl Default for PaneKind {
