@@ -33,7 +33,7 @@ pub struct Plot2DPane {
     #[serde(skip)]
     settings_visible: bool,
     #[serde(skip)]
-    pub contains_pointer: bool,
+    contains_pointer: bool,
 }
 
 impl PartialEq for Plot2DPane {
