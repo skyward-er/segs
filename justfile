@@ -9,7 +9,7 @@ test *ARGS:
     cargo nextest run {{ARGS}}
 
 run LEVEL="debug":
-    RUST_LOG=segs={{LEVEL}} cargo r
+    RUST_BACKTRACE=full RUST_LOG=segs={{LEVEL}} cargo r
 
 doc:
     cargo doc --no-deps --open

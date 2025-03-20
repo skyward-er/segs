@@ -158,7 +158,7 @@ impl ChangeTracker {
     /// ```
     /// let initial_tracker = ChangeTracker::record_initial_state(&state);
     /// ```
-    pub fn record_initial_state<T: Hash>(state: &T) -> Self {
+    pub fn record_initial_state<T: Hash>(state: T) -> Self {
         let mut hasher = DefaultHasher::new();
         state.hash(&mut hasher);
         let integrity_digest = hasher.finish();
@@ -187,7 +187,7 @@ impl ChangeTracker {
     ///     println!("The state has changed.");
     /// }
     /// ```
-    pub fn has_changed<T: Hash>(&self, state: &T) -> bool {
+    pub fn has_changed<T: Hash>(&self, state: T) -> bool {
         let mut hasher = DefaultHasher::new();
         state.hash(&mut hasher);
         self.integrity_digest != hasher.finish()

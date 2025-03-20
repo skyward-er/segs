@@ -35,8 +35,8 @@ impl Element {
     pub fn new(center: Vec2, symbol: Symbol) -> Self {
         Self {
             position: center - symbol.size() / 2.0,
-            rotation: 0.0,
             symbol,
+            rotation: 0.0,
         }
     }
 
@@ -66,21 +66,17 @@ impl Element {
     }
 
     pub fn context_menu(&mut self, ui: &mut Ui) {
-        match &mut self.symbol {
-            Symbol::Icon(_) => {
-                if ui.button("Rotate 90° ⟲").clicked() {
-                    self.rotate(-FRAC_PI_2);
-                    ui.close_menu();
-                }
-                if ui.button("Rotate 90° ⟳").clicked() {
-                    self.rotate(FRAC_PI_2);
-                    ui.close_menu();
-                }
+        if let Symbol::Icon(_) = &mut self.symbol {
+            if ui.button("Rotate 90° ⟲").clicked() {
+                self.rotate(-FRAC_PI_2);
+                ui.close_menu();
             }
-            Symbol::Label(label) => {
-                label.context_menu(ui);
+            if ui.button("Rotate 90° ⟳").clicked() {
+                self.rotate(FRAC_PI_2);
+                ui.close_menu();
             }
         }
+        self.symbol.context_menu(ui);
     }
 
     /// Rotate the element by its center
@@ -122,13 +118,18 @@ impl Element {
         self.position + Mat2::from_angle(self.rotation) * self.size() * 0.5
     }
 
-    pub fn draw(&mut self, grid: &GridInfo, ui: &Ui, theme: Theme) {
+    pub fn ui(&mut self, ui: &mut Ui, grid: &GridInfo, theme: Theme, msg: u32) {
         let pos = grid.grid_to_screen(self.position);
         let size = grid.size();
         self.symbol.paint(ui, theme, pos, size, self.rotation);
+        self.symbol.subscriptions_ui(ui, msg);
     }
 
-    pub fn update(&mut self, message: &MavMessage) {
-        self.symbol.update(message);
+    pub fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32) {
+        self.symbol.update(message, subscribed_msg_id);
+    }
+
+    pub fn reset_subscriptions(&mut self) {
+        self.symbol.reset_subscriptions();
     }
 }

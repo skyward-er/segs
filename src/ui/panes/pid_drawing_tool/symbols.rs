@@ -26,7 +26,18 @@ impl Default for Symbol {
 
 #[enum_dispatch(Symbol)]
 pub trait SymbolBehavior {
-    fn paint(&mut self, ui: &Ui, theme: Theme, pos: Vec2, size: f32, rotation: f32);
+    /// Resets the subscriptions settings.
+    /// IMPORTANT: This method should be called every time the msg_id changes.
+    fn reset_subscriptions(&mut self);
+
+    /// Updates the symbol based on the received message.
+    fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32);
+
+    /// Renders the symbol on the UI.
+    fn paint(&mut self, ui: &mut Ui, theme: Theme, pos: Vec2, size: f32, rotation: f32);
+
+    /// Renders further elements related to the subscriptions settings
+    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_id: u32);
 
     /// Anchor point in grid coordinates relative to the element's center
     ///
@@ -36,8 +47,6 @@ pub trait SymbolBehavior {
 
     /// Symbol size in grid coordinates
     fn size(&self) -> Vec2;
-
-    fn update(&mut self, message: &MavMessage);
 
     #[allow(unused_variables)]
     fn context_menu(&mut self, ui: &mut Ui) {}

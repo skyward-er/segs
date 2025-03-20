@@ -15,9 +15,10 @@ use strum::IntoEnumIterator;
 use symbols::{Symbol, icons::Icon};
 
 use crate::{
+    MAVLINK_PROFILE,
     error::ErrInstrument,
-    mavlink::{GSE_TM_DATA, MessageData, TimedMessage},
-    ui::{app::PaneResponse, utils::egui_to_glam},
+    mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
+    ui::{app::PaneResponse, cache::ChangeTracker, utils::egui_to_glam},
 };
 
 use super::PaneBehavior;
@@ -32,20 +33,39 @@ enum Action {
 }
 
 /// Piping and instrumentation diagram
-#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PidPane {
+    // Persistent internal state
     elements: Vec<Element>,
     connections: Vec<Connection>,
-
     grid: GridInfo,
+    message_subscription_id: u32,
 
+    // UI settings
+    center_content: bool,
+
+    // Temporary internal state
     #[serde(skip)]
     action: Option<Action>,
-
     #[serde(skip)]
     editable: bool,
+    #[serde(skip)]
+    is_subs_window_visible: bool,
+}
 
-    center_content: bool,
+impl Default for PidPane {
+    fn default() -> Self {
+        Self {
+            elements: Vec::new(),
+            connections: Vec::new(),
+            grid: GridInfo::default(),
+            message_subscription_id: GSE_TM_DATA::ID,
+            center_content: false,
+            action: None,
+            editable: false,
+            is_subs_window_visible: false,
+        }
+    }
 }
 
 impl PartialEq for PidPane {
@@ -69,7 +89,7 @@ impl PaneBehavior for PidPane {
             self.draw_grid(ui, theme);
         }
         self.draw_connections(ui, theme);
-        self.draw_elements(ui, theme);
+        self.elements_ui(ui, theme);
 
         // Handle things that require knowing the position of the pointer
         let (_, response) = ui.allocate_at_least(ui.max_rect().size(), Sense::click_and_drag());
@@ -96,6 +116,20 @@ impl PaneBehavior for PidPane {
             response.context_menu(|ui| self.draw_context_menu(ui, pointer_pos));
         }
 
+        let change_tracker = ChangeTracker::record_initial_state(self.message_subscription_id);
+        egui::Window::new("Subscription")
+            .id(ui.auto_id_with("sub_settings"))
+            .auto_sized()
+            .collapsible(true)
+            .movable(true)
+            .open(&mut self.is_subs_window_visible)
+            .show(ui.ctx(), |ui| {
+                subscription_window(ui, &mut self.message_subscription_id)
+            });
+        if change_tracker.has_changed(self.message_subscription_id) {
+            self.reset_subscriptions();
+        }
+
         PaneResponse::default()
     }
 
@@ -106,13 +140,13 @@ impl PaneBehavior for PidPane {
     fn update(&mut self, messages: &[TimedMessage]) {
         if let Some(msg) = messages.last() {
             for element in &mut self.elements {
-                element.update(&msg.message);
+                element.update(&msg.message, self.message_subscription_id);
             }
         }
     }
 
     fn get_message_subscription(&self) -> Option<u32> {
-        Some(GSE_TM_DATA::ID)
+        Some(self.message_subscription_id)
     }
 }
 
@@ -203,16 +237,16 @@ impl PidPane {
         }
     }
 
-    fn draw_elements(&mut self, ui: &mut Ui, theme: Theme) {
+    fn elements_ui(&mut self, ui: &mut Ui, theme: Theme) {
         for element in &mut self.elements {
             ui.scope(|ui| {
-                element.draw(&self.grid, ui, theme);
+                element.ui(ui, &self.grid, theme, self.message_subscription_id);
             });
         }
     }
 
     fn draw_context_menu(&mut self, ui: &mut Ui, pointer_pos: Vec2) {
-        ui.set_max_width(120.0); // To make sure we wrap long text
+        ui.set_max_width(170.0); // To make sure we wrap long text
 
         if !self.editable {
             if ui.button("Enable editing").clicked() {
@@ -229,12 +263,12 @@ impl PidPane {
                 self.action = Some(Action::Connect(elem_idx));
                 ui.close_menu();
             }
-            self.elements[elem_idx].context_menu(ui);
             if ui.button("Delete").clicked() {
                 self.delete_element(elem_idx);
                 self.action.take();
                 ui.close_menu();
             }
+            self.elements[elem_idx].context_menu(ui);
         } else if let Some((conn_idx, segm_idx)) = self.hovers_connection(pointer_pos) {
             if ui.button("Split").clicked() {
                 self.connections[conn_idx].split(segm_idx, self.grid.screen_to_grid(pointer_pos));
@@ -281,6 +315,11 @@ impl PidPane {
                     }
                 }
             });
+        }
+
+        if ui.button("Pane subscription settings…").clicked() {
+            self.is_subs_window_visible = true;
+            ui.close_menu();
         }
 
         if ui.button("Disable editing").clicked() {
@@ -400,4 +439,21 @@ impl PidPane {
             None => {}
         }
     }
+
+    fn reset_subscriptions(&mut self) {
+        for element in &mut self.elements {
+            element.reset_subscriptions();
+        }
+    }
+}
+
+fn subscription_window(ui: &mut Ui, msg_id: &mut u32) {
+    let current_msg = msg_id.to_mav_message(&MAVLINK_PROFILE).log_unwrap();
+    egui::ComboBox::from_label("Message subscription")
+        .selected_text(current_msg.name.as_str())
+        .show_ui(ui, |ui| {
+            for msg in MAVLINK_PROFILE.get_sorted_msgs() {
+                ui.selectable_value(msg_id, msg.id, &msg.name);
+            }
+        });
 }

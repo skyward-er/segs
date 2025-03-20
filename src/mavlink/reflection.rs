@@ -98,6 +98,21 @@ impl ReflectionContext {
             .map(|f| f.to_mav_field(msg.id, self).ok())
             .collect()
     }
+
+    pub fn get_all_state_fields(
+        &'static self,
+        message_id: impl MessageLike,
+    ) -> Option<Vec<IndexedField>> {
+        let msg = message_id.to_mav_message(self).ok()?;
+        msg.fields
+            .iter()
+            .filter(|f| {
+                f.name.to_lowercase().ends_with("state")
+                    || f.name.to_lowercase().ends_with("status")
+            })
+            .map(|f| f.to_mav_field(msg.id, self).ok())
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone)]

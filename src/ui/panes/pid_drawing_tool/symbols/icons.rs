@@ -1,6 +1,6 @@
 mod motor_valve;
 
-use egui::{ImageSource, Theme};
+use egui::{ImageSource, Theme, Ui};
 use glam::Vec2;
 use motor_valve::MotorValve;
 use serde::{Deserialize, Serialize};
@@ -148,14 +148,19 @@ impl Icon {
 }
 
 impl SymbolBehavior for Icon {
-    fn paint(
-        &mut self,
-        ui: &egui::Ui,
-        theme: egui::Theme,
-        pos: glam::Vec2,
-        size: f32,
-        rotation: f32,
-    ) {
+    fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32) {
+        if let Icon::MotorValve(state) = self {
+            state.update(message, subscribed_msg_id)
+        }
+    }
+
+    fn reset_subscriptions(&mut self) {
+        if let Icon::MotorValve(state) = self {
+            state.reset_subscriptions()
+        }
+    }
+
+    fn paint(&mut self, ui: &mut Ui, theme: Theme, pos: glam::Vec2, size: f32, rotation: f32) {
         let center = glam_to_egui(pos).to_pos2();
         let image_rect = egui::Rect::from_min_size(center, glam_to_egui(self.size() * size));
         egui::Image::new(self.get_image(theme))
@@ -163,9 +168,18 @@ impl SymbolBehavior for Icon {
             .paint_at(ui, image_rect);
     }
 
-    fn update(&mut self, message: &MavMessage) {
+    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_id: u32) {
         if let Icon::MotorValve(state) = self {
-            state.update(message)
+            state.subscriptions_ui(ui, mavlink_id)
+        }
+    }
+
+    fn context_menu(&mut self, ui: &mut Ui) {
+        if let Icon::MotorValve(state) = self {
+            if ui.button("Icon subscription settings…").clicked() {
+                state.is_subs_window_visible = true;
+                ui.close_menu();
+            }
         }
     }
 
