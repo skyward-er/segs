@@ -90,7 +90,7 @@ pub enum PaneKind {
     Plot2D(plot::Plot2DPane),
 
     #[strum(message = "Pid")]
-    PidOld(pid_drawing_tool::PidPane),
+    Pid(pid_drawing_tool::PidPane),
 }
 
 impl Default for PaneKind {
