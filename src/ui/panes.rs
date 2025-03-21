@@ -34,11 +34,11 @@ pub trait PaneBehavior {
 
     /// Updates the pane state. This method is called before `ui` to allow the
     /// pane to update its state based on the messages received.
-    fn update(&mut self, _messages: &[TimedMessage]) {}
+    fn update(&mut self, _messages: &[&TimedMessage]) {}
 
     /// Returns the ID of the messages this pane is interested in, if any.
-    fn get_message_subscription(&self) -> Option<u32> {
-        None
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(None.into_iter())
     }
 
     /// Checks whether the full message history should be sent to the pane.
@@ -61,12 +61,12 @@ impl PaneBehavior for Pane {
         self.pane.contains_pointer()
     }
 
-    fn update(&mut self, messages: &[TimedMessage]) {
+    fn update(&mut self, messages: &[&TimedMessage]) {
         self.pane.update(messages)
     }
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        self.pane.get_message_subscription()
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        self.pane.get_message_subscriptions()
     }
 
     fn should_send_message_history(&self) -> bool {

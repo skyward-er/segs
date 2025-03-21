@@ -34,4 +34,8 @@ impl TimedMessage {
             time: Instant::now(),
         }
     }
+
+    pub fn id(&self) -> u32 {
+        self.message.message_id()
+    }
 }
