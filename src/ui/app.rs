@@ -66,18 +66,18 @@ impl eframe::App for App {
                 ((Modifiers::NONE, Key::V), PaneAction::SplitV),
                 ((Modifiers::NONE, Key::H), PaneAction::SplitH),
                 ((Modifiers::NONE, Key::C), PaneAction::Close),
-                (
-                    (Modifiers::NONE, Key::R),
-                    PaneAction::ReplaceThroughGallery(Some(hovered_tile)),
-                ),
+                ((Modifiers::NONE, Key::R), PaneAction::ReplaceThroughGallery),
                 ((Modifiers::SHIFT, Key::Escape), PaneAction::Maximize),
                 ((Modifiers::NONE, Key::Escape), PaneAction::Exit),
             ];
-            pane_action = pane_action.or(shortcuts::map_to_action(ctx, &key_action_pairs[..]));
+            pane_action =
+                pane_action
+                    .or(shortcuts::map_to_action(ctx, &key_action_pairs[..])
+                        .map(|a| (hovered_tile, a)));
         }
 
         // If an action was triggered, we consume it
-        if let Some(action) = pane_action.take() {
+        if let Some((tile_id, action)) = pane_action.take() {
             match action {
                 PaneAction::SplitH => {
                     if let Some(hovered_tile) = hovered_pane {
@@ -132,15 +132,15 @@ impl eframe::App for App {
                         }
                     }
                 }
-                PaneAction::Replace(tile_id, new_pane) => {
+                PaneAction::Replace(new_pane) => {
                     debug!(
                         "Called Replace on tile {:?} with pane {:?}",
                         tile_id, new_pane
                     );
                     panes_tree.tiles.insert(tile_id, Tile::Pane(*new_pane));
                 }
-                PaneAction::ReplaceThroughGallery(Some(source_tile)) => {
-                    self.widget_gallery.replace_tile(source_tile);
+                PaneAction::ReplaceThroughGallery => {
+                    self.widget_gallery.replace_tile(tile_id);
                 }
                 PaneAction::Maximize => {
                     // This is a toggle: if there is not currently a maximized pane,
@@ -170,7 +170,6 @@ impl eframe::App for App {
                         self.maximized_pane = None;
                     }
                 }
-                _ => panic!("Unable to handle action"),
             }
         }
 
@@ -225,7 +224,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(maximized_pane) = self.maximized_pane {
                 if let Some(Tile::Pane(pane)) = panes_tree.tiles.get_mut(maximized_pane) {
-                    maximized_pane_ui(ui, maximized_pane, pane);
+                    maximized_pane_ui(ui, pane);
                 } else {
                     panic!("Maximized pane not found in tree!");
                 }
@@ -400,7 +399,7 @@ impl AppState {
 /// Behavior for the tree of panes in the app
 #[derive(Default)]
 pub struct AppBehavior {
-    pub action: Option<PaneAction>,
+    pub action: Option<(TileId, PaneAction)>,
 }
 
 impl Behavior<Pane> for AppBehavior {
@@ -413,10 +412,10 @@ impl Behavior<Pane> for AppBehavior {
         let PaneResponse {
             action_called,
             drag_response,
-        } = pane.ui(ui, tile_id);
+        } = pane.ui(ui);
         // Capture the action and store it to be consumed in the update function
         if let Some(action_called) = action_called {
-            self.action = Some(action_called);
+            self.action = Some((tile_id, action_called));
         }
         drag_response
     }
@@ -456,8 +455,8 @@ pub enum PaneAction {
     SplitH,
     SplitV,
     Close,
-    Replace(TileId, Box<Pane>),
-    ReplaceThroughGallery(Option<TileId>),
+    Replace(Box<Pane>),
+    ReplaceThroughGallery,
     Maximize,
     Exit,
 }
