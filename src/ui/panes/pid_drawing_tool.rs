@@ -52,8 +52,6 @@ pub struct PidPane {
     editable: bool,
     #[serde(skip)]
     is_subs_window_visible: bool,
-    #[serde(skip)]
-    contains_pointer: bool,
 }
 
 impl Default for PidPane {
@@ -67,7 +65,6 @@ impl Default for PidPane {
             action: None,
             editable: false,
             is_subs_window_visible: false,
-            contains_pointer: false,
         }
     }
 }
@@ -137,17 +134,12 @@ impl PaneBehavior for PidPane {
         }
 
         // Check if the user is draqging the pane
-        self.contains_pointer = response.contains_pointer();
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
         if response.dragged() && (ctrl_pressed || !self.editable) {
             pane_response.set_drag_started();
         }
 
         pane_response
-    }
-
-    fn contains_pointer(&self) -> bool {
-        self.contains_pointer
     }
 
     fn update(&mut self, messages: &[&TimedMessage]) {
