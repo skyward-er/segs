@@ -145,9 +145,11 @@ impl PaneBehavior for ValveControlPane {
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
-            let valve_chunks = Valve::iter().enumerate().chunks(3);
+            ui.set_min_width(200.0);
+            let n = (ui.max_rect().width() / 200.0) as usize;
+            let valve_chunks = Valve::iter().enumerate().chunks(n);
             Grid::new("valves_grid")
-                .num_columns(3)
+                .num_columns(n)
                 .spacing(Vec2::splat(5.))
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
