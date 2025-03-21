@@ -151,7 +151,7 @@ impl PaneBehavior for PidPane {
         self.contains_pointer
     }
 
-    fn update(&mut self, messages: &[TimedMessage]) {
+    fn update(&mut self, messages: &[&TimedMessage]) {
         if let Some(msg) = messages.last() {
             for element in &mut self.elements {
                 element.update(&msg.message, self.message_subscription_id);
@@ -159,8 +159,8 @@ impl PaneBehavior for PidPane {
         }
     }
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        Some(self.message_subscription_id)
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(Some(self.message_subscription_id).into_iter())
     }
 }
 
