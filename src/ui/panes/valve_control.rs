@@ -1,4 +1,3 @@
-use egui_tiles::TileId;
 use serde::{Deserialize, Serialize};
 
 use crate::ui::app::PaneResponse;
@@ -15,7 +14,7 @@ pub struct ValveControlPane {
 }
 
 impl PaneBehavior for ValveControlPane {
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         todo!()
     }
 

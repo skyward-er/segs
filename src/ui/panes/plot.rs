@@ -11,9 +11,8 @@ use crate::{
     ui::app::PaneResponse,
     utils::units::UnitOfMeasure,
 };
-use egui::{Color32, Vec2, Vec2b};
+use egui::{Color32, Ui, Vec2, Vec2b};
 use egui_plot::{AxisHints, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
-use egui_tiles::TileId;
 use serde::{self, Deserialize, Serialize};
 use source_window::sources_window;
 use std::{
@@ -44,7 +43,7 @@ impl PartialEq for Plot2DPane {
 
 impl PaneBehavior for Plot2DPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
         let data_settings_digest = self.settings.data_digest();
 
@@ -235,7 +234,7 @@ impl PaneBehavior for Plot2DPane {
     }
 }
 
-fn show_menu(ui: &mut egui::Ui, settings_visible: &mut bool, settings: &mut PlotSettings) {
+fn show_menu(ui: &mut Ui, settings_visible: &mut bool, settings: &mut PlotSettings) {
     ui.set_max_width(200.0); // To make sure we wrap long text
 
     if ui.button("Source Data Settings…").clicked() {

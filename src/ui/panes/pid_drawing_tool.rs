@@ -8,7 +8,6 @@ use core::f32;
 use egui::{
     Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
 };
-use egui_tiles::TileId;
 use elements::Element;
 use glam::Vec2;
 use grid::GridInfo;
@@ -83,7 +82,7 @@ impl PartialEq for PidPane {
 }
 
 impl PaneBehavior for PidPane {
-    fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
 
         let theme = PidPane::find_theme(ui.ctx());
