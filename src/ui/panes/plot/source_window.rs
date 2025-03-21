@@ -14,6 +14,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
             egui::DragValue::new(&mut points_lifespan_sec)
                 .range(5..=1800)
                 .speed(1)
+                .update_while_editing(false)
                 .suffix(" seconds"),
         );
         res1.union(res2)
