@@ -19,7 +19,7 @@ impl WidgetGallery {
         self.open = true;
     }
 
-    pub fn show(&mut self, ctx: &Context) -> Option<PaneAction> {
+    pub fn show(&mut self, ctx: &Context) -> Option<(TileId, PaneAction)> {
         let mut window_visible = self.open;
         let resp = egui::Window::new("Widget Gallery")
             .collapsible(false)
@@ -31,7 +31,7 @@ impl WidgetGallery {
                     } else if let Some(message) = pane.get_message() {
                         if ui.button(message).clicked() {
                             if let Some(tile_id) = self.tile_id {
-                                return Some(PaneAction::Replace(tile_id, Pane::boxed(pane)));
+                                return Some((tile_id, PaneAction::Replace(Pane::boxed(pane))));
                             }
                         }
                     }

@@ -1,4 +1,5 @@
 use super::PaneBehavior;
+use egui::Ui;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -26,7 +27,7 @@ impl PartialEq for DefaultPane {
 
 impl PaneBehavior for DefaultPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: egui_tiles::TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let parent = vertically_centered(ui, &mut self.centering_memo, |ui| {
@@ -40,7 +41,7 @@ impl PaneBehavior for DefaultPane {
                     debug!("Horizontal Split button clicked");
                 }
                 if ui.button("Widget Gallery").clicked() {
-                    response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
+                    response.set_action(PaneAction::ReplaceThroughGallery);
                 }
             })
             .response

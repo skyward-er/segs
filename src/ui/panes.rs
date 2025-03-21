@@ -4,7 +4,7 @@ mod pid_drawing_tool;
 mod plot;
 mod valve_control;
 
-use egui_tiles::TileId;
+use egui::Ui;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
@@ -27,7 +27,7 @@ impl Pane {
 #[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
     /// Renders the UI of the pane.
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse;
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse;
 
     /// Whether the pane contains the pointer.
     fn contains_pointer(&self) -> bool;
@@ -53,8 +53,8 @@ pub trait PaneBehavior {
 }
 
 impl PaneBehavior for Pane {
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse {
-        self.pane.ui(ui, tile_id)
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
+        self.pane.ui(ui)
     }
 
     fn contains_pointer(&self) -> bool {
