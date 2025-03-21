@@ -5,8 +5,8 @@ mod valves;
 use std::time::{Duration, Instant};
 
 use egui::{
-    Color32, DragValue, Frame, Grid, Label, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder,
-    Vec2, Widget, vec2,
+    Color32, DragValue, FontId, Frame, Grid, Label, Layout, Rect, Response, RichText, Sense,
+    Stroke, Ui, UiBuilder, Vec2, Widget, vec2,
 };
 use egui_extras::{Size, StripBuilder};
 use itertools::Itertools;
@@ -145,14 +145,14 @@ impl PaneBehavior for ValveControlPane {
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
-            let valve_chunks = Valve::iter().chunks(3);
+            let valve_chunks = Valve::iter().enumerate().chunks(3);
             Grid::new("valves_grid")
                 .num_columns(3)
                 .spacing(Vec2::splat(5.))
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
-                        for valve in chunk {
-                            ui.scope(self.valve_frame_ui(valve));
+                        for (i, valve) in chunk {
+                            ui.scope(self.valve_frame_ui(valve, i as u8));
                         }
                         ui.end_row();
                     }
@@ -198,7 +198,7 @@ impl ValveControlPane {
         }
     }
 
-    fn valve_frame_ui(&self, valve: Valve) -> impl FnOnce(&mut Ui) {
+    fn valve_frame_ui(&self, valve: Valve, number: u8) -> impl FnOnce(&mut Ui) {
         move |ui| {
             let valve_str = valve.to_string();
             let timing = self.valves_state.get_timing_for(valve);
@@ -222,45 +222,89 @@ impl ValveControlPane {
                     format!("ERROR: {}", err_id)
                 }
             };
+            let text_color = ui.visuals().text_color();
 
-            let inside_frame = |ui: &mut Ui| {
-                let text_color = ui.visuals().text_color();
+            let valve_title_ui = |ui: &mut Ui| {
+                Label::new(
+                    RichText::new(valve_str.to_ascii_uppercase())
+                        .color(text_color)
+                        .size(16.0),
+                )
+                .selectable(false)
+                .ui(ui);
+            };
+
+            fn big_number_ui(
+                response: &Response,
+                number: u8,
+                text_color: Color32,
+            ) -> impl Fn(&mut Ui) {
+                move |ui: &mut Ui| {
+                    let visuals = ui.style().interact(response);
+                    let number = RichText::new(number.to_string())
+                        .color(text_color)
+                        .font(FontId::monospace(25.));
+
+                    let fill_color = if response.hovered() {
+                        visuals.bg_fill.gamma_multiply(0.8).to_opaque()
+                    } else {
+                        visuals.bg_fill
+                    };
+
+                    Frame::canvas(ui.style())
+                        .fill(fill_color)
+                        .stroke(Stroke::NONE)
+                        .inner_margin(ui.spacing().menu_margin)
+                        .corner_radius(visuals.corner_radius)
+                        .show(ui, |ui| {
+                            Label::new(number).selectable(false).ui(ui);
+                        });
+                }
+            }
+
+            let labels_ui = |ui: &mut Ui| {
                 let icon_size = Vec2::splat(17.);
-
-                StripBuilder::new(ui)
-                    .sizes(Size::exact(20.), 2)
-                    .vertical(|mut strip| {
-                        strip.cell(|ui| {
-                            Label::new(
-                                RichText::new(valve_str.to_ascii_uppercase())
-                                    .color(text_color)
-                                    .size(16.0),
-                            )
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        let rect = Rect::from_min_size(ui.cursor().min, icon_size);
+                        Icon::Timing.paint(ui, rect);
+                        ui.allocate_rect(rect, Sense::hover());
+                        Label::new(format!("Timing: {}", timing_str))
                             .selectable(false)
                             .ui(ui);
-                        });
-                        strip.cell(|ui| {
-                            ui.vertical(|ui| {
+                    });
+                    ui.horizontal(|ui| {
+                        let rect = Rect::from_min_size(ui.cursor().min, icon_size);
+                        Icon::Aperture.paint(ui, rect);
+                        ui.allocate_rect(rect, Sense::hover());
+                        Label::new(format!("Aperture: {}", aperture_str))
+                            .selectable(false)
+                            .ui(ui);
+                    });
+                });
+            };
+
+            fn inside_frame(
+                response: &Response,
+                valve_title_ui: impl Fn(&mut Ui),
+                number: &u8,
+                text_color: &Color32,
+                labels_ui: &impl Fn(&mut Ui),
+            ) -> impl FnOnce(&mut Ui) {
+                |ui: &mut Ui| {
+                    StripBuilder::new(ui)
+                        .sizes(Size::exact(20.), 2)
+                        .vertical(|mut strip| {
+                            strip.cell(valve_title_ui);
+                            strip.cell(|ui| {
                                 ui.horizontal(|ui| {
-                                    let rect = Rect::from_min_size(ui.cursor().min, icon_size);
-                                    Icon::Timing.paint(ui, rect);
-                                    ui.allocate_rect(rect, Sense::hover());
-                                    Label::new(format!("Timing: {}", timing_str))
-                                        .selectable(false)
-                                        .ui(ui);
-                                });
-                                ui.horizontal(|ui| {
-                                    let rect = Rect::from_min_size(ui.cursor().min, icon_size);
-                                    Icon::Aperture.paint(ui, rect);
-                                    ui.allocate_rect(rect, Sense::hover());
-                                    Label::new(format!("Aperture: {}", aperture_str))
-                                        .selectable(false)
-                                        .ui(ui);
+                                    big_number_ui(response, *number, *text_color)(ui);
+                                    labels_ui(ui);
                                 });
                             });
                         });
-                    });
-            };
+                }
+            }
 
             ui.scope_builder(
                 UiBuilder::new()
@@ -283,7 +327,16 @@ impl ValveControlPane {
                         .stroke(Stroke::NONE)
                         .inner_margin(ui.spacing().menu_margin)
                         .corner_radius(visuals.corner_radius)
-                        .show(ui, inside_frame);
+                        .show(
+                            ui,
+                            inside_frame(
+                                &response,
+                                &valve_title_ui,
+                                &number,
+                                &text_color,
+                                &labels_ui,
+                            ),
+                        );
 
                     if response.clicked() {
                         info!("Clicked!");
