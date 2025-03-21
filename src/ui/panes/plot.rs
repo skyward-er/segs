@@ -31,8 +31,6 @@ pub struct Plot2DPane {
     state_valid: bool,
     #[serde(skip)]
     settings_visible: bool,
-    #[serde(skip)]
-    contains_pointer: bool,
 }
 
 impl PartialEq for Plot2DPane {
@@ -145,7 +143,6 @@ impl PaneBehavior for Plot2DPane {
         }
 
         plot.show(ui, |plot_ui| {
-            self.contains_pointer = plot_ui.response().contains_pointer();
             if plot_ui.response().dragged() && ctrl_pressed {
                 response.set_drag_started();
             }
@@ -178,10 +175,6 @@ impl PaneBehavior for Plot2DPane {
         }
 
         response
-    }
-
-    fn contains_pointer(&self) -> bool {
-        self.contains_pointer
     }
 
     #[profiling::function]

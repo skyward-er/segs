@@ -60,10 +60,6 @@ impl PaneBehavior for DefaultPane {
         response
     }
 
-    fn contains_pointer(&self) -> bool {
-        self.contains_pointer
-    }
-
     fn update(&mut self, _messages: &[&TimedMessage]) {}
 
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
