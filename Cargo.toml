@@ -39,6 +39,7 @@ thiserror = "2.0.7"
 uuid = { version = "1.12.1", features = ["serde", "v7"] }
 glam = { version = "0.29", features = ["serde", "mint"] }
 mint = "0.5.9"
+itertools = "0.14.0"
 
 [dependencies.skyward_mavlink]
 git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git"
