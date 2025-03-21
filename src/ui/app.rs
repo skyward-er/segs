@@ -318,14 +318,12 @@ impl App {
             // Skip non-pane tiles
             let Tile::Pane(pane) = tile else { continue };
             // Skip panes that do not have a subscription
-            let Some(sub_id) = pane.get_message_subscription() else {
-                continue;
-            };
+            let sub_ids: Vec<u32> = pane.get_message_subscriptions().collect();
 
             if pane.should_send_message_history() {
-                pane.update(self.message_broker.get(sub_id));
+                pane.update(self.message_broker.get(&sub_ids[..]).as_slice());
             } else {
-                pane.update(self.message_bundle.get(sub_id));
+                pane.update(self.message_bundle.get(&sub_ids[..]).as_slice());
             }
         }
 

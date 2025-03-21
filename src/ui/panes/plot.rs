@@ -186,7 +186,7 @@ impl PaneBehavior for Plot2DPane {
     }
 
     #[profiling::function]
-    fn update(&mut self, messages: &[TimedMessage]) {
+    fn update(&mut self, messages: &[&TimedMessage]) {
         if !self.state_valid {
             self.line_data.clear();
         }
@@ -226,8 +226,8 @@ impl PaneBehavior for Plot2DPane {
         self.state_valid = true;
     }
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        Some(self.settings.plot_message_id)
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(Some(self.settings.plot_message_id).into_iter())
     }
 
     fn should_send_message_history(&self) -> bool {

@@ -2,9 +2,12 @@ use super::PaneBehavior;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::ui::{
-    app::{PaneAction, PaneResponse},
-    utils::{SizingMemo, vertically_centered},
+use crate::{
+    mavlink::TimedMessage,
+    ui::{
+        app::{PaneAction, PaneResponse},
+        utils::{SizingMemo, vertically_centered},
+    },
 };
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -60,10 +63,10 @@ impl PaneBehavior for DefaultPane {
         self.contains_pointer
     }
 
-    fn update(&mut self, _messages: &[crate::mavlink::TimedMessage]) {}
+    fn update(&mut self, _messages: &[&TimedMessage]) {}
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        None
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(None.into_iter())
     }
 
     fn should_send_message_history(&self) -> bool {
