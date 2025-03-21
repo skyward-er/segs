@@ -5,8 +5,8 @@ mod valves;
 use std::time::{Duration, Instant};
 
 use egui::{
-    Color32, DragValue, Frame, Label, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, Widget,
-    vec2,
+    Color32, DragValue, Frame, Grid, Label, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder,
+    Vec2, Widget, vec2,
 };
 use egui_extras::{Size, StripBuilder};
 use itertools::Itertools;
@@ -16,7 +16,7 @@ use skyward_mavlink::{
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     mavlink::{MavMessage, TimedMessage},
@@ -146,17 +146,15 @@ impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
             let valve_chunks = Valve::iter().chunks(3);
-            StripBuilder::new(ui)
-                .sizes(Size::remainder(), 3)
-                .vertical(|mut strip| {
+            Grid::new("valves_grid")
+                .num_columns(3)
+                .spacing(Vec2::splat(5.))
+                .show(ui, |ui| {
                     for chunk in &valve_chunks {
-                        strip.strip(|builder| {
-                            builder.sizes(Size::remainder(), 3).horizontal(|mut strip| {
-                                for valve in chunk {
-                                    strip.cell(self.valve_frame_ui(valve));
-                                }
-                            });
-                        });
+                        for valve in chunk {
+                            ui.scope(self.valve_frame_ui(valve));
+                        }
+                        ui.end_row();
                     }
                 });
         }
@@ -226,14 +224,11 @@ impl ValveControlPane {
             };
 
             let inside_frame = |ui: &mut Ui| {
-                let response = ui.response();
-                let visuals = ui.style().interact(&response);
-                let text_color = visuals.text_color();
+                let text_color = ui.visuals().text_color();
                 let icon_size = Vec2::splat(17.);
 
                 StripBuilder::new(ui)
-                    .size(Size::exact(20.))
-                    .size(Size::exact(20.))
+                    .sizes(Size::exact(20.), 2)
                     .vertical(|mut strip| {
                         strip.cell(|ui| {
                             Label::new(
@@ -273,7 +268,7 @@ impl ValveControlPane {
                     .sense(Sense::click()),
                 |ui| {
                     ui.set_width(200.);
-                    ui.set_height(60.);
+                    ui.set_height(80.);
                     let response = ui.response();
                     let visuals = ui.style().interact(&response);
 
@@ -287,6 +282,7 @@ impl ValveControlPane {
                         .fill(fill_color)
                         .stroke(Stroke::NONE)
                         .inner_margin(ui.spacing().menu_margin)
+                        .corner_radius(visuals.corner_radius)
                         .show(ui, inside_frame);
 
                     if response.clicked() {
