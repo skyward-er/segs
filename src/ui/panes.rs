@@ -29,9 +29,6 @@ pub trait PaneBehavior {
     /// Renders the UI of the pane.
     fn ui(&mut self, ui: &mut Ui) -> PaneResponse;
 
-    /// Whether the pane contains the pointer.
-    fn contains_pointer(&self) -> bool;
-
     /// Updates the pane state. This method is called before `ui` to allow the
     /// pane to update its state based on the messages received.
     fn update(&mut self, _messages: &[&TimedMessage]) {}
@@ -55,10 +52,6 @@ pub trait PaneBehavior {
 impl PaneBehavior for Pane {
     fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         self.pane.ui(ui)
-    }
-
-    fn contains_pointer(&self) -> bool {
-        self.pane.contains_pointer()
     }
 
     fn update(&mut self, messages: &[&TimedMessage]) {

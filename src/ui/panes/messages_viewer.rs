@@ -1,4 +1,4 @@
-use egui::Label;
+use egui::{Label, Ui};
 use serde::{Deserialize, Serialize};
 
 use crate::ui::app::PaneResponse;
@@ -19,7 +19,7 @@ impl PartialEq for MessagesViewerPane {
 
 impl PaneBehavior for MessagesViewerPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
         let label = ui.add_sized(ui.available_size(), Label::new("This is a label"));
         self.contains_pointer = label.contains_pointer();
@@ -27,9 +27,5 @@ impl PaneBehavior for MessagesViewerPane {
             response.set_drag_started();
         }
         response
-    }
-
-    fn contains_pointer(&self) -> bool {
-        self.contains_pointer
     }
 }
