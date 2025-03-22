@@ -2,11 +2,16 @@ mod commands;
 mod icons;
 mod valves;
 
-use std::time::{Duration, Instant};
+use std::{
+    fmt::format,
+    time::{Duration, Instant},
+};
 
 use egui::{
-    Color32, DragValue, FontId, Frame, Grid, Label, Layout, Rect, Response, RichText, Sense,
-    Stroke, Ui, UiBuilder, Vec2, Widget, vec2,
+    Color32, DragValue, FontId, Frame, Grid, Label, Layout, Margin, Rect, Response, RichText,
+    Sense, Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, WidgetText,
+    text::{Fonts, LayoutJob},
+    vec2,
 };
 use egui_extras::{Size, StripBuilder};
 use itertools::Itertools;
@@ -142,7 +147,8 @@ impl PaneBehavior for ValveControlPane {
 // ┌────────────────────────┐
 // │       UI METHODS       │
 // └────────────────────────┘
-const BTN_WIDTH: f32 = 200.0;
+const BTN_WIDTH: f32 = 185.0;
+const BTN_HEIGHT: f32 = 70.0;
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
@@ -214,16 +220,16 @@ impl ValveControlPane {
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR: {}", err_id)
+                    format!("ERROR({})", err_id)
                 }
             };
             let aperture_str = match aperture {
                 valves::ParameterValue::Valid(value) => {
-                    format!("{}", value)
+                    format!("{:.2}", value)
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR: {}", err_id)
+                    format!("ERROR({})", err_id)
                 }
             };
             let text_color = ui.visuals().text_color();
@@ -232,7 +238,7 @@ impl ValveControlPane {
                 Label::new(
                     RichText::new(valve_str.to_ascii_uppercase())
                         .color(text_color)
-                        .size(16.0),
+                        .size(15.0),
                 )
                 .selectable(false)
                 .ui(ui);
@@ -247,7 +253,7 @@ impl ValveControlPane {
                     let visuals = ui.style().interact(response);
                     let number = RichText::new(number.to_string())
                         .color(text_color)
-                        .font(FontId::monospace(25.));
+                        .font(FontId::monospace(20.));
 
                     let fill_color = if response.hovered() {
                         visuals.bg_fill.gamma_multiply(0.8).to_opaque()
@@ -258,7 +264,7 @@ impl ValveControlPane {
                     Frame::canvas(ui.style())
                         .fill(fill_color)
                         .stroke(Stroke::NONE)
-                        .inner_margin(ui.spacing().menu_margin)
+                        .inner_margin(Margin::same(5))
                         .corner_radius(visuals.corner_radius)
                         .show(ui, |ui| {
                             Label::new(number).selectable(false).ui(ui);
@@ -267,23 +273,36 @@ impl ValveControlPane {
             }
 
             let labels_ui = |ui: &mut Ui| {
-                let icon_size = Vec2::splat(17.);
+                let icon_size = Vec2::splat(16.);
+                let text_format = TextFormat {
+                    font_id: FontId::proportional(12.),
+                    extra_letter_spacing: 0.,
+                    line_height: Some(12.),
+                    color: text_color,
+                    ..Default::default()
+                };
                 ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_top(|ui| {
                         let rect = Rect::from_min_size(ui.cursor().min, icon_size);
                         Icon::Timing.paint(ui, rect);
                         ui.allocate_rect(rect, Sense::hover());
-                        Label::new(format!("Timing: {}", timing_str))
-                            .selectable(false)
-                            .ui(ui);
+                        let layout_job = LayoutJob::single_section(
+                            format!("Timing: {}", timing_str),
+                            text_format.clone(),
+                        );
+                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                        Label::new(galley).selectable(false).ui(ui);
                     });
-                    ui.horizontal(|ui| {
+                    ui.horizontal_top(|ui| {
                         let rect = Rect::from_min_size(ui.cursor().min, icon_size);
                         Icon::Aperture.paint(ui, rect);
                         ui.allocate_rect(rect, Sense::hover());
-                        Label::new(format!("Aperture: {}", aperture_str))
-                            .selectable(false)
-                            .ui(ui);
+                        let layout_job = LayoutJob::single_section(
+                            format!("Aperture: {}", aperture_str),
+                            text_format,
+                        );
+                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                        Label::new(galley).selectable(false).ui(ui);
                     });
                 });
             };
@@ -297,7 +316,8 @@ impl ValveControlPane {
             ) -> impl FnOnce(&mut Ui) {
                 |ui: &mut Ui| {
                     StripBuilder::new(ui)
-                        .sizes(Size::exact(20.), 2)
+                        .size(Size::exact(10.))
+                        .size(Size::exact(15.))
                         .vertical(|mut strip| {
                             strip.cell(valve_title_ui);
                             strip.cell(|ui| {
@@ -315,8 +335,8 @@ impl ValveControlPane {
                     .id_salt("valve_".to_owned() + &valve_str)
                     .sense(Sense::click()),
                 |ui| {
-                    ui.set_width(200.);
-                    ui.set_height(80.);
+                    ui.set_width(BTN_WIDTH);
+                    ui.set_height(BTN_HEIGHT);
                     let response = ui.response();
                     let visuals = ui.style().interact(&response);
 
