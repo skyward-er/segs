@@ -429,7 +429,7 @@ impl Behavior<Pane> for AppBehavior {
     }
 
     fn min_size(&self) -> f32 {
-        200.0
+        185.0
     }
 }
 
