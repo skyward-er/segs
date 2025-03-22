@@ -142,11 +142,12 @@ impl PaneBehavior for ValveControlPane {
 // ┌────────────────────────┐
 // │       UI METHODS       │
 // └────────────────────────┘
+const BTN_WIDTH: f32 = 200.0;
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
-            ui.set_min_width(200.0);
-            let n = (ui.max_rect().width() / 200.0) as usize;
+            ui.set_min_width(BTN_WIDTH);
+            let n = (ui.max_rect().width() / BTN_WIDTH) as usize;
             let valve_chunks = Valve::iter().enumerate().chunks(n);
             Grid::new("valves_grid")
                 .num_columns(n)
@@ -184,15 +185,16 @@ impl ValveControlPane {
                 if auto_refresh {
                     let auto_refresh_duration =
                         auto_refresh_setting.get_or_insert(DEFAULT_AUTO_REFRESH_RATE);
-                    let mut auto_refresh_rate = 1. / auto_refresh_duration.as_secs_f32();
-                    DragValue::new(&mut auto_refresh_rate)
-                        .speed(0.1)
-                        .range(0.1..=10.0)
+                    let mut auto_refresh_period = auto_refresh_duration.as_secs_f32();
+                    DragValue::new(&mut auto_refresh_period)
+                        .speed(0.2)
+                        .range(0.5..=5.0)
                         .fixed_decimals(1)
                         .update_while_editing(false)
-                        .suffix(" Hz")
+                        .prefix("Every ")
+                        .suffix(" s")
                         .ui(ui);
-                    *auto_refresh_duration = Duration::from_secs_f32(1. / auto_refresh_rate);
+                    *auto_refresh_duration = Duration::from_secs_f32(auto_refresh_period);
                 } else {
                     *auto_refresh_setting = None;
                 }
