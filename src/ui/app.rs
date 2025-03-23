@@ -427,10 +427,6 @@ impl Behavior<Pane> for AppBehavior {
     fn tab_title_for_pane(&mut self, _pane: &Pane) -> egui::WidgetText {
         "Tab".into()
     }
-
-    fn min_size(&self) -> f32 {
-        185.0
-    }
 }
 
 #[derive(Clone)]
