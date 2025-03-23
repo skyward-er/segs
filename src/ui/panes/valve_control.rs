@@ -147,21 +147,21 @@ impl PaneBehavior for ValveControlPane {
 // ┌────────────────────────┐
 // │       UI METHODS       │
 // └────────────────────────┘
-const BTN_WIDTH: f32 = 185.0;
-const BTN_HEIGHT: f32 = 70.0;
+const BTN_MAX_WIDTH: f32 = 125.;
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
-            ui.set_min_width(BTN_WIDTH);
-            let n = (ui.max_rect().width() / BTN_WIDTH) as usize;
-            let valve_chunks = Valve::iter().enumerate().chunks(n);
+            ui.set_min_width(BTN_MAX_WIDTH);
+            let n = ((ui.max_rect().width() / BTN_MAX_WIDTH) as usize).max(1);
+            let symbols: Vec<char> = "123456789-/*".chars().collect();
+            let valve_chunks = Valve::iter().zip(symbols).chunks(n);
             Grid::new("valves_grid")
                 .num_columns(n)
                 .spacing(Vec2::splat(5.))
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
-                        for (i, valve) in chunk {
-                            ui.scope(self.valve_frame_ui(valve, i as u8));
+                        for (valve, symbol) in chunk {
+                            ui.scope(self.valve_frame_ui(valve, symbol));
                         }
                         ui.end_row();
                     }
@@ -208,7 +208,7 @@ impl ValveControlPane {
         }
     }
 
-    fn valve_frame_ui(&self, valve: Valve, number: u8) -> impl FnOnce(&mut Ui) {
+    fn valve_frame_ui(&self, valve: Valve, symbol: char) -> impl FnOnce(&mut Ui) {
         move |ui| {
             let valve_str = valve.to_string();
             let timing = self.valves_state.get_timing_for(valve);
@@ -225,7 +225,7 @@ impl ValveControlPane {
             };
             let aperture_str = match aperture {
                 valves::ParameterValue::Valid(value) => {
-                    format!("{:.2}", value)
+                    format!("{:.2}%", value * 100.)
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
@@ -235,23 +235,26 @@ impl ValveControlPane {
             let text_color = ui.visuals().text_color();
 
             let valve_title_ui = |ui: &mut Ui| {
+                ui.set_max_width(100.);
                 Label::new(
                     RichText::new(valve_str.to_ascii_uppercase())
                         .color(text_color)
+                        .strong()
                         .size(15.0),
                 )
                 .selectable(false)
+                .wrap()
                 .ui(ui);
             };
 
             fn big_number_ui(
                 response: &Response,
-                number: u8,
+                symbol: char,
                 text_color: Color32,
             ) -> impl Fn(&mut Ui) {
                 move |ui: &mut Ui| {
                     let visuals = ui.style().interact(response);
-                    let number = RichText::new(number.to_string())
+                    let number = RichText::new(symbol.to_string())
                         .color(text_color)
                         .font(FontId::monospace(20.));
 
@@ -273,7 +276,7 @@ impl ValveControlPane {
             }
 
             let labels_ui = |ui: &mut Ui| {
-                let icon_size = Vec2::splat(16.);
+                let icon_size = Vec2::splat(17.);
                 let text_format = TextFormat {
                     font_id: FontId::proportional(12.),
                     extra_letter_spacing: 0.,
@@ -282,25 +285,24 @@ impl ValveControlPane {
                     ..Default::default()
                 };
                 ui.vertical(|ui| {
+                    ui.set_min_width(80.);
                     ui.horizontal_top(|ui| {
                         let rect = Rect::from_min_size(ui.cursor().min, icon_size);
                         Icon::Timing.paint(ui, rect);
                         ui.allocate_rect(rect, Sense::hover());
-                        let layout_job = LayoutJob::single_section(
-                            format!("Timing: {}", timing_str),
-                            text_format.clone(),
-                        );
-                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
-                        Label::new(galley).selectable(false).ui(ui);
+                        ui.allocate_ui(vec2(20., 10.), |ui| {
+                            let layout_job =
+                                LayoutJob::single_section(timing_str.clone(), text_format.clone());
+                            let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                            Label::new(galley).selectable(false).ui(ui);
+                        });
                     });
                     ui.horizontal_top(|ui| {
                         let rect = Rect::from_min_size(ui.cursor().min, icon_size);
                         Icon::Aperture.paint(ui, rect);
                         ui.allocate_rect(rect, Sense::hover());
-                        let layout_job = LayoutJob::single_section(
-                            format!("Aperture: {}", aperture_str),
-                            text_format,
-                        );
+                        let layout_job =
+                            LayoutJob::single_section(aperture_str.clone(), text_format);
                         let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
                         Label::new(galley).selectable(false).ui(ui);
                     });
@@ -309,24 +311,19 @@ impl ValveControlPane {
 
             fn inside_frame(
                 response: &Response,
-                valve_title_ui: impl Fn(&mut Ui),
-                number: &u8,
-                text_color: &Color32,
-                labels_ui: &impl Fn(&mut Ui),
+                valve_title_ui: impl FnOnce(&mut Ui),
+                symbol: char,
+                text_color: Color32,
+                labels_ui: impl FnOnce(&mut Ui),
             ) -> impl FnOnce(&mut Ui) {
-                |ui: &mut Ui| {
-                    StripBuilder::new(ui)
-                        .size(Size::exact(10.))
-                        .size(Size::exact(15.))
-                        .vertical(|mut strip| {
-                            strip.cell(valve_title_ui);
-                            strip.cell(|ui| {
-                                ui.horizontal(|ui| {
-                                    big_number_ui(response, *number, *text_color)(ui);
-                                    labels_ui(ui);
-                                });
-                            });
+                move |ui: &mut Ui| {
+                    ui.vertical(|ui| {
+                        valve_title_ui(ui);
+                        ui.horizontal(|ui| {
+                            big_number_ui(response, symbol, text_color)(ui);
+                            labels_ui(ui);
                         });
+                    });
                 }
             }
 
@@ -335,8 +332,6 @@ impl ValveControlPane {
                     .id_salt("valve_".to_owned() + &valve_str)
                     .sense(Sense::click()),
                 |ui| {
-                    ui.set_width(BTN_WIDTH);
-                    ui.set_height(BTN_HEIGHT);
                     let response = ui.response();
                     let visuals = ui.style().interact(&response);
 
@@ -356,8 +351,8 @@ impl ValveControlPane {
                             inside_frame(
                                 &response,
                                 &valve_title_ui,
-                                &number,
-                                &text_color,
+                                symbol,
+                                text_color,
                                 &labels_ui,
                             ),
                         );
