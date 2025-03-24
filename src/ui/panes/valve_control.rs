@@ -1,5 +1,6 @@
 mod commands;
 mod icons;
+mod ui;
 mod valves;
 
 use std::{
@@ -8,9 +9,9 @@ use std::{
 };
 
 use egui::{
-    Color32, DragValue, FontId, Frame, Grid, Key, Label, Margin, Modal, Modifiers, Response,
-    RichText, Sense, Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, Window, text::LayoutJob,
-    vec2,
+    Color32, DragValue, FontId, Frame, Grid, Key, KeyboardShortcut, Label, Modal, Modifiers,
+    Response, RichText, Sense, Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, Window,
+    text::LayoutJob, vec2,
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -20,9 +21,9 @@ use skyward_mavlink::{
 };
 use strum::IntoEnumIterator;
 use tracing::{error, info, warn};
+use ui::ShortcutCard;
 
 use crate::{
-    error::ErrInstrument,
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
@@ -228,7 +229,7 @@ impl ValveControlPane {
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
                         for (symbol, valve) in chunk {
-                            ui.scope(self.valve_frame_ui(valve, symbol));
+                            ui.scope(self.valve_frame_ui(valve, map_symbol_to_key(symbol)));
                         }
                         ui.end_row();
                     }
@@ -277,7 +278,7 @@ impl ValveControlPane {
         }
     }
 
-    fn valve_frame_ui(&self, valve: Valve, symbol: char) -> impl FnOnce(&mut Ui) {
+    fn valve_frame_ui(&self, valve: Valve, shortcut_key: Key) -> impl FnOnce(&mut Ui) {
         move |ui| {
             profiling::function_scope!("valve_frame_ui");
             let valve_str = valve.to_string();
@@ -357,24 +358,6 @@ impl ValveControlPane {
                 });
             };
 
-            fn inside_frame(
-                valve_title_ui: impl FnOnce(&mut Ui),
-                symbol: char,
-                btn_fill_color: Color32,
-                text_color: Color32,
-                labels_ui: impl FnOnce(&mut Ui),
-            ) -> impl FnOnce(&mut Ui) {
-                move |ui: &mut Ui| {
-                    ui.vertical(|ui| {
-                        valve_title_ui(ui);
-                        ui.horizontal(|ui| {
-                            big_symbol_ui(symbol, btn_fill_color, text_color)(ui);
-                            labels_ui(ui);
-                        });
-                    });
-                }
-            }
-
             ui.scope_builder(
                 UiBuilder::new()
                     .id_salt("valve_".to_owned() + &valve_str)
@@ -395,21 +378,26 @@ impl ValveControlPane {
                         visuals.bg_fill
                     };
 
+                    let inside_frame = |ui: &mut Ui| {
+                        ui.vertical(|ui| {
+                            valve_title_ui(ui);
+                            ui.horizontal(|ui| {
+                                ShortcutCard::new(map_key_to_shortcut(shortcut_key))
+                                    .text_color(text_color)
+                                    .fill_color(btn_fill_color)
+                                    .text_size(20.)
+                                    .ui(ui);
+                                labels_ui(ui);
+                            });
+                        });
+                    };
+
                     Frame::canvas(ui.style())
                         .fill(fill_color)
                         .stroke(Stroke::NONE)
                         .inner_margin(ui.spacing().menu_margin)
                         .corner_radius(visuals.corner_radius)
-                        .show(
-                            ui,
-                            inside_frame(
-                                &valve_title_ui,
-                                symbol,
-                                btn_fill_color,
-                                text_color,
-                                &labels_ui,
-                            ),
-                        );
+                        .show(ui, inside_frame);
 
                     if response.clicked() {
                         info!("Clicked!");
@@ -471,15 +459,11 @@ impl ValveControlPane {
             }
 
             let wiggle_btn_response = btn_ui(valve, Self::WIGGLE_KEY, |ui| {
-                big_symbol_ui(
-                    Self::WIGGLE_KEY
-                        .symbol_or_name()
-                        .chars()
-                        .next()
-                        .log_unwrap(),
-                    ui.visuals().widgets.inactive.bg_fill,
-                    ui.visuals().text_color(),
-                )(ui);
+                ShortcutCard::new(map_key_to_shortcut(Self::WIGGLE_KEY))
+                    .text_color(ui.visuals().text_color())
+                    .fill_color(ui.visuals().widgets.inactive.bg_fill)
+                    .text_size(20.)
+                    .ui(ui);
                 ui.add(
                     Icon::Wiggle
                         .as_image(ui.ctx().theme())
@@ -490,15 +474,11 @@ impl ValveControlPane {
 
             let mut aperture = 0_u32;
             let aperture_btn_response = btn_ui(valve, Self::APERTURE_KEY, |ui| {
-                big_symbol_ui(
-                    Self::APERTURE_KEY
-                        .symbol_or_name()
-                        .chars()
-                        .next()
-                        .log_unwrap(),
-                    ui.visuals().widgets.inactive.bg_fill,
-                    ui.visuals().text_color(),
-                )(ui);
+                ShortcutCard::new(map_key_to_shortcut(Self::APERTURE_KEY))
+                    .text_color(ui.visuals().text_color())
+                    .fill_color(ui.visuals().widgets.inactive.bg_fill)
+                    .text_size(20.)
+                    .ui(ui);
                 ui.add(
                     Icon::Aperture
                         .as_image(ui.ctx().theme())
@@ -517,15 +497,11 @@ impl ValveControlPane {
 
             let mut timing_ms = 0_u32;
             let timing_btn_response = btn_ui(valve, Self::TIMING_KEY, |ui| {
-                big_symbol_ui(
-                    Self::TIMING_KEY
-                        .symbol_or_name()
-                        .chars()
-                        .next()
-                        .log_unwrap(),
-                    ui.visuals().widgets.inactive.bg_fill,
-                    ui.visuals().text_color(),
-                )(ui);
+                ShortcutCard::new(map_key_to_shortcut(Self::TIMING_KEY))
+                    .text_color(ui.visuals().text_color())
+                    .fill_color(ui.visuals().widgets.inactive.bg_fill)
+                    .text_size(20.)
+                    .ui(ui);
                 ui.add(
                     Icon::Timing
                         .as_image(ui.ctx().theme())
@@ -616,27 +592,9 @@ impl ValveControlPane {
                 shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
                 // No window is open, so we can map the keys to open the valve control windows
                 for &symbol in self.valve_symbol_map.keys() {
-                    let key = match symbol {
-                        '1' => Key::Num1,
-                        '2' => Key::Num2,
-                        '3' => Key::Num3,
-                        '4' => Key::Num4,
-                        '5' => Key::Num5,
-                        '6' => Key::Num6,
-                        '7' => Key::Num7,
-                        '8' => Key::Num8,
-                        '9' => Key::Num9,
-                        '-' => Key::Minus,
-                        '/' => Key::Slash,
-                        '.' => Key::Period,
-                        _ => {
-                            error!("Invalid symbol: {}", symbol);
-                            panic!("Invalid symbol: {}", symbol);
-                        }
-                    };
                     key_action_pairs.push((
                         Modifiers::NONE,
-                        key,
+                        map_symbol_to_key(symbol),
                         PaneAction::OpenValveControl(self.valve_symbol_map[&symbol]),
                     ));
                 }
@@ -647,21 +605,30 @@ impl ValveControlPane {
     }
 }
 
-fn big_symbol_ui(symbol: char, fill_color: Color32, text_color: Color32) -> impl Fn(&mut Ui) {
-    move |ui: &mut Ui| {
-        let number = RichText::new(symbol.to_string())
-            .color(text_color)
-            .font(FontId::monospace(20.));
-
-        Frame::canvas(ui.style())
-            .fill(fill_color)
-            .stroke(Stroke::NONE)
-            .inner_margin(Margin::same(5))
-            .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
-            .show(ui, |ui| {
-                Label::new(number).selectable(false).ui(ui);
-            });
+fn map_symbol_to_key(symbol: char) -> Key {
+    match symbol {
+        '1' => Key::Num1,
+        '2' => Key::Num2,
+        '3' => Key::Num3,
+        '4' => Key::Num4,
+        '5' => Key::Num5,
+        '6' => Key::Num6,
+        '7' => Key::Num7,
+        '8' => Key::Num8,
+        '9' => Key::Num9,
+        '-' => Key::Minus,
+        '/' => Key::Slash,
+        '.' => Key::Period,
+        _ => {
+            error!("Invalid symbol: {}", symbol);
+            panic!("Invalid symbol: {}", symbol)
+        }
     }
+}
+
+#[inline]
+fn map_key_to_shortcut(key: Key) -> KeyboardShortcut {
+    KeyboardShortcut::new(Modifiers::NONE, key)
 }
 
 // ┌───────────────────────────┐
