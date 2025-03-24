@@ -7,6 +7,7 @@ use crate::error::ErrInstrument;
 
 #[derive(Debug, Clone, Copy, EnumIter)]
 pub enum Icon {
+    Wiggle,
     Aperture,
     Timing,
 }
@@ -14,6 +15,18 @@ pub enum Icon {
 impl Icon {
     fn as_image_source(&self, theme: Theme) -> ImageSource {
         match (&self, theme) {
+            (Icon::Wiggle, Theme::Light) => {
+                egui::include_image!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/icons/valve_control/light/wiggle.svg"
+                ))
+            }
+            (Icon::Wiggle, Theme::Dark) => {
+                egui::include_image!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/icons/valve_control/dark/wiggle.svg"
+                ))
+            }
             (Icon::Aperture, Theme::Light) => {
                 egui::include_image!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
@@ -55,10 +68,5 @@ impl Icon {
 
     pub fn as_image(&self, theme: Theme) -> Image {
         Image::new(self.as_image_source(theme))
-    }
-
-    pub fn reset_cache(&self, ui: &mut Ui) {
-        let img: Image = self.as_image(ui.ctx().theme());
-        ui.ctx().forget_image(img.uri().log_unwrap());
     }
 }
