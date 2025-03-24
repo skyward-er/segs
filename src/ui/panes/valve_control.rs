@@ -3,17 +3,15 @@ mod icons;
 mod valves;
 
 use std::{
-    fmt::format,
+    collections::HashMap,
     time::{Duration, Instant},
 };
 
 use egui::{
-    Color32, DragValue, FontId, Frame, Grid, Label, Layout, Margin, Rect, Response, RichText,
-    Sense, Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, WidgetText,
-    text::{Fonts, LayoutJob},
+    Color32, DragValue, FontId, Frame, Grid, Key, Label, Margin, Modal, Modifiers, Response,
+    RichText, Sense, Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, Window, text::LayoutJob,
     vec2,
 };
-use egui_extras::{Size, StripBuilder};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
@@ -21,22 +19,26 @@ use skyward_mavlink::{
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     mavlink::{MavMessage, TimedMessage},
-    ui::app::PaneResponse,
+    ui::{
+        app::PaneResponse,
+        shortcuts::{ShortcutHandler, ShortcutMode},
+    },
 };
 
 use super::PaneBehavior;
 
-use commands::CommandSM;
+use commands::{Command, CommandSM};
 use icons::Icon;
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
+const SYMBOL_LIST: &str = "123456789-/.";
 
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ValveControlPane {
     // INTERNAL
     #[serde(skip)]
@@ -58,11 +60,38 @@ pub struct ValveControlPane {
     // UI SETTINGS
     #[serde(skip)]
     is_settings_window_open: bool,
+    #[serde(skip)]
+    valve_symbol_map: HashMap<char, Valve>,
+    #[serde(skip)]
+    valve_window_states: HashMap<Valve, ValveWindowState>,
+}
+
+impl Default for ValveControlPane {
+    fn default() -> Self {
+        let symbols: Vec<char> = SYMBOL_LIST.chars().collect();
+        let valve_symbol = symbols.into_iter().zip(Valve::iter()).collect();
+        let valve_window_states = Valve::iter()
+            .map(|v| (v, ValveWindowState::Closed))
+            .collect();
+        Self {
+            valves_state: ValveStateManager::default(),
+            commands: vec![],
+            auto_refresh: None,
+            manual_refresh: false,
+            last_refresh: None,
+            is_settings_window_open: false,
+            valve_symbol_map: valve_symbol,
+            valve_window_states,
+        }
+    }
 }
 
 impl PaneBehavior for ValveControlPane {
-    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
+
+        // Set this to at least double the maximum icon size used
+        Icon::init_cache(ui.ctx(), (100, 100));
 
         let res = ui
             .scope_builder(UiBuilder::new().sense(Sense::click_and_drag()), |ui| {
@@ -79,13 +108,46 @@ impl PaneBehavior for ValveControlPane {
             pane_response.set_drag_started();
         }
 
-        egui::Window::new("Settings")
+        // capture actions from keyboard shortcuts
+        let action_to_pass = self.keyboard_actions(shortcut_handler);
+
+        match action_to_pass {
+            // Open the valve control window if the action is to open it
+            Some(PaneAction::OpenValveControl(valve)) => {
+                self.valve_window_states
+                    .insert(valve, ValveWindowState::Open);
+            }
+            // Close if the user requests so
+            Some(PaneAction::CloseValveControls) => {
+                warn!("closing all");
+                for valve in Valve::iter() {
+                    self.valve_window_states
+                        .insert(valve, ValveWindowState::Closed);
+                }
+            }
+            // Ignore otherwise
+            _ => {}
+        }
+
+        Window::new("Settings")
             .id(ui.auto_id_with("settings"))
             .auto_sized()
             .collapsible(true)
             .movable(true)
             .open(&mut self.is_settings_window_open)
-            .show(ui.ctx(), Self::window_ui(&mut self.auto_refresh));
+            .show(ui.ctx(), Self::settings_window_ui(&mut self.auto_refresh));
+
+        if let Some(valve_window_open) = self
+            .valve_window_states
+            .iter()
+            .find(|&(_, state)| !state.is_closed())
+            .map(|(&v, _)| v)
+        {
+            Modal::new(ui.auto_id_with(format!("valve_control {}", valve_window_open))).show(
+                ui.ctx(),
+                self.valve_control_window_ui(valve_window_open, action_to_pass),
+            );
+        }
 
         pane_response
     }
@@ -118,7 +180,7 @@ impl PaneBehavior for ValveControlPane {
                 // intercept all ACK/NACK/WACK messages
                 cmd.capture_response(&message.message);
                 // If a response was captured, consume the command and update the valve state
-                if let Some((valve, parameter)) = cmd.consume_response() {
+                if let Some((valve, Some(parameter))) = cmd.consume_response() {
                     self.valves_state.set_parameter_of(valve, parameter);
                 }
             }
@@ -152,15 +214,14 @@ impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
             ui.set_min_width(BTN_MAX_WIDTH);
-            let n = ((ui.max_rect().width() / BTN_MAX_WIDTH) as usize).max(1);
-            let symbols: Vec<char> = "123456789-/*".chars().collect();
-            let valve_chunks = Valve::iter().zip(symbols).chunks(n);
+            let n = (ui.max_rect().width() / BTN_MAX_WIDTH) as usize;
+            let valve_chunks = SYMBOL_LIST.chars().zip(Valve::iter()).chunks(n.max(1));
             Grid::new("valves_grid")
                 .num_columns(n)
                 .spacing(Vec2::splat(5.))
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
-                        for (valve, symbol) in chunk {
+                        for (symbol, valve) in chunk {
                             ui.scope(self.valve_frame_ui(valve, symbol));
                         }
                         ui.end_row();
@@ -182,7 +243,7 @@ impl ValveControlPane {
         }
     }
 
-    fn window_ui(auto_refresh_setting: &mut Option<Duration>) -> impl FnOnce(&mut Ui) {
+    fn settings_window_ui(auto_refresh_setting: &mut Option<Duration>) -> impl FnOnce(&mut Ui) {
         |ui| {
             // Display auto refresh setting
             let mut auto_refresh = auto_refresh_setting.is_some();
@@ -287,9 +348,12 @@ impl ValveControlPane {
                 ui.vertical(|ui| {
                     ui.set_min_width(80.);
                     ui.horizontal_top(|ui| {
-                        let rect = Rect::from_min_size(ui.cursor().min, icon_size);
-                        Icon::Timing.paint(ui, rect);
-                        ui.allocate_rect(rect, Sense::hover());
+                        ui.add(
+                            Icon::Timing
+                                .as_image(ui.ctx().theme())
+                                .fit_to_exact_size(icon_size)
+                                .sense(Sense::hover()),
+                        );
                         ui.allocate_ui(vec2(20., 10.), |ui| {
                             let layout_job =
                                 LayoutJob::single_section(timing_str.clone(), text_format.clone());
@@ -298,9 +362,12 @@ impl ValveControlPane {
                         });
                     });
                     ui.horizontal_top(|ui| {
-                        let rect = Rect::from_min_size(ui.cursor().min, icon_size);
-                        Icon::Aperture.paint(ui, rect);
-                        ui.allocate_rect(rect, Sense::hover());
+                        ui.add(
+                            Icon::Aperture
+                                .as_image(ui.ctx().theme())
+                                .fit_to_exact_size(icon_size)
+                                .sense(Sense::hover()),
+                        );
                         let layout_job =
                             LayoutJob::single_section(aperture_str.clone(), text_format);
                         let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
@@ -364,6 +431,200 @@ impl ValveControlPane {
             );
         }
     }
+
+    const WIGGLE_KEY: Key = Key::Minus;
+    const TIMING_KEY: Key = Key::Slash;
+    const APERTURE_KEY: Key = Key::Period;
+
+    fn valve_control_window_ui(
+        &mut self,
+        valve: Valve,
+        action: Option<PaneAction>,
+    ) -> impl FnOnce(&mut Ui) {
+        move |ui| {
+            let icon_size = Vec2::splat(25.);
+            let text_size = 16.;
+
+            fn btn_ui<R>(
+                valve: Valve,
+                add_contents: impl FnOnce(&mut Ui) -> R,
+            ) -> impl FnOnce(&mut Ui) -> Response {
+                move |ui| {
+                    let mut wiggle_btn = Frame::canvas(ui.style())
+                        .inner_margin(ui.spacing().menu_margin)
+                        .corner_radius(ui.visuals().noninteractive().corner_radius);
+
+                    wiggle_btn = ui.ctx().input(|input| {
+                        if input.key_down(ValveControlPane::WIGGLE_KEY) {
+                            wiggle_btn
+                                .fill(ui.visuals().widgets.active.bg_fill)
+                                .stroke(ui.visuals().widgets.active.fg_stroke)
+                        } else {
+                            wiggle_btn
+                                .fill(ui.visuals().widgets.inactive.bg_fill.gamma_multiply(0.3))
+                                .stroke(Stroke::new(2.0, Color32::TRANSPARENT))
+                        }
+                    });
+
+                    ui.scope_builder(
+                        UiBuilder::new()
+                            .id_salt(format!("valve_control_window_{}_wiggle", valve))
+                            .sense(Sense::click()),
+                        |ui| {
+                            wiggle_btn.show(ui, |ui| ui.horizontal(|ui| add_contents(ui)));
+                        },
+                    )
+                    .response
+                }
+            }
+
+            let wiggle_btn_response = btn_ui(valve, |ui| {
+                ui.add(
+                    Icon::Aperture
+                        .as_image(ui.ctx().theme())
+                        .fit_to_exact_size(icon_size),
+                );
+                ui.add(Label::new(RichText::new("Wiggle").size(text_size)).selectable(false));
+            })(ui);
+
+            let mut aperture = 0_u32;
+            let aperture_btn_response = btn_ui(valve, |ui| {
+                ui.add(
+                    Icon::Aperture
+                        .as_image(ui.ctx().theme())
+                        .fit_to_exact_size(icon_size),
+                );
+                ui.add(Label::new(RichText::new("Aperture: ").size(text_size)).selectable(false));
+                ui.add(
+                    DragValue::new(&mut aperture)
+                        .speed(0.5)
+                        .range(0.0..=100.0)
+                        .fixed_decimals(1)
+                        .update_while_editing(false)
+                        .suffix("%"),
+                );
+            })(ui);
+
+            let mut timing_ms = 0_u32;
+            let timing_btn_response = btn_ui(valve, |ui| {
+                ui.add(
+                    Icon::Timing
+                        .as_image(ui.ctx().theme())
+                        .fit_to_exact_size(icon_size),
+                );
+                ui.add(Label::new(RichText::new("Timing: ").size(text_size)).selectable(false));
+                ui.add(
+                    DragValue::new(&mut timing_ms)
+                        .speed(1)
+                        .range(1..=10000)
+                        .fixed_decimals(0)
+                        .update_while_editing(false)
+                        .suffix(" [ms]"),
+                );
+            })(ui);
+
+            if wiggle_btn_response.clicked() || matches!(action, Some(PaneAction::Wiggle)) {
+                info!("Wiggle valve: {:?}", valve);
+                self.commands.push(Command::wiggle(valve).into());
+            }
+            // self.valve_window_states
+            //     .insert(valve, ValveWindowState::Closed);
+        }
+    }
+
+    fn keyboard_actions(&self, shortcut_handler: &mut ShortcutHandler) -> Option<PaneAction> {
+        let mut key_action_pairs = Vec::new();
+        match self
+            .valve_window_states
+            .iter()
+            .find(|&(_, open)| !open.is_closed())
+        {
+            Some((&valve, state)) => {
+                shortcut_handler.activate_mode(ShortcutMode::valve_control());
+                match state {
+                    ValveWindowState::Open => {
+                        // A window is open, so we can map the keys to control the valve
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Self::WIGGLE_KEY,
+                            PaneAction::Wiggle,
+                        ));
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Self::TIMING_KEY,
+                            PaneAction::FocusOnTiming,
+                        ));
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Self::APERTURE_KEY,
+                            PaneAction::FocusOnAperture,
+                        ));
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Key::Escape,
+                            PaneAction::CloseValveControls,
+                        ));
+                    }
+                    ValveWindowState::TimingFocused => {
+                        // The timing field is focused, so we can map the keys to control the timing
+                        key_action_pairs.push((Modifiers::NONE, Key::Enter, PaneAction::SetTiming));
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Key::Escape,
+                            PaneAction::OpenValveControl(valve),
+                        ));
+                    }
+                    ValveWindowState::ApertureFocused => {
+                        // The aperture field is focused, so we can map the keys to control the aperture
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Key::Enter,
+                            PaneAction::SetAperture,
+                        ));
+                        key_action_pairs.push((
+                            Modifiers::NONE,
+                            Key::Escape,
+                            PaneAction::OpenValveControl(valve),
+                        ));
+                    }
+                    ValveWindowState::Closed => unreachable!(),
+                }
+                shortcut_handler
+                    .consume_if_mode_is(ShortcutMode::valve_control(), &key_action_pairs[..])
+            }
+            None => {
+                shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
+                // No window is open, so we can map the keys to open the valve control windows
+                for &symbol in self.valve_symbol_map.keys() {
+                    let key = match symbol {
+                        '1' => Key::Num1,
+                        '2' => Key::Num2,
+                        '3' => Key::Num3,
+                        '4' => Key::Num4,
+                        '5' => Key::Num5,
+                        '6' => Key::Num6,
+                        '7' => Key::Num7,
+                        '8' => Key::Num8,
+                        '9' => Key::Num9,
+                        '-' => Key::Minus,
+                        '/' => Key::Slash,
+                        '.' => Key::Period,
+                        _ => {
+                            error!("Invalid symbol: {}", symbol);
+                            panic!("Invalid symbol: {}", symbol);
+                        }
+                    };
+                    key_action_pairs.push((
+                        Modifiers::NONE,
+                        key,
+                        PaneAction::OpenValveControl(self.valve_symbol_map[&symbol]),
+                    ));
+                }
+                shortcut_handler
+                    .consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
+            }
+        }
+    }
 }
 
 // ┌───────────────────────────┐
@@ -387,5 +648,41 @@ impl ValveControlPane {
     fn reset_last_refresh(&mut self) {
         self.last_refresh = Some(Instant::now());
         self.manual_refresh = false;
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PaneAction {
+    OpenValveControl(Valve),
+    CloseValveControls,
+    Wiggle,
+    SetTiming,
+    SetAperture,
+    FocusOnTiming,
+    FocusOnAperture,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValveWindowState {
+    Closed,
+    Open,
+    TimingFocused,
+    ApertureFocused,
+}
+
+impl ValveWindowState {
+    #[inline]
+    fn is_open(&self) -> bool {
+        matches!(self, Self::Open)
+    }
+
+    #[inline]
+    fn is_closed(&self) -> bool {
+        matches!(self, Self::Closed)
+    }
+
+    #[inline]
+    fn is_focused(&self) -> bool {
+        matches!(self, Self::TimingFocused | Self::ApertureFocused)
     }
 }

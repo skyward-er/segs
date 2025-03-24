@@ -19,7 +19,9 @@ use crate::{
     MAVLINK_PROFILE,
     error::ErrInstrument,
     mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
-    ui::{app::PaneResponse, cache::ChangeTracker, utils::egui_to_glam},
+    ui::{
+        app::PaneResponse, cache::ChangeTracker, shortcuts::ShortcutHandler, utils::egui_to_glam,
+    },
 };
 
 use super::PaneBehavior;
@@ -79,7 +81,7 @@ impl PartialEq for PidPane {
 }
 
 impl PaneBehavior for PidPane {
-    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
 
         let theme = PidPane::find_theme(ui.ctx());
