@@ -403,23 +403,24 @@ impl ValveControlPane {
                         .input(|input| input.key_down(self.valve_key_map[&valve]));
                     let visuals = ui.style().interact(&response);
 
-                    let (fill_color, btn_fill_color, stroke) =
-                        if response.clicked() || shortcut_key_is_down {
-                            let visuals = ui.visuals().widgets.active;
-                            (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
-                        } else if response.hovered() {
-                            (
-                                visuals.bg_fill,
-                                visuals.bg_fill.gamma_multiply(0.8).to_opaque(),
-                                visuals.bg_stroke,
-                            )
-                        } else {
-                            (
-                                visuals.bg_fill.gamma_multiply(0.3),
-                                visuals.bg_fill,
-                                Stroke::new(1.0, Color32::TRANSPARENT),
-                            )
-                        };
+                    let (fill_color, btn_fill_color, stroke) = if response.clicked()
+                        || shortcut_key_is_down && self.valve_window_states[&valve].is_closed()
+                    {
+                        let visuals = ui.visuals().widgets.active;
+                        (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
+                    } else if response.hovered() {
+                        (
+                            visuals.bg_fill,
+                            visuals.bg_fill.gamma_multiply(0.8).to_opaque(),
+                            visuals.bg_stroke,
+                        )
+                    } else {
+                        (
+                            visuals.bg_fill.gamma_multiply(0.3),
+                            visuals.bg_fill,
+                            Stroke::new(1.0, Color32::TRANSPARENT),
+                        )
+                    };
 
                     let inside_frame = |ui: &mut Ui| {
                         ui.vertical(|ui| {
@@ -482,17 +483,18 @@ impl ValveControlPane {
                             let shortcut_down = ui.ctx().input(|input| input.key_down(key));
 
                             let visuals = ui.style().interact(&response);
-                            let stroke = if shortcut_down || clicked {
+                            let (fill_color, stroke) = if shortcut_down || clicked {
                                 let visuals = ui.visuals().widgets.active;
-                                visuals.bg_stroke
+                                (visuals.bg_fill, visuals.bg_stroke)
                             } else if response.hovered() {
-                                visuals.bg_stroke
+                                (visuals.bg_fill, visuals.bg_stroke)
                             } else {
-                                Stroke::new(1., Color32::TRANSPARENT)
+                                let stroke = Stroke::new(1., Color32::TRANSPARENT);
+                                (visuals.bg_fill.gamma_multiply(0.3), stroke)
                             };
 
                             wiggle_btn
-                                .fill(visuals.bg_fill.gamma_multiply(0.3).to_opaque())
+                                .fill(fill_color)
                                 .stroke(stroke)
                                 .stroke(stroke)
                                 .show(ui, |ui| {
