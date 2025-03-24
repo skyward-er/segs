@@ -1,66 +1,14 @@
-use egui::{
-    Color32, FontId, Frame, KeyboardShortcut, Label, Margin, ModifierNames, RichText, Stroke,
-    Widget,
-};
+mod shortcut_widget;
+mod valve_control_window;
 
-pub struct ShortcutCard {
-    shortcut: KeyboardShortcut,
-    text_size: f32,
-    text_color: Option<Color32>,
-    fill_color: Option<Color32>,
-}
+use egui::{Key, KeyboardShortcut, Modifiers};
 
-impl Widget for ShortcutCard {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        #[cfg(target_os = "macos")]
-        let is_mac = true;
-        #[cfg(not(target_os = "macos"))]
-        let is_mac = false;
+// Re-export the modules for the UI modules
+use super::{commands, icons, valves};
 
-        let shortcut_fmt = self.shortcut.format(&ModifierNames::SYMBOLS, is_mac);
-        let default_style = ui.style().noninteractive();
-        let text_color = self.text_color.unwrap_or(default_style.text_color());
-        let fill_color = self.fill_color.unwrap_or(default_style.bg_fill);
-        let corner_radius = default_style.corner_radius;
+pub use {shortcut_widget::ShortcutCard, valve_control_window::ValveControlWindow};
 
-        let number = RichText::new(shortcut_fmt)
-            .color(text_color)
-            .font(FontId::monospace(self.text_size));
-
-        Frame::canvas(ui.style())
-            .fill(fill_color)
-            .stroke(Stroke::NONE)
-            .inner_margin(Margin::same(5))
-            .corner_radius(corner_radius)
-            .show(ui, |ui| {
-                Label::new(number).selectable(false).ui(ui);
-            })
-            .response
-    }
-}
-
-impl ShortcutCard {
-    pub fn new(shortcut: KeyboardShortcut) -> Self {
-        Self {
-            shortcut,
-            text_size: 20.,
-            text_color: None,
-            fill_color: None,
-        }
-    }
-
-    pub fn text_size(mut self, text_size: f32) -> Self {
-        self.text_size = text_size;
-        self
-    }
-
-    pub fn text_color(mut self, text_color: Color32) -> Self {
-        self.text_color = Some(text_color);
-        self
-    }
-
-    pub fn fill_color(mut self, fill_color: Color32) -> Self {
-        self.fill_color = Some(fill_color);
-        self
-    }
+#[inline]
+pub fn map_key_to_shortcut(key: Key) -> KeyboardShortcut {
+    KeyboardShortcut::new(Modifiers::NONE, key)
 }
