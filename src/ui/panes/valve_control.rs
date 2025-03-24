@@ -22,6 +22,7 @@ use strum::IntoEnumIterator;
 use tracing::{error, info, warn};
 
 use crate::{
+    error::ErrInstrument,
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
@@ -87,6 +88,7 @@ impl Default for ValveControlPane {
 }
 
 impl PaneBehavior for ValveControlPane {
+    #[profiling::function]
     fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
 
@@ -152,6 +154,7 @@ impl PaneBehavior for ValveControlPane {
         pane_response
     }
 
+    #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
         let mut subscriptions = vec![];
         if self.needs_refresh() {
@@ -169,6 +172,7 @@ impl PaneBehavior for ValveControlPane {
         Box::new(subscriptions.into_iter())
     }
 
+    #[profiling::function]
     fn update(&mut self, messages: &[&TimedMessage]) {
         if self.needs_refresh() {
             // TODO
@@ -192,6 +196,7 @@ impl PaneBehavior for ValveControlPane {
         self.reset_last_refresh();
     }
 
+    #[profiling::function]
     fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
         let mut outgoing = vec![];
 
@@ -213,6 +218,7 @@ const BTN_MAX_WIDTH: f32 = 125.;
 impl ValveControlPane {
     fn pane_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
+            profiling::function_scope!("pane_ui");
             ui.set_min_width(BTN_MAX_WIDTH);
             let n = (ui.max_rect().width() / BTN_MAX_WIDTH) as usize;
             let valve_chunks = SYMBOL_LIST.chars().zip(Valve::iter()).chunks(n.max(1));
@@ -232,6 +238,7 @@ impl ValveControlPane {
 
     fn menu_ui(&mut self) -> impl FnOnce(&mut Ui) {
         |ui| {
+            profiling::function_scope!("menu_ui");
             if ui.button("Refresh now").clicked() {
                 self.manual_refresh = true;
                 ui.close_menu();
@@ -245,6 +252,7 @@ impl ValveControlPane {
 
     fn settings_window_ui(auto_refresh_setting: &mut Option<Duration>) -> impl FnOnce(&mut Ui) {
         |ui| {
+            profiling::function_scope!("settings_window_ui");
             // Display auto refresh setting
             let mut auto_refresh = auto_refresh_setting.is_some();
             ui.horizontal(|ui| {
@@ -271,6 +279,7 @@ impl ValveControlPane {
 
     fn valve_frame_ui(&self, valve: Valve, symbol: char) -> impl FnOnce(&mut Ui) {
         move |ui| {
+            profiling::function_scope!("valve_frame_ui");
             let valve_str = valve.to_string();
             let timing = self.valves_state.get_timing_for(valve);
             let aperture = self.valves_state.get_aperture_for(valve);
@@ -307,34 +316,6 @@ impl ValveControlPane {
                 .wrap()
                 .ui(ui);
             };
-
-            fn big_number_ui(
-                response: &Response,
-                symbol: char,
-                text_color: Color32,
-            ) -> impl Fn(&mut Ui) {
-                move |ui: &mut Ui| {
-                    let visuals = ui.style().interact(response);
-                    let number = RichText::new(symbol.to_string())
-                        .color(text_color)
-                        .font(FontId::monospace(20.));
-
-                    let fill_color = if response.hovered() {
-                        visuals.bg_fill.gamma_multiply(0.8).to_opaque()
-                    } else {
-                        visuals.bg_fill
-                    };
-
-                    Frame::canvas(ui.style())
-                        .fill(fill_color)
-                        .stroke(Stroke::NONE)
-                        .inner_margin(Margin::same(5))
-                        .corner_radius(visuals.corner_radius)
-                        .show(ui, |ui| {
-                            Label::new(number).selectable(false).ui(ui);
-                        });
-                }
-            }
 
             let labels_ui = |ui: &mut Ui| {
                 let icon_size = Vec2::splat(17.);
@@ -377,9 +358,9 @@ impl ValveControlPane {
             };
 
             fn inside_frame(
-                response: &Response,
                 valve_title_ui: impl FnOnce(&mut Ui),
                 symbol: char,
+                btn_fill_color: Color32,
                 text_color: Color32,
                 labels_ui: impl FnOnce(&mut Ui),
             ) -> impl FnOnce(&mut Ui) {
@@ -387,7 +368,7 @@ impl ValveControlPane {
                     ui.vertical(|ui| {
                         valve_title_ui(ui);
                         ui.horizontal(|ui| {
-                            big_number_ui(response, symbol, text_color)(ui);
+                            big_symbol_ui(symbol, btn_fill_color, text_color)(ui);
                             labels_ui(ui);
                         });
                     });
@@ -408,6 +389,12 @@ impl ValveControlPane {
                         visuals.bg_fill.gamma_multiply(0.3)
                     };
 
+                    let btn_fill_color = if response.hovered() {
+                        visuals.bg_fill.gamma_multiply(0.8).to_opaque()
+                    } else {
+                        visuals.bg_fill
+                    };
+
                     Frame::canvas(ui.style())
                         .fill(fill_color)
                         .stroke(Stroke::NONE)
@@ -416,9 +403,9 @@ impl ValveControlPane {
                         .show(
                             ui,
                             inside_frame(
-                                &response,
                                 &valve_title_ui,
                                 symbol,
+                                btn_fill_color,
                                 text_color,
                                 &labels_ui,
                             ),
@@ -442,11 +429,13 @@ impl ValveControlPane {
         action: Option<PaneAction>,
     ) -> impl FnOnce(&mut Ui) {
         move |ui| {
+            profiling::function_scope!("valve_control_window_ui");
             let icon_size = Vec2::splat(25.);
             let text_size = 16.;
 
             fn btn_ui<R>(
                 valve: Valve,
+                key: Key,
                 add_contents: impl FnOnce(&mut Ui) -> R,
             ) -> impl FnOnce(&mut Ui) -> Response {
                 move |ui| {
@@ -455,7 +444,7 @@ impl ValveControlPane {
                         .corner_radius(ui.visuals().noninteractive().corner_radius);
 
                     wiggle_btn = ui.ctx().input(|input| {
-                        if input.key_down(ValveControlPane::WIGGLE_KEY) {
+                        if input.key_down(key) {
                             wiggle_btn
                                 .fill(ui.visuals().widgets.active.bg_fill)
                                 .stroke(ui.visuals().widgets.active.fg_stroke)
@@ -471,16 +460,28 @@ impl ValveControlPane {
                             .id_salt(format!("valve_control_window_{}_wiggle", valve))
                             .sense(Sense::click()),
                         |ui| {
-                            wiggle_btn.show(ui, |ui| ui.horizontal(|ui| add_contents(ui)));
+                            wiggle_btn.show(ui, |ui| {
+                                ui.set_width(200.);
+                                ui.horizontal(|ui| add_contents(ui))
+                            });
                         },
                     )
                     .response
                 }
             }
 
-            let wiggle_btn_response = btn_ui(valve, |ui| {
+            let wiggle_btn_response = btn_ui(valve, Self::WIGGLE_KEY, |ui| {
+                big_symbol_ui(
+                    Self::WIGGLE_KEY
+                        .symbol_or_name()
+                        .chars()
+                        .next()
+                        .log_unwrap(),
+                    ui.visuals().widgets.inactive.bg_fill,
+                    ui.visuals().text_color(),
+                )(ui);
                 ui.add(
-                    Icon::Aperture
+                    Icon::Wiggle
                         .as_image(ui.ctx().theme())
                         .fit_to_exact_size(icon_size),
                 );
@@ -488,7 +489,16 @@ impl ValveControlPane {
             })(ui);
 
             let mut aperture = 0_u32;
-            let aperture_btn_response = btn_ui(valve, |ui| {
+            let aperture_btn_response = btn_ui(valve, Self::APERTURE_KEY, |ui| {
+                big_symbol_ui(
+                    Self::APERTURE_KEY
+                        .symbol_or_name()
+                        .chars()
+                        .next()
+                        .log_unwrap(),
+                    ui.visuals().widgets.inactive.bg_fill,
+                    ui.visuals().text_color(),
+                )(ui);
                 ui.add(
                     Icon::Aperture
                         .as_image(ui.ctx().theme())
@@ -506,7 +516,16 @@ impl ValveControlPane {
             })(ui);
 
             let mut timing_ms = 0_u32;
-            let timing_btn_response = btn_ui(valve, |ui| {
+            let timing_btn_response = btn_ui(valve, Self::TIMING_KEY, |ui| {
+                big_symbol_ui(
+                    Self::TIMING_KEY
+                        .symbol_or_name()
+                        .chars()
+                        .next()
+                        .log_unwrap(),
+                    ui.visuals().widgets.inactive.bg_fill,
+                    ui.visuals().text_color(),
+                )(ui);
                 ui.add(
                     Icon::Timing
                         .as_image(ui.ctx().theme())
@@ -532,6 +551,7 @@ impl ValveControlPane {
         }
     }
 
+    #[profiling::function]
     fn keyboard_actions(&self, shortcut_handler: &mut ShortcutHandler) -> Option<PaneAction> {
         let mut key_action_pairs = Vec::new();
         match self
@@ -624,6 +644,23 @@ impl ValveControlPane {
                     .consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
             }
         }
+    }
+}
+
+fn big_symbol_ui(symbol: char, fill_color: Color32, text_color: Color32) -> impl Fn(&mut Ui) {
+    move |ui: &mut Ui| {
+        let number = RichText::new(symbol.to_string())
+            .color(text_color)
+            .font(FontId::monospace(20.));
+
+        Frame::canvas(ui.style())
+            .fill(fill_color)
+            .stroke(Stroke::NONE)
+            .inner_margin(Margin::same(5))
+            .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
+            .show(ui, |ui| {
+                Label::new(number).selectable(false).ui(ui);
+            });
     }
 }
 
