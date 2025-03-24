@@ -20,7 +20,7 @@ use skyward_mavlink::{
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
-use tracing::{error, info, warn};
+use tracing::{info, trace, warn};
 use ui::ShortcutCard;
 
 use crate::{
@@ -39,6 +39,26 @@ use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
 const SYMBOL_LIST: &str = "123456789-/.";
+
+fn map_symbol_to_key(symbol: char) -> Key {
+    match symbol {
+        '1' => Key::Num1,
+        '2' => Key::Num2,
+        '3' => Key::Num3,
+        '4' => Key::Num4,
+        '5' => Key::Num5,
+        '6' => Key::Num6,
+        '7' => Key::Num7,
+        '8' => Key::Num8,
+        '9' => Key::Num9,
+        '-' => Key::Minus,
+        '/' => Key::Slash,
+        '.' => Key::Period,
+        _ => {
+            unreachable!("Invalid symbol: {}", symbol);
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ValveControlPane {
@@ -63,7 +83,7 @@ pub struct ValveControlPane {
     #[serde(skip)]
     is_settings_window_open: bool,
     #[serde(skip)]
-    valve_symbol_map: HashMap<char, Valve>,
+    valve_key_map: HashMap<Valve, Key>,
     #[serde(skip)]
     valve_window_states: HashMap<Valve, ValveWindowState>,
 }
@@ -71,7 +91,9 @@ pub struct ValveControlPane {
 impl Default for ValveControlPane {
     fn default() -> Self {
         let symbols: Vec<char> = SYMBOL_LIST.chars().collect();
-        let valve_symbol = symbols.into_iter().zip(Valve::iter()).collect();
+        let valve_key_map = Valve::iter()
+            .zip(symbols.into_iter().map(map_symbol_to_key))
+            .collect();
         let valve_window_states = Valve::iter()
             .map(|v| (v, ValveWindowState::Closed))
             .collect();
@@ -82,7 +104,7 @@ impl Default for ValveControlPane {
             manual_refresh: false,
             last_refresh: None,
             is_settings_window_open: false,
-            valve_symbol_map: valve_symbol,
+            valve_key_map,
             valve_window_states,
         }
     }
@@ -146,6 +168,10 @@ impl PaneBehavior for ValveControlPane {
             .find(|&(_, state)| !state.is_closed())
             .map(|(&v, _)| v)
         {
+            trace!(
+                "Valve control window for valve {} is open",
+                valve_window_open
+            );
             Modal::new(ui.auto_id_with(format!("valve_control {}", valve_window_open))).show(
                 ui.ctx(),
                 self.valve_control_window_ui(valve_window_open, action_to_pass),
@@ -229,7 +255,15 @@ impl ValveControlPane {
                 .show(ui, |ui| {
                     for chunk in &valve_chunks {
                         for (symbol, valve) in chunk {
-                            ui.scope(self.valve_frame_ui(valve, map_symbol_to_key(symbol)));
+                            let response = ui
+                                .scope(self.valve_frame_ui(valve, map_symbol_to_key(symbol)))
+                                .inner;
+
+                            if response.clicked() {
+                                info!("Clicked on valve: {:?}", valve);
+                                self.valve_window_states
+                                    .insert(valve, ValveWindowState::Open);
+                            }
                         }
                         ui.end_row();
                     }
@@ -278,7 +312,7 @@ impl ValveControlPane {
         }
     }
 
-    fn valve_frame_ui(&self, valve: Valve, shortcut_key: Key) -> impl FnOnce(&mut Ui) {
+    fn valve_frame_ui(&self, valve: Valve, shortcut_key: Key) -> impl FnOnce(&mut Ui) -> Response {
         move |ui| {
             profiling::function_scope!("valve_frame_ui");
             let valve_str = valve.to_string();
@@ -364,19 +398,28 @@ impl ValveControlPane {
                     .sense(Sense::click()),
                 |ui| {
                     let response = ui.response();
+                    let shortcut_key_is_down = ui
+                        .ctx()
+                        .input(|input| input.key_down(self.valve_key_map[&valve]));
                     let visuals = ui.style().interact(&response);
 
-                    let fill_color = if response.hovered() {
-                        visuals.bg_fill
-                    } else {
-                        visuals.bg_fill.gamma_multiply(0.3)
-                    };
-
-                    let btn_fill_color = if response.hovered() {
-                        visuals.bg_fill.gamma_multiply(0.8).to_opaque()
-                    } else {
-                        visuals.bg_fill
-                    };
+                    let (fill_color, btn_fill_color, stroke) =
+                        if response.clicked() || shortcut_key_is_down {
+                            let visuals = ui.visuals().widgets.active;
+                            (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
+                        } else if response.hovered() {
+                            (
+                                visuals.bg_fill,
+                                visuals.bg_fill.gamma_multiply(0.8).to_opaque(),
+                                visuals.bg_stroke,
+                            )
+                        } else {
+                            (
+                                visuals.bg_fill.gamma_multiply(0.3),
+                                visuals.bg_fill,
+                                Stroke::new(1.0, Color32::TRANSPARENT),
+                            )
+                        };
 
                     let inside_frame = |ui: &mut Ui| {
                         ui.vertical(|ui| {
@@ -394,16 +437,13 @@ impl ValveControlPane {
 
                     Frame::canvas(ui.style())
                         .fill(fill_color)
-                        .stroke(Stroke::NONE)
+                        .stroke(stroke)
                         .inner_margin(ui.spacing().menu_margin)
                         .corner_radius(visuals.corner_radius)
                         .show(ui, inside_frame);
-
-                    if response.clicked() {
-                        info!("Clicked!");
-                    }
                 },
-            );
+            )
+            .response
         }
     }
 
@@ -427,31 +467,42 @@ impl ValveControlPane {
                 add_contents: impl FnOnce(&mut Ui) -> R,
             ) -> impl FnOnce(&mut Ui) -> Response {
                 move |ui| {
-                    let mut wiggle_btn = Frame::canvas(ui.style())
+                    let wiggle_btn = Frame::canvas(ui.style())
                         .inner_margin(ui.spacing().menu_margin)
                         .corner_radius(ui.visuals().noninteractive().corner_radius);
-
-                    wiggle_btn = ui.ctx().input(|input| {
-                        if input.key_down(key) {
-                            wiggle_btn
-                                .fill(ui.visuals().widgets.active.bg_fill)
-                                .stroke(ui.visuals().widgets.active.fg_stroke)
-                        } else {
-                            wiggle_btn
-                                .fill(ui.visuals().widgets.inactive.bg_fill.gamma_multiply(0.3))
-                                .stroke(Stroke::new(2.0, Color32::TRANSPARENT))
-                        }
-                    });
 
                     ui.scope_builder(
                         UiBuilder::new()
                             .id_salt(format!("valve_control_window_{}_wiggle", valve))
                             .sense(Sense::click()),
                         |ui| {
-                            wiggle_btn.show(ui, |ui| {
-                                ui.set_width(200.);
-                                ui.horizontal(|ui| add_contents(ui))
-                            });
+                            let response = ui.response();
+
+                            let clicked = response.clicked();
+                            let shortcut_down = ui.ctx().input(|input| input.key_down(key));
+
+                            let visuals = ui.style().interact(&response);
+                            let stroke = if shortcut_down || clicked {
+                                let visuals = ui.visuals().widgets.active;
+                                visuals.bg_stroke
+                            } else if response.hovered() {
+                                visuals.bg_stroke
+                            } else {
+                                Stroke::new(1., Color32::TRANSPARENT)
+                            };
+
+                            wiggle_btn
+                                .fill(visuals.bg_fill.gamma_multiply(0.3).to_opaque())
+                                .stroke(stroke)
+                                .stroke(stroke)
+                                .show(ui, |ui| {
+                                    ui.set_width(200.);
+                                    ui.horizontal(|ui| add_contents(ui))
+                                });
+
+                            if response.clicked() {
+                                info!("Clicked!");
+                            }
                         },
                     )
                     .response
@@ -591,37 +642,16 @@ impl ValveControlPane {
             None => {
                 shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
                 // No window is open, so we can map the keys to open the valve control windows
-                for &symbol in self.valve_symbol_map.keys() {
+                for (&valve, &key) in self.valve_key_map.iter() {
                     key_action_pairs.push((
                         Modifiers::NONE,
-                        map_symbol_to_key(symbol),
-                        PaneAction::OpenValveControl(self.valve_symbol_map[&symbol]),
+                        key,
+                        PaneAction::OpenValveControl(valve),
                     ));
                 }
                 shortcut_handler
                     .consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
             }
-        }
-    }
-}
-
-fn map_symbol_to_key(symbol: char) -> Key {
-    match symbol {
-        '1' => Key::Num1,
-        '2' => Key::Num2,
-        '3' => Key::Num3,
-        '4' => Key::Num4,
-        '5' => Key::Num5,
-        '6' => Key::Num6,
-        '7' => Key::Num7,
-        '8' => Key::Num8,
-        '9' => Key::Num9,
-        '-' => Key::Minus,
-        '/' => Key::Slash,
-        '.' => Key::Period,
-        _ => {
-            error!("Invalid symbol: {}", symbol);
-            panic!("Invalid symbol: {}", symbol)
         }
     }
 }
