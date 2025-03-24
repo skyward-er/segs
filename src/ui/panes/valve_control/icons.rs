@@ -1,9 +1,7 @@
-use egui::{Context, Image, ImageSource, SizeHint, TextureOptions, Theme, Ui};
+use egui::{Context, Image, ImageSource, SizeHint, TextureOptions, Theme};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use tracing::error;
-
-use crate::error::ErrInstrument;
 
 #[derive(Debug, Clone, Copy, EnumIter)]
 pub enum Icon {
