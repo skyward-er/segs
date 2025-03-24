@@ -1,13 +1,18 @@
-use egui::{ImageSource, Rect, Theme, Ui};
+use egui::{Context, Image, ImageSource, SizeHint, TextureOptions, Theme, Ui};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+use tracing::error;
 
-#[derive(Debug, Clone, Copy)]
+use crate::error::ErrInstrument;
+
+#[derive(Debug, Clone, Copy, EnumIter)]
 pub enum Icon {
     Aperture,
     Timing,
 }
 
 impl Icon {
-    fn get_image(&self, theme: Theme) -> ImageSource {
+    fn as_image_source(&self, theme: Theme) -> ImageSource {
         match (&self, theme) {
             (Icon::Aperture, Theme::Light) => {
                 egui::include_image!(concat!(
@@ -35,11 +40,25 @@ impl Icon {
             }
         }
     }
-}
 
-impl Icon {
-    pub fn paint(&mut self, ui: &mut Ui, image_rect: Rect) {
-        let theme = ui.ctx().theme();
-        egui::Image::new(self.get_image(theme)).paint_at(ui, image_rect);
+    pub fn init_cache(ctx: &Context, size_hint: (u32, u32)) {
+        let size_hint = SizeHint::Size(size_hint.0, size_hint.1);
+        for icon in Self::iter() {
+            if let Err(e) =
+                icon.as_image_source(ctx.theme())
+                    .load(ctx, TextureOptions::LINEAR, size_hint)
+            {
+                error!("Error loading icons: {}", e);
+            }
+        }
+    }
+
+    pub fn as_image(&self, theme: Theme) -> Image {
+        Image::new(self.as_image_source(theme))
+    }
+
+    pub fn reset_cache(&self, ui: &mut Ui) {
+        let img: Image = self.as_image(ui.ctx().theme());
+        ui.ctx().forget_image(img.uri().log_unwrap());
     }
 }

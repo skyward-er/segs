@@ -63,7 +63,7 @@ impl ValveStateManager {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter, Hash)]
 pub enum Valve {
     OxFilling,
     OxRelease,
@@ -131,9 +131,9 @@ pub enum ParameterValue<T, E> {
 impl<T: Display, E: Display> Display for ParameterValue<T, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParameterValue::Valid(value) => write!(f, "{}", value),
-            ParameterValue::Missing => write!(f, "MISSING"),
-            ParameterValue::Invalid(error) => write!(f, "INVALID: {}", error),
+            Self::Valid(value) => write!(f, "{}", value),
+            Self::Missing => write!(f, "MISSING"),
+            Self::Invalid(error) => write!(f, "INVALID: {}", error),
         }
     }
 }
