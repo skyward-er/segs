@@ -139,15 +139,13 @@ impl PaneBehavior for ValveControlPane {
         match action_to_pass {
             // Open the valve control window if the action is to open it
             Some(PaneAction::OpenValveControl(valve)) => {
-                self.valve_window_states
-                    .insert(valve, ValveWindowState::Open);
+                self.set_window_state(valve, ValveWindowState::Open);
             }
             // Close if the user requests so
             Some(PaneAction::CloseValveControls) => {
                 warn!("closing all");
                 for valve in Valve::iter() {
-                    self.valve_window_states
-                        .insert(valve, ValveWindowState::Closed);
+                    self.set_window_state(valve, ValveWindowState::Closed);
                 }
             }
             // Ignore otherwise
@@ -261,8 +259,7 @@ impl ValveControlPane {
 
                             if response.clicked() {
                                 info!("Clicked on valve: {:?}", valve);
-                                self.valve_window_states
-                                    .insert(valve, ValveWindowState::Open);
+                                self.set_window_state(valve, ValveWindowState::Open);
                             }
                         }
                         ui.end_row();
@@ -398,13 +395,12 @@ impl ValveControlPane {
                     .sense(Sense::click()),
                 |ui| {
                     let response = ui.response();
-                    let shortcut_key_is_down = ui
-                        .ctx()
-                        .input(|input| input.key_down(self.valve_key_map[&valve]));
+                    let shortcut_key_is_down = ui.ctx().input(|input| input.key_down(shortcut_key));
                     let visuals = ui.style().interact(&response);
 
                     let (fill_color, btn_fill_color, stroke) = if response.clicked()
-                        || shortcut_key_is_down && self.valve_window_states[&valve].is_closed()
+                        || shortcut_key_is_down
+                            && self.valve_window_states.values().all(|&v| v.is_closed())
                     {
                         let visuals = ui.visuals().widgets.active;
                         (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
@@ -455,7 +451,7 @@ impl ValveControlPane {
     fn valve_control_window_ui(
         &mut self,
         valve: Valve,
-        action: Option<PaneAction>,
+        mut action: Option<PaneAction>,
     ) -> impl FnOnce(&mut Ui) {
         move |ui| {
             profiling::function_scope!("valve_control_window_ui");
@@ -463,7 +459,7 @@ impl ValveControlPane {
             let text_size = 16.;
 
             fn btn_ui<R>(
-                valve: Valve,
+                window_state: &ValveWindowState,
                 key: Key,
                 add_contents: impl FnOnce(&mut Ui) -> R,
             ) -> impl FnOnce(&mut Ui) -> Response {
@@ -472,18 +468,15 @@ impl ValveControlPane {
                         .inner_margin(ui.spacing().menu_margin)
                         .corner_radius(ui.visuals().noninteractive().corner_radius);
 
-                    ui.scope_builder(
-                        UiBuilder::new()
-                            .id_salt(format!("valve_control_window_{}_wiggle", valve))
-                            .sense(Sense::click()),
-                        |ui| {
-                            let response = ui.response();
+                    ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
+                        let response = ui.response();
 
-                            let clicked = response.clicked();
-                            let shortcut_down = ui.ctx().input(|input| input.key_down(key));
+                        let clicked = response.clicked();
+                        let shortcut_down = ui.ctx().input(|input| input.key_down(key));
 
-                            let visuals = ui.style().interact(&response);
-                            let (fill_color, stroke) = if shortcut_down || clicked {
+                        let visuals = ui.style().interact(&response);
+                        let (fill_color, stroke) =
+                            if clicked || shortcut_down && window_state.is_open() {
                                 let visuals = ui.visuals().widgets.active;
                                 (visuals.bg_fill, visuals.bg_stroke)
                             } else if response.hovered() {
@@ -493,25 +486,25 @@ impl ValveControlPane {
                                 (visuals.bg_fill.gamma_multiply(0.3), stroke)
                             };
 
-                            wiggle_btn
-                                .fill(fill_color)
-                                .stroke(stroke)
-                                .stroke(stroke)
-                                .show(ui, |ui| {
-                                    ui.set_width(200.);
-                                    ui.horizontal(|ui| add_contents(ui))
-                                });
+                        wiggle_btn
+                            .fill(fill_color)
+                            .stroke(stroke)
+                            .stroke(stroke)
+                            .show(ui, |ui| {
+                                ui.set_width(200.);
+                                ui.horizontal(|ui| add_contents(ui))
+                            });
 
-                            if response.clicked() {
-                                info!("Clicked!");
-                            }
-                        },
-                    )
+                        if response.clicked() {
+                            info!("Clicked!");
+                        }
+                    })
                     .response
                 }
             }
 
-            let wiggle_btn_response = btn_ui(valve, Self::WIGGLE_KEY, |ui| {
+            let window_state = &self.valve_window_states[&valve];
+            let wiggle_btn_response = btn_ui(window_state, Self::WIGGLE_KEY, |ui| {
                 ShortcutCard::new(map_key_to_shortcut(Self::WIGGLE_KEY))
                     .text_color(ui.visuals().text_color())
                     .fill_color(ui.visuals().widgets.inactive.bg_fill)
@@ -525,8 +518,8 @@ impl ValveControlPane {
                 ui.add(Label::new(RichText::new("Wiggle").size(text_size)).selectable(false));
             })(ui);
 
-            let mut aperture = 0_u32;
-            let aperture_btn_response = btn_ui(valve, Self::APERTURE_KEY, |ui| {
+            let mut aperture = self.valves_state.get_aperture_for(valve).valid_or(0.5) * 100.;
+            let aperture_btn_response = btn_ui(window_state, Self::APERTURE_KEY, |ui| {
                 ShortcutCard::new(map_key_to_shortcut(Self::APERTURE_KEY))
                     .text_color(ui.visuals().text_color())
                     .fill_color(ui.visuals().widgets.inactive.bg_fill)
@@ -538,18 +531,24 @@ impl ValveControlPane {
                         .fit_to_exact_size(icon_size),
                 );
                 ui.add(Label::new(RichText::new("Aperture: ").size(text_size)).selectable(false));
+                let drag_value_id = ui.next_auto_id();
                 ui.add(
                     DragValue::new(&mut aperture)
                         .speed(0.5)
                         .range(0.0..=100.0)
-                        .fixed_decimals(1)
+                        .fixed_decimals(0)
                         .update_while_editing(false)
                         .suffix("%"),
                 );
+                if matches!(window_state, ValveWindowState::ApertureFocused) {
+                    ui.ctx().memory_mut(|m| {
+                        m.request_focus(drag_value_id);
+                    });
+                }
             })(ui);
 
             let mut timing_ms = 0_u32;
-            let timing_btn_response = btn_ui(valve, Self::TIMING_KEY, |ui| {
+            let timing_btn_response = btn_ui(window_state, Self::TIMING_KEY, |ui| {
                 ShortcutCard::new(map_key_to_shortcut(Self::TIMING_KEY))
                     .text_color(ui.visuals().text_color())
                     .fill_color(ui.visuals().widgets.inactive.bg_fill)
@@ -561,6 +560,7 @@ impl ValveControlPane {
                         .fit_to_exact_size(icon_size),
                 );
                 ui.add(Label::new(RichText::new("Timing: ").size(text_size)).selectable(false));
+                let drag_value_id = ui.next_auto_id();
                 ui.add(
                     DragValue::new(&mut timing_ms)
                         .speed(1)
@@ -569,14 +569,53 @@ impl ValveControlPane {
                         .update_while_editing(false)
                         .suffix(" [ms]"),
                 );
+                if matches!(window_state, ValveWindowState::TimingFocused) {
+                    ui.ctx().memory_mut(|m| {
+                        m.request_focus(drag_value_id);
+                    });
+                }
             })(ui);
 
-            if wiggle_btn_response.clicked() || matches!(action, Some(PaneAction::Wiggle)) {
-                info!("Wiggle valve: {:?}", valve);
-                self.commands.push(Command::wiggle(valve).into());
+            // consider that action may be different that null if a keyboard shortcut was captured
+            if wiggle_btn_response.clicked() {
+                action = Some(PaneAction::Wiggle);
+            } else if aperture_btn_response.clicked() {
+                action = Some(PaneAction::SetAperture);
+            } else if timing_btn_response.clicked() {
+                action = Some(PaneAction::SetTiming);
             }
-            // self.valve_window_states
-            //     .insert(valve, ValveWindowState::Closed);
+
+            match action {
+                Some(PaneAction::Wiggle) => {
+                    info!("Issued command to Wiggle valve: {:?}", valve);
+                    self.commands.push(Command::wiggle(valve).into());
+                }
+                Some(PaneAction::SetTiming) => {
+                    info!(
+                        "Issued command to set timing for valve {:?} to {} ms",
+                        valve, timing_ms
+                    );
+                    self.commands
+                        .push(Command::set_atomic_valve_timing(valve, timing_ms).into());
+                    self.set_window_state(valve, ValveWindowState::Open);
+                }
+                Some(PaneAction::SetAperture) => {
+                    info!(
+                        "Issued command to set aperture for valve {:?} to {}%",
+                        valve, aperture
+                    );
+                    self.commands
+                        .push(Command::set_valve_maximum_aperture(valve, aperture / 100.).into());
+                    self.set_window_state(valve, ValveWindowState::Open);
+                }
+                Some(PaneAction::FocusOnTiming) => {
+                    self.set_window_state(valve, ValveWindowState::TimingFocused);
+                }
+                Some(PaneAction::FocusOnAperture) => {
+                    self.set_window_state(valve, ValveWindowState::ApertureFocused);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -684,6 +723,11 @@ impl ValveControlPane {
     fn reset_last_refresh(&mut self) {
         self.last_refresh = Some(Instant::now());
         self.manual_refresh = false;
+    }
+
+    #[inline]
+    fn set_window_state(&mut self, valve: Valve, state: ValveWindowState) {
+        self.valve_window_states.insert(valve, state);
     }
 }
 
