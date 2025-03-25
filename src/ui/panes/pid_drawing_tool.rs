@@ -348,31 +348,33 @@ impl PidPane {
             .chain(self.connections.iter().flat_map(|conn| conn.points()))
             .collect();
 
-        let min_x = points
-            .iter()
-            .map(|p| p.x)
-            .min_by(|a, b| a.total_cmp(b))
-            .log_unwrap();
-        let min_y = points
-            .iter()
-            .map(|p| p.y)
-            .min_by(|a, b| a.total_cmp(b))
-            .log_unwrap();
-        let min = Vec2::new(min_x, min_y);
+        if !points.is_empty() {
+            let min_x = points
+                .iter()
+                .map(|p| p.x)
+                .min_by(|a, b| a.total_cmp(b))
+                .log_unwrap();
+            let min_y = points
+                .iter()
+                .map(|p| p.y)
+                .min_by(|a, b| a.total_cmp(b))
+                .log_unwrap();
+            let min = Vec2::new(min_x, min_y);
 
-        let max_x = points
-            .iter()
-            .map(|p| p.x)
-            .max_by(|a, b| a.total_cmp(b))
-            .log_unwrap();
-        let max_y = points
-            .iter()
-            .map(|p| p.y)
-            .max_by(|a, b| a.total_cmp(b))
-            .log_unwrap();
-        let max = Vec2::new(max_x, max_y);
+            let max_x = points
+                .iter()
+                .map(|p| p.x)
+                .max_by(|a, b| a.total_cmp(b))
+                .log_unwrap();
+            let max_y = points
+                .iter()
+                .map(|p| p.y)
+                .max_by(|a, b| a.total_cmp(b))
+                .log_unwrap();
+            let max = Vec2::new(max_x, max_y);
 
-        self.grid.zero_pos = ui_center - min.midpoint(max) * self.grid.size();
+            self.grid.zero_pos = ui_center - min.midpoint(max) * self.grid.size();
+        }
     }
 
     fn handle_zoom(&mut self, ui: &Ui, theme: Theme, pointer_pos: Vec2) {
