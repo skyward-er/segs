@@ -9,12 +9,11 @@ mod message_broker;
 mod ui;
 mod utils;
 
-use std::sync::LazyLock;
-
-use tokio::runtime::Runtime;
-use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
+use std::{fs::create_dir_all, sync::LazyLock};
 
 use error::ErrInstrument;
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
+
 use mavlink::reflection::ReflectionContext;
 use ui::App;
 
@@ -26,21 +25,28 @@ static APP_NAME: &str = "segs";
 fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
     let env_filter = EnvFilter::builder().from_env_lossy();
-    let file_appender = tracing_appender::rolling::daily("logs/", "segs.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    tracing_subscriber::registry()
+    let registry = tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
-        .with(
+        .with(tracing_tracy::TracyLayer::default());
+
+    // Create the logs directory if it doesn't exist and add to the registry
+    if let Some(base_dirs) = directories::BaseDirs::new() {
+        let local_dir = base_dirs.data_local_dir();
+        let logs_dir = local_dir.join("logs");
+        create_dir_all(&logs_dir).log_expect("Failed to create logs directory");
+
+        let file_appender = tracing_appender::rolling::daily(logs_dir, "segs.log");
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+        let registry = registry.with(
             tracing_subscriber::fmt::layer()
                 .json()
                 .with_writer(non_blocking),
-        )
-        .with(tracing_tracy::TracyLayer::default())
-        .init();
-
-    // Start Tokio runtime (TODO: decide whether to use Tokio or a simpler thread-based approach)
-    let rt = Runtime::new().log_expect("Unable to create Tokio Runtime");
-    let _enter = rt.enter();
+        );
+        // Initialize the logger
+        registry.init();
+    } else {
+        registry.init();
+    }
 
     let native_options = eframe::NativeOptions {
         // By modifying the viewport, we can change things like the windows size
