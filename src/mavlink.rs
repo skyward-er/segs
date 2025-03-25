@@ -5,7 +5,7 @@
 
 mod base;
 mod error;
-mod reflection;
+pub mod reflection;
 
 // Export all the types from the base module as if they were defined in this module
 pub use base::*;

@@ -1,4 +1,4 @@
-mod source_window;
+pub mod source_window;
 
 use super::PaneBehavior;
 use crate::{
@@ -53,7 +53,7 @@ impl PaneBehavior for Plot2DPane {
         if settings.are_sources_changed() {
             self.state_valid = false;
         }
-
+        
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
         egui_plot::Plot::new("plot")
@@ -89,7 +89,7 @@ impl PaneBehavior for Plot2DPane {
 
     #[profiling::function]
     fn update(&mut self, messages: &[TimedMessage]) {
-        if !self.state_valid {
+        if !self.state_valid { //si aspetta di ricevere tutti i messaggi oppure no
             self.line_data.clear();
         }
 
@@ -98,14 +98,14 @@ impl PaneBehavior for Plot2DPane {
         } = &self.settings;
 
         for msg in messages {
-            let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0];
+            let x: f64 = extract_from_message(&msg.message, [x_field]).unwrap()[0]; //estraiamo i messaggi dei field che ci interessano
             let ys: Vec<f64> = extract_from_message(&msg.message, y_fields).unwrap();
 
             if self.line_data.len() < ys.len() {
                 self.line_data.resize(ys.len(), Vec::new());
             }
 
-            for (line, y) in zip(&mut self.line_data, ys) {
+            for (line, y) in zip(&mut self.line_data, ys) { 
                 let point = if x_field == "timestamp" {
                     [x / 1e6, y]
                 } else {
@@ -120,7 +120,7 @@ impl PaneBehavior for Plot2DPane {
     }
 
     fn get_message_subscription(&self) -> Option<u32> {
-        Some(self.settings.msg_id)
+        Some(self.settings.msg_id) 
     }
 
     fn should_send_message_history(&self) -> bool {
@@ -129,7 +129,7 @@ impl PaneBehavior for Plot2DPane {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct MsgSources {
+pub struct MsgSources {
     msg_id: u32,
     x_field: String,
     y_fields: Vec<String>,
@@ -154,7 +154,7 @@ impl PartialEq for MsgSources {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct LineSettings {
+pub struct LineSettings {
     field: String,
     width: f32,
     color: Color32,
