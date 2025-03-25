@@ -5,7 +5,9 @@ mod symbols;
 
 use connections::Connection;
 use core::f32;
-use egui::{Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui};
+use egui::{
+    Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
+};
 use egui_tiles::TileId;
 use elements::Element;
 use glam::Vec2;
@@ -263,12 +265,14 @@ impl PidPane {
                 self.action = Some(Action::Connect(elem_idx));
                 ui.close_menu();
             }
-            if ui.button("Delete").clicked() {
+            let btn_response = Button::new("Delete").ui(ui);
+            self.elements[elem_idx].context_menu(ui);
+            // Handle the delete button
+            if btn_response.clicked() {
                 self.delete_element(elem_idx);
                 self.action.take();
                 ui.close_menu();
             }
-            self.elements[elem_idx].context_menu(ui);
         } else if let Some((conn_idx, segm_idx)) = self.hovers_connection(pointer_pos) {
             if ui.button("Split").clicked() {
                 self.connections[conn_idx].split(segm_idx, self.grid.screen_to_grid(pointer_pos));
