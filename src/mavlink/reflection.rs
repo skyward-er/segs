@@ -164,6 +164,14 @@ impl IndexedField {
     pub fn name(&self) -> &str {
         &self.field.name
     }
+
+    pub fn extract_as_string<T: Message>(&self, message: &T) -> Result<String, String> {
+        let value = message
+            .get_field(self.id)
+            .ok_or("Field not found".to_string())?;
+        let str_value = format!("{:?}", value);
+        Ok(str_value)
+    }
 }
 
 /// ### Extractors
