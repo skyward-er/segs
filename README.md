@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./assets/segs_banner.png" alt="Logo" width="400"/>
+  <img src="./assets/segs_banner.png" alt="Logo"/>
   <br>
   <img src="https://img.shields.io/badge/version-v0.1.0-blue.svg?logo=rust">
   <img src="https://img.shields.io/badge/development-alpha-red">
