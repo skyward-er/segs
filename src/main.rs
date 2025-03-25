@@ -31,8 +31,8 @@ fn main() -> Result<(), eframe::Error> {
 
     // Create the logs directory if it doesn't exist and add to the registry
     if let Some(base_dirs) = directories::BaseDirs::new() {
-        let local_dir = base_dirs.data_local_dir();
-        let logs_dir = local_dir.join("logs");
+        let proj_dir = base_dirs.data_local_dir().join(APP_NAME);
+        let logs_dir = proj_dir.join("logs");
         create_dir_all(&logs_dir).log_expect("Failed to create logs directory");
 
         let file_appender = tracing_appender::rolling::daily(logs_dir, "segs.log");
