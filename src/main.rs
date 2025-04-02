@@ -26,8 +26,7 @@ fn main() -> Result<(), eframe::Error> {
     // Set up logging (USE RUST_LOG=debug to see logs)
     let env_filter = EnvFilter::builder().from_env_lossy();
     let registry = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
-        .with(tracing_tracy::TracyLayer::default());
+        .with(tracing_subscriber::fmt::layer().with_filter(env_filter));
 
     // Create the logs directory if it doesn't exist and add to the registry
     if let Some(base_dirs) = directories::BaseDirs::new() {
