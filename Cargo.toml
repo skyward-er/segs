@@ -7,7 +7,7 @@ authors = [
     "Niccolò Betto <niccolo.betto@skywarder.eu>",
 ]
 edition = "2024"
-edescription = "Skyward Enhanced Ground Software"
+description = "Skyward Enhanced Ground Software"
 license = "MIT"
 
 [dependencies]
