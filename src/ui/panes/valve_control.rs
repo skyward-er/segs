@@ -33,7 +33,7 @@ use super::PaneBehavior;
 
 use commands::CommandSM;
 use icons::Icon;
-use ui::{ShortcutCard, ValveControlWindow, map_key_to_shortcut};
+use ui::{ShortcutCard, ValveControlView, map_key_to_shortcut};
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
@@ -84,7 +84,7 @@ pub struct ValveControlPane {
     #[serde(skip)]
     valve_key_map: HashMap<Valve, Key>,
     #[serde(skip)]
-    valve_window: Option<ValveControlWindow>,
+    valve_view: Option<ValveControlView>,
 }
 
 impl Default for ValveControlPane {
@@ -101,7 +101,7 @@ impl Default for ValveControlPane {
             last_refresh: None,
             is_settings_window_open: false,
             valve_key_map,
-            valve_window: None,
+            valve_view: None,
         }
     }
 }
@@ -114,48 +114,48 @@ impl PaneBehavior for ValveControlPane {
         // Set this to at least double the maximum icon size used
         Icon::init_cache(ui.ctx(), (100, 100));
 
-        let res = ui
-            .scope_builder(UiBuilder::new().sense(Sense::click_and_drag()), |ui| {
-                self.pane_ui()(ui);
-                ui.allocate_space(ui.available_size());
-            })
-            .response;
-
-        // Show the menu when the user right-clicks the pane
-        res.context_menu(self.menu_ui());
-
-        // Check if the user started dragging the pane
-        if res.drag_started() {
-            pane_response.set_drag_started();
-        }
-
-        // capture actions from keyboard shortcuts
-        let action = self.keyboard_actions(shortcut_handler);
-
-        match action {
-            // Open the valve control window if the action is to open it
-            Some(PaneAction::OpenValveControl(valve)) => {
-                self.valve_window.replace(ValveControlWindow::new(valve));
-            }
-            None => {}
-        }
-
-        Window::new("Settings")
-            .id(ui.auto_id_with("settings"))
-            .auto_sized()
-            .collapsible(true)
-            .movable(true)
-            .open(&mut self.is_settings_window_open)
-            .show(ui.ctx(), Self::settings_window_ui(&mut self.auto_refresh));
-
-        if let Some(valve_window) = &mut self.valve_window {
-            if let Some(command) = valve_window.ui(ui, shortcut_handler) {
+        if let Some(valve_view) = &mut self.valve_view {
+            if let Some(command) = valve_view.ui(ui, shortcut_handler) {
                 self.commands.push(command.into());
             }
 
-            if valve_window.is_closed() {
-                self.valve_window = None;
+            if valve_view.is_closed() {
+                self.valve_view = None;
             }
+        } else {
+            let res = ui
+                .scope_builder(UiBuilder::new().sense(Sense::click_and_drag()), |ui| {
+                    self.pane_ui()(ui);
+                    ui.allocate_space(ui.available_size());
+                })
+                .response;
+
+            // Show the menu when the user right-clicks the pane
+            res.context_menu(self.menu_ui());
+
+            // Check if the user started dragging the pane
+            if res.drag_started() {
+                pane_response.set_drag_started();
+            }
+
+            // capture actions from keyboard shortcuts
+            let action = self.keyboard_actions(shortcut_handler);
+
+            match action {
+                // Open the valve control window if the action is to open it
+                Some(PaneAction::OpenValveControl(valve)) => {
+                    self.valve_view.replace(ValveControlView::new(valve));
+                }
+                None => {}
+            }
+
+            Window::new("Settings")
+                .id(ui.auto_id_with("settings"))
+                .auto_sized()
+                .collapsible(true)
+                .movable(true)
+                .open(&mut self.is_settings_window_open)
+                .show(ui.ctx(), Self::settings_window_ui(&mut self.auto_refresh));
         }
 
         pane_response
@@ -241,7 +241,7 @@ impl ValveControlPane {
 
                             if response.clicked() {
                                 info!("Clicked on valve: {:?}", valve);
-                                self.valve_window = Some(ValveControlWindow::new(valve));
+                                self.valve_view = Some(ValveControlView::new(valve));
                             }
                         }
                         ui.end_row();
@@ -381,7 +381,7 @@ impl ValveControlPane {
                     let visuals = ui.style().interact(&response);
 
                     let (fill_color, btn_fill_color, stroke) = if response.clicked()
-                        || shortcut_key_is_down && self.valve_window.is_none()
+                        || shortcut_key_is_down && self.valve_view.is_none()
                     {
                         let visuals = ui.visuals().widgets.active;
                         (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)

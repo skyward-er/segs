@@ -6,6 +6,7 @@ use egui::{
 pub struct ShortcutCard {
     shortcut: KeyboardShortcut,
     text_size: f32,
+    margin: Margin,
     text_color: Option<Color32>,
     fill_color: Option<Color32>,
 }
@@ -30,7 +31,7 @@ impl Widget for ShortcutCard {
         Frame::canvas(ui.style())
             .fill(fill_color)
             .stroke(Stroke::NONE)
-            .inner_margin(Margin::same(5))
+            .inner_margin(self.margin)
             .corner_radius(corner_radius)
             .show(ui, |ui| {
                 Label::new(number).selectable(false).ui(ui);
@@ -44,6 +45,7 @@ impl ShortcutCard {
         Self {
             shortcut,
             text_size: 20.,
+            margin: Margin::same(5),
             text_color: None,
             fill_color: None,
         }
@@ -61,6 +63,11 @@ impl ShortcutCard {
 
     pub fn fill_color(mut self, fill_color: Color32) -> Self {
         self.fill_color = Some(fill_color);
+        self
+    }
+
+    pub fn margin(mut self, margin: Margin) -> Self {
+        self.margin = margin;
         self
     }
 }
