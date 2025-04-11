@@ -1,8 +1,8 @@
 use egui::{
-    Align, Button, Color32, Direction, DragValue, FontId, Frame, Grid, Key, Label, Layout, Margin,
-    Modifiers, Response, RichText, Sense, Stroke, TextEdit, Ui, UiBuilder, Vec2, Widget,
+    Align, Color32, Context, Direction, DragValue, Frame, Id, Key, Label, Layout, Margin,
+    Modifiers, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, Widget,
 };
-use egui_extras::{Size, Strip, StripBuilder};
+use egui_extras::{Size, StripBuilder};
 use tracing::info;
 
 use crate::ui::shortcuts::{ShortcutHandler, ShortcutMode};
@@ -26,15 +26,17 @@ pub struct ValveControlView {
     state: ValveViewState,
     timing_ms: u32,
     aperture_perc: f32,
+    id: Id,
 }
 
 impl ValveControlView {
-    pub fn new(valve: Valve) -> ValveControlView {
+    pub fn new(valve: Valve, id: Id) -> ValveControlView {
         ValveControlView {
             valve,
             state: ValveViewState::Open,
             timing_ms: 0,
             aperture_perc: 0.0,
+            id,
         }
     }
 
@@ -56,57 +58,16 @@ impl ValveControlView {
         ui.scope(self.draw_view_ui(&mut action));
 
         // Handle the actions
-        self.handle_actions(action)
+        self.handle_actions(action, ui.ctx())
     }
 
+    // DISCLAIMER: the code for the UI is really ugly, still learning how to use
+    // egui and in a hurry due to deadlines. If you know how to do it better
+    // feel free to help us
     fn draw_view_ui(&mut self, action: &mut Option<WindowAction>) -> impl FnOnce(&mut Ui) {
         |ui: &mut Ui| {
-            let icon_size = Vec2::splat(20.);
-            let text_size = 14.;
-
-            fn btn_ui<R>(
-                window_state: &ValveViewState,
-                key: Key,
-                add_contents: impl FnOnce(&mut Ui) -> R,
-            ) -> impl FnOnce(&mut Ui) -> Response {
-                move |ui| {
-                    let btn = Frame::canvas(ui.style())
-                        .inner_margin(Margin::same(4))
-                        .corner_radius(ui.visuals().noninteractive().corner_radius);
-
-                    ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
-                        let response = ui.response();
-
-                        let clicked = response.clicked();
-                        let shortcut_down = ui.ctx().input(|input| input.key_down(key));
-
-                        let visuals = ui.style().interact(&response);
-                        let (fill_color, stroke) =
-                            if clicked || shortcut_down && window_state.is_open() {
-                                let visuals = ui.visuals().widgets.active;
-                                (visuals.bg_fill, visuals.bg_stroke)
-                            } else if response.hovered() {
-                                (visuals.bg_fill, visuals.bg_stroke)
-                            } else {
-                                let stroke = Stroke::new(1., Color32::TRANSPARENT);
-                                (visuals.bg_fill.gamma_multiply(0.3), stroke)
-                            };
-
-                        btn.fill(fill_color)
-                            .stroke(stroke)
-                            .stroke(stroke)
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.horizontal(|ui| add_contents(ui))
-                            });
-
-                        if response.clicked() {
-                            info!("Clicked!");
-                        }
-                    })
-                    .response
-                }
-            }
+            let aperture_field_focus = self.id.with("aperture_field_focus");
+            let timing_field_focus = self.id.with("timing_field_focus");
 
             let valid_fill = ui
                 .visuals()
@@ -121,22 +82,26 @@ impl ValveControlView {
                 .bg_fill
                 .lerp_to_gamma(Color32::RED, 0.3);
 
-            fn shortcut_ui(ui: &Ui, key: &Key) -> ShortcutCard {
+            fn shortcut_ui(ui: &Ui, key: &Key, upper_response: &Response) -> ShortcutCard {
                 let vis = ui.visuals();
+                let uvis = ui.style().interact(upper_response);
                 ShortcutCard::new(map_key_to_shortcut(*key))
                     .text_color(vis.strong_text_color())
-                    .fill_color(vis.gray_out(vis.widgets.inactive.bg_fill))
+                    .fill_color(vis.gray_out(uvis.bg_fill))
                     .margin(Margin::symmetric(5, 2))
                     .text_size(12.)
             }
 
             fn add_parameter_btn(ui: &mut Ui, key: Key) -> Response {
                 ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
+                    let visuals = *ui.style().interact(&ui.response());
+                    let shortcut_card = shortcut_ui(ui, &key, &ui.response());
+
                     Frame::canvas(ui.style())
                         .inner_margin(Margin::symmetric(4, 2))
                         .outer_margin(0)
                         .corner_radius(ui.visuals().noninteractive().corner_radius)
-                        .fill(ui.visuals().widgets.inactive.bg_fill)
+                        .fill(visuals.bg_fill)
                         .stroke(Stroke::new(1., Color32::TRANSPARENT))
                         .show(ui, |ui| {
                             ui.set_height(ui.available_height());
@@ -144,13 +109,11 @@ impl ValveControlView {
                                 ui.set_height(21.);
                                 ui.add_space(1.);
                                 Label::new(
-                                    RichText::new("SET")
-                                        .size(16.)
-                                        .color(ui.visuals().widgets.inactive.text_color()),
+                                    RichText::new("SET").size(16.).color(visuals.text_color()),
                                 )
                                 .selectable(false)
                                 .ui(ui);
-                                shortcut_ui(ui, &key).ui(ui);
+                                shortcut_card.ui(ui);
                             });
                         });
                 })
@@ -158,91 +121,117 @@ impl ValveControlView {
             }
 
             // set aperture and timing buttons
-            let aperture_btn: Box<dyn FnOnce(&mut Ui) -> Response> = match self.state {
-                ValveViewState::Open => Box::new(|ui| add_parameter_btn(ui, FOCUS_APERTURE_KEY)),
-                ValveViewState::ApertureFocused => {
-                    Box::new(|ui| add_parameter_btn(ui, SET_PAR_KEY))
+            fn show_aperture_btn(
+                state: &ValveViewState,
+                action: &mut Option<WindowAction>,
+                ui: &mut Ui,
+            ) -> Response {
+                let res = match state {
+                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_APERTURE_KEY)),
+                    ValveViewState::ApertureFocused => Some(add_parameter_btn(ui, SET_PAR_KEY)),
+                    ValveViewState::TimingFocused | ValveViewState::Closed => None,
+                };
+                if let Some(res) = &res {
+                    if res.clicked() {
+                        // set the focus on the aperture field
+                        action.replace(WindowAction::SetAperture);
+                    }
                 }
-                ValveViewState::TimingFocused | ValveViewState::Closed => {
-                    Box::new(|ui| ui.response())
-                }
-            };
+                res.unwrap_or_else(|| ui.response())
+            }
 
             // set timing button
-            let timing_btn: Box<dyn FnOnce(&mut Ui) -> Response> = match self.state {
-                ValveViewState::Open => Box::new(|ui| add_parameter_btn(ui, FOCUS_TIMING_KEY)),
-                ValveViewState::TimingFocused => Box::new(|ui| add_parameter_btn(ui, SET_PAR_KEY)),
-                ValveViewState::ApertureFocused | ValveViewState::Closed => {
-                    Box::new(|ui| ui.response())
+            fn show_timing_btn(
+                state: &ValveViewState,
+                action: &mut Option<WindowAction>,
+                ui: &mut Ui,
+            ) -> Response {
+                let res = match state {
+                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_TIMING_KEY)),
+                    ValveViewState::TimingFocused => Some(add_parameter_btn(ui, SET_PAR_KEY)),
+                    ValveViewState::ApertureFocused | ValveViewState::Closed => None,
+                };
+                if let Some(res) = &res {
+                    if res.clicked() {
+                        // set the focus on the aperture field
+                        action.replace(WindowAction::SetTiming);
+                    }
                 }
-            };
+                res.unwrap_or_else(|| ui.response())
+            }
 
             // wiggle button with shortcut
-            let wiggle_btn = |ui: &mut Ui| {
-                ui.scope_builder(
-                    UiBuilder::new().id_salt(WIGGLE_KEY).sense(Sense::click()),
-                    |ui| {
-                        Frame::canvas(ui.style())
-                            .inner_margin(Margin::symmetric(4, 2))
-                            .outer_margin(0)
-                            .corner_radius(ui.visuals().noninteractive().corner_radius)
-                            .fill(ui.visuals().widgets.inactive.bg_fill)
-                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                            .show(ui, |ui| {
-                                ui.set_height(ui.available_height());
-                                ui.horizontal_centered(|ui| {
-                                    ui.set_height(21.);
-                                    ui.add_space(1.);
-                                    Label::new(
-                                        RichText::new("WIGGLE")
-                                            .size(16.)
-                                            .color(ui.visuals().widgets.inactive.text_color()),
-                                    )
-                                    .selectable(false)
-                                    .ui(ui);
-                                    ui.add(
-                                        Icon::Wiggle
-                                            .as_image(ui.ctx().theme())
-                                            .fit_to_exact_size(Vec2::splat(22.)),
-                                    );
-                                    shortcut_ui(ui, &WIGGLE_KEY).ui(ui);
+            fn wiggle_btn(ui: &mut Ui, action: &mut Option<WindowAction>) {
+                let res = ui
+                    .scope_builder(
+                        UiBuilder::new().id_salt(WIGGLE_KEY).sense(Sense::click()),
+                        |ui| {
+                            let visuals = *ui.style().interact(&ui.response());
+                            let shortcut_card = shortcut_ui(ui, &WIGGLE_KEY, &ui.response());
+
+                            Frame::canvas(ui.style())
+                                .inner_margin(Margin::symmetric(4, 2))
+                                .outer_margin(0)
+                                .corner_radius(ui.visuals().noninteractive().corner_radius)
+                                .fill(visuals.bg_fill)
+                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .show(ui, |ui| {
+                                    ui.set_height(ui.available_height());
+                                    ui.horizontal_centered(|ui| {
+                                        ui.set_height(21.);
+                                        ui.add_space(1.);
+                                        Label::new(
+                                            RichText::new("WIGGLE")
+                                                .size(16.)
+                                                .color(visuals.text_color()),
+                                        )
+                                        .selectable(false)
+                                        .ui(ui);
+                                        ui.add(
+                                            Icon::Wiggle
+                                                .as_image(ui.ctx().theme())
+                                                .fit_to_exact_size(Vec2::splat(22.)),
+                                        );
+                                        shortcut_card.ui(ui);
+                                    });
                                 });
-                            });
-                    },
-                );
+                        },
+                    )
+                    .response;
+
+                if res.clicked() {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::Wiggle);
+                }
+            }
+
+            // valve header
+            let valve_header = |ui: &mut Ui| {
+                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                    Label::new(
+                        RichText::new(self.valve.to_string().to_uppercase())
+                            .color(ui.visuals().strong_text_color())
+                            .size(16.),
+                    )
+                    .ui(ui);
+                    Label::new(RichText::new("VALVE: ").size(16.))
+                        .selectable(false)
+                        .ui(ui);
+                });
             };
 
             ui.with_layout(Layout::centered_and_justified(Direction::TopDown), |ui| {
-                ui.set_max_width(300.);
+                ui.set_max_width(350.);
                 ui.set_min_height(50.);
                 StripBuilder::new(ui)
                     .size(Size::exact(5.))
                     .sizes(Size::initial(5.), 3)
                     .vertical(|mut strip| {
                         strip.empty();
-                        // strip.cell(|ui| {
-                        //     // ui.add_sized(
-                        //     //     Vec2::new(ui.available_width(), 0.0),
-                        //     //     Button::new("Wiggle"),
-                        //     // );
-                        //     let wiggle_btn_response = btn_ui(&self.state, WIGGLE_KEY, |ui| {
-                        //         shortcut_ui(ui, &WIGGLE_KEY).ui(ui);
-                        //         ui.add(
-                        //             Icon::Wiggle
-                        //                 .as_image(ui.ctx().theme())
-                        //                 .fit_to_exact_size(icon_size),
-                        //         );
-                        //         ui.add(
-                        //             Label::new(RichText::new("WIGGLE").size(text_size))
-                        //                 .selectable(false),
-                        //         );
-                        //     })(ui);
-                        // });
                         strip.strip(|builder| {
                             builder
-                                // .size(Size::exact(230.))
-                                .size(Size::initial(10.))
-                                .size(Size::exact(25.))
+                                .size(Size::exact(206.))
+                                .size(Size::initial(50.))
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
                                         builder
@@ -251,35 +240,11 @@ impl ValveControlView {
                                             .size(Size::remainder())
                                             .vertical(|mut strip| {
                                                 strip.empty();
-                                                strip.cell(|ui| {
-                                                    ui.with_layout(
-                                                        Layout::right_to_left(Align::Min),
-                                                        |ui| {
-                                                            Label::new(
-                                                                RichText::new(
-                                                                    self.valve
-                                                                        .to_string()
-                                                                        .to_uppercase(),
-                                                                )
-                                                                .color(
-                                                                    ui.visuals()
-                                                                        .strong_text_color(),
-                                                                )
-                                                                .size(16.),
-                                                            )
-                                                            .ui(ui);
-                                                            Label::new(
-                                                                RichText::new("VALVE: ").size(16.),
-                                                            )
-                                                            .selectable(false)
-                                                            .ui(ui);
-                                                        },
-                                                    );
-                                                });
+                                                strip.cell(valve_header);
                                                 strip.empty();
                                             });
                                     });
-                                    strip.cell(wiggle_btn);
+                                    strip.cell(|ui| wiggle_btn(ui, action));
                                 });
                         });
                         strip.strip(|builder| {
@@ -335,22 +300,66 @@ impl ValveControlView {
                                             .fill(ui.visuals().widgets.inactive.bg_fill)
                                             .stroke(Stroke::new(1., Color32::TRANSPARENT))
                                             .show(ui, |ui| {
+                                                // caveat used to clear the field and fill with the current value
+                                                if let Some(WindowAction::SetAperture) =
+                                                    action.as_ref()
+                                                {
+                                                    ui.ctx().input_mut(|input| {
+                                                        input.events.push(egui::Event::Key {
+                                                            key: Key::A,
+                                                            physical_key: None,
+                                                            pressed: true,
+                                                            repeat: false,
+                                                            modifiers: Modifiers::COMMAND,
+                                                        });
+                                                        input.events.push(egui::Event::Text(
+                                                            self.aperture_perc.to_string(),
+                                                        ));
+                                                        input.events.push(egui::Event::Key {
+                                                            key: Key::A,
+                                                            physical_key: None,
+                                                            pressed: true,
+                                                            repeat: false,
+                                                            modifiers: Modifiers::COMMAND,
+                                                        });
+                                                    });
+                                                }
+
                                                 let res = ui.add_sized(
                                                     Vec2::new(ui.available_width(), 0.0),
                                                     DragValue::new(&mut self.aperture_perc)
                                                         .speed(0.5)
                                                         .range(0.0..=100.0)
                                                         .fixed_decimals(0)
-                                                        .update_while_editing(false)
+                                                        .update_while_editing(true)
                                                         .suffix("%"),
                                                 );
+
+                                                let command_focus = ui.ctx().memory(|m| {
+                                                    m.data.get_temp(aperture_field_focus)
+                                                });
+
+                                                // needed for making sure the state changes even
+                                                // if the pointer clicks inside the field
                                                 if res.gained_focus() {
-                                                    self.state = ValveViewState::ApertureFocused;
+                                                    action.replace(WindowAction::FocusOnAperture);
+                                                } else if res.lost_focus() {
+                                                    action.replace(WindowAction::LooseFocus);
+                                                }
+
+                                                match (command_focus, res.has_focus()) {
+                                                    (Some(true), false) => {
+                                                        res.request_focus();
+                                                    }
+                                                    (Some(false), true) => {
+                                                        res.surrender_focus();
+                                                    }
+                                                    _ => {}
                                                 }
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        aperture_btn(ui);
+                                        show_aperture_btn(&self.state, action, ui);
                                     });
                                 });
                         });
@@ -404,99 +413,75 @@ impl ValveControlView {
                                             .fill(ui.visuals().widgets.inactive.bg_fill)
                                             .stroke(Stroke::new(1., Color32::TRANSPARENT))
                                             .show(ui, |ui| {
-                                                ui.add_sized(
+                                                // caveat used to clear the field and fill with the current value
+                                                if let Some(WindowAction::SetTiming) =
+                                                    action.as_ref()
+                                                {
+                                                    ui.ctx().input_mut(|input| {
+                                                        input.events.push(egui::Event::Key {
+                                                            key: Key::A,
+                                                            physical_key: None,
+                                                            pressed: true,
+                                                            repeat: false,
+                                                            modifiers: Modifiers::COMMAND,
+                                                        });
+                                                        input.events.push(egui::Event::Text(
+                                                            self.timing_ms.to_string(),
+                                                        ));
+                                                        input.events.push(egui::Event::Key {
+                                                            key: Key::A,
+                                                            physical_key: None,
+                                                            pressed: true,
+                                                            repeat: false,
+                                                            modifiers: Modifiers::COMMAND,
+                                                        });
+                                                    });
+                                                }
+
+                                                let res = ui.add_sized(
                                                     Vec2::new(ui.available_width(), 0.0),
                                                     DragValue::new(&mut self.timing_ms)
                                                         .speed(1)
                                                         .range(1..=10000)
                                                         .fixed_decimals(0)
-                                                        .update_while_editing(false)
+                                                        .update_while_editing(true)
                                                         .suffix(" [ms]"),
                                                 );
+
+                                                let command_focus = ui.ctx().memory(|m| {
+                                                    m.data.get_temp(timing_field_focus)
+                                                });
+
+                                                // needed for making sure the state changes even
+                                                // if the pointer clicks inside the field
+                                                if res.gained_focus() {
+                                                    action.replace(WindowAction::FocusOnTiming);
+                                                } else if res.lost_focus() {
+                                                    action.replace(WindowAction::LooseFocus);
+                                                }
+
+                                                match (command_focus, res.has_focus()) {
+                                                    (Some(true), false) => {
+                                                        res.request_focus();
+                                                    }
+                                                    (Some(false), true) => {
+                                                        res.surrender_focus();
+                                                    }
+                                                    _ => {}
+                                                }
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        timing_btn(ui);
+                                        show_timing_btn(&self.state, action, ui);
                                     });
                                 });
                         });
                     });
             });
-
-            // ui.horizontal(|ui| {
-            //     let wiggle_btn_response = btn_ui(&self.state, WIGGLE_KEY, |ui| {
-            //         shortcut_ui(ui, &WIGGLE_KEY).ui(ui);
-            //         ui.add(
-            //             Icon::Wiggle
-            //                 .as_image(ui.ctx().theme())
-            //                 .fit_to_exact_size(icon_size),
-            //         );
-            //         ui.add(Label::new(RichText::new("Wiggle").size(text_size)).selectable(false));
-            //     })(ui);
-
-            //     let aperture_btn_response = btn_ui(&self.state, APERTURE_KEY, |ui| {
-            //         shortcut_ui(ui, &APERTURE_KEY).ui(ui);
-            //         ui.add(
-            //             Icon::Aperture
-            //                 .as_image(ui.ctx().theme())
-            //                 .fit_to_exact_size(icon_size),
-            //         );
-            //         ui.add(
-            //             Label::new(RichText::new("Aperture: ").size(text_size)).selectable(false),
-            //         );
-            //         let drag_value_id = ui.next_auto_id();
-            //         ui.add(
-            //             DragValue::new(&mut self.aperture_perc)
-            //                 .speed(0.5)
-            //                 .range(0.0..=100.0)
-            //                 .fixed_decimals(0)
-            //                 .update_while_editing(false)
-            //                 .suffix("%"),
-            //         );
-            //         if matches!(&self.state, ValveViewState::ApertureFocused) {
-            //             ui.ctx().memory_mut(|m| {
-            //                 m.request_focus(drag_value_id);
-            //             });
-            //         }
-            //     })(ui);
-
-            //     let timing_btn_response = btn_ui(&self.state, TIMING_KEY, |ui| {
-            //         shortcut_ui(ui, &TIMING_KEY).ui(ui);
-            //         ui.add(
-            //             Icon::Timing
-            //                 .as_image(ui.ctx().theme())
-            //                 .fit_to_exact_size(icon_size),
-            //         );
-            //         ui.add(Label::new(RichText::new("Timing: ").size(text_size)).selectable(false));
-            //         let drag_value_id = ui.next_auto_id();
-            //         ui.add(
-            //             DragValue::new(&mut self.timing_ms)
-            //                 .speed(1)
-            //                 .range(1..=10000)
-            //                 .fixed_decimals(0)
-            //                 .update_while_editing(false)
-            //                 .suffix(" [ms]"),
-            //         );
-            //         if matches!(&self.state, ValveViewState::TimingFocused) {
-            //             ui.ctx().memory_mut(|m| {
-            //                 m.request_focus(drag_value_id);
-            //             });
-            //         }
-            //     })(ui);
-
-            //     // consider that action may be different that null if a keyboard shortcut was captured
-            //     if wiggle_btn_response.clicked() {
-            //         action.replace(WindowAction::Wiggle);
-            //     } else if aperture_btn_response.clicked() {
-            //         action.replace(WindowAction::SetAperture);
-            //     } else if timing_btn_response.clicked() {
-            //         action.replace(WindowAction::SetTiming);
-            //     }
-            // });
         }
     }
 
-    fn handle_actions(&mut self, action: Option<WindowAction>) -> Option<Command> {
+    fn handle_actions(&mut self, action: Option<WindowAction>, ctx: &Context) -> Option<Command> {
         match action {
             // If the action close is called, close the window
             Some(WindowAction::CloseWindow) => {
@@ -505,6 +490,12 @@ impl ValveControlView {
             }
             Some(WindowAction::LooseFocus) => {
                 self.state = ValveViewState::Open;
+                let aperture_field_focus = self.id.with("aperture_field_focus");
+                let timing_field_focus = self.id.with("timing_field_focus");
+                ctx.memory_mut(|m| {
+                    m.data.insert_temp(aperture_field_focus, false);
+                    m.data.insert_temp(timing_field_focus, false);
+                });
                 None
             }
             Some(WindowAction::Wiggle) => {
@@ -516,7 +507,7 @@ impl ValveControlView {
                     "Issued command to set timing for valve {:?} to {} ms",
                     self.valve, self.timing_ms
                 );
-                self.state = ValveViewState::Open;
+                self.handle_actions(Some(WindowAction::LooseFocus), ctx);
                 Some(Command::set_atomic_valve_timing(self.valve, self.timing_ms))
             }
             Some(WindowAction::SetAperture) => {
@@ -524,7 +515,7 @@ impl ValveControlView {
                     "Issued command to set aperture for valve {:?} to {}%",
                     self.valve, self.aperture_perc
                 );
-                self.state = ValveViewState::Open;
+                self.handle_actions(Some(WindowAction::LooseFocus), ctx);
                 Some(Command::set_valve_maximum_aperture(
                     self.valve,
                     self.aperture_perc / 100.,
@@ -532,10 +523,18 @@ impl ValveControlView {
             }
             Some(WindowAction::FocusOnTiming) => {
                 self.state = ValveViewState::TimingFocused;
+                let timing_field_focus = self.id.with("timing_field_focus");
+                ctx.memory_mut(|m| {
+                    m.data.insert_temp(timing_field_focus, true);
+                });
                 None
             }
             Some(WindowAction::FocusOnAperture) => {
                 self.state = ValveViewState::ApertureFocused;
+                let aperture_field_focus = self.id.with("aperture_field_focus");
+                ctx.memory_mut(|m| {
+                    m.data.insert_temp(aperture_field_focus, true);
+                });
                 None
             }
             _ => None,
@@ -553,22 +552,26 @@ impl ValveControlView {
             ValveViewState::Open => {
                 // A window is open, so we can map the keys to control the valve
                 key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
-                // key_action_pairs.push((Modifiers::NONE, TIMING_KEY, WindowAction::FocusOnTiming));
-                // key_action_pairs.push((
-                //     Modifiers::NONE,
-                //     APERTURE_KEY,
-                //     WindowAction::FocusOnAperture,
-                // ));
+                key_action_pairs.push((
+                    Modifiers::NONE,
+                    FOCUS_TIMING_KEY,
+                    WindowAction::FocusOnTiming,
+                ));
+                key_action_pairs.push((
+                    Modifiers::NONE,
+                    FOCUS_APERTURE_KEY,
+                    WindowAction::FocusOnAperture,
+                ));
                 key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
             }
             ValveViewState::TimingFocused => {
                 // The timing field is focused, so we can map the keys to control the timing
-                key_action_pairs.push((Modifiers::NONE, Key::Enter, WindowAction::SetTiming));
+                key_action_pairs.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
                 key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
             }
             ValveViewState::ApertureFocused => {
                 // The aperture field is focused, so we can map the keys to control the aperture
-                key_action_pairs.push((Modifiers::NONE, Key::Enter, WindowAction::SetAperture));
+                key_action_pairs.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetAperture));
                 key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
             }
             ValveViewState::Closed => {}
@@ -583,13 +586,6 @@ enum ValveViewState {
     Open,
     TimingFocused,
     ApertureFocused,
-}
-
-impl ValveViewState {
-    #[inline]
-    fn is_open(&self) -> bool {
-        matches!(self, Self::Open)
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

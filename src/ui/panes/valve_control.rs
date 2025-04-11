@@ -144,7 +144,10 @@ impl PaneBehavior for ValveControlPane {
             match action {
                 // Open the valve control window if the action is to open it
                 Some(PaneAction::OpenValveControl(valve)) => {
-                    self.valve_view.replace(ValveControlView::new(valve));
+                    self.valve_view.replace(ValveControlView::new(
+                        valve,
+                        ui.id().with(valve.to_string()),
+                    ));
                 }
                 None => {}
             }
@@ -241,7 +244,10 @@ impl ValveControlPane {
 
                             if response.clicked() {
                                 info!("Clicked on valve: {:?}", valve);
-                                self.valve_view = Some(ValveControlView::new(valve));
+                                self.valve_view = Some(ValveControlView::new(
+                                    valve,
+                                    ui.id().with(valve.to_string()),
+                                ));
                             }
                         }
                         ui.end_row();
