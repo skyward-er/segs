@@ -20,7 +20,7 @@ use super::SymbolBehavior;
 const FONT_SIZE: f32 = 2.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Label {
+pub struct ValueDisplay {
     subscribed_field: Option<IndexedField>,
     size: Vec2,
 
@@ -30,7 +30,7 @@ pub struct Label {
     is_subs_window_visible: bool,
 }
 
-impl Default for Label {
+impl Default for ValueDisplay {
     fn default() -> Self {
         Self {
             subscribed_field: None,
@@ -41,7 +41,7 @@ impl Default for Label {
     }
 }
 
-impl SymbolBehavior for Label {
+impl SymbolBehavior for ValueDisplay {
     fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32) {
         if let Some(subscribed_field) = &self.subscribed_field {
             if message.message_id() == subscribed_msg_id {
