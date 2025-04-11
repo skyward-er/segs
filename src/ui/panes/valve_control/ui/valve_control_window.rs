@@ -92,9 +92,15 @@ impl ValveControlView {
                     .text_size(12.)
             }
 
-            fn add_parameter_btn(ui: &mut Ui, key: Key) -> Response {
+            fn add_parameter_btn(ui: &mut Ui, key: Key, action_override: bool) -> Response {
                 ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
-                    let visuals = *ui.style().interact(&ui.response());
+                    let mut visuals = *ui.style().interact(&ui.response());
+
+                    // override the visuals if the button is pressed
+                    if action_override {
+                        visuals = ui.visuals().widgets.active;
+                    }
+
                     let shortcut_card = shortcut_ui(ui, &key, &ui.response());
 
                     Frame::canvas(ui.style())
@@ -127,8 +133,12 @@ impl ValveControlView {
                 ui: &mut Ui,
             ) -> Response {
                 let res = match state {
-                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_APERTURE_KEY)),
-                    ValveViewState::ApertureFocused => Some(add_parameter_btn(ui, SET_PAR_KEY)),
+                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_APERTURE_KEY, false)),
+                    ValveViewState::ApertureFocused => Some(add_parameter_btn(
+                        ui,
+                        SET_PAR_KEY,
+                        action.is_some_and(|a| a == WindowAction::SetAperture),
+                    )),
                     ValveViewState::TimingFocused | ValveViewState::Closed => None,
                 };
                 if let Some(res) = &res {
@@ -147,8 +157,12 @@ impl ValveControlView {
                 ui: &mut Ui,
             ) -> Response {
                 let res = match state {
-                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_TIMING_KEY)),
-                    ValveViewState::TimingFocused => Some(add_parameter_btn(ui, SET_PAR_KEY)),
+                    ValveViewState::Open => Some(add_parameter_btn(ui, FOCUS_TIMING_KEY, false)),
+                    ValveViewState::TimingFocused => Some(add_parameter_btn(
+                        ui,
+                        SET_PAR_KEY,
+                        action.is_some_and(|a| a == WindowAction::SetTiming),
+                    )),
                     ValveViewState::ApertureFocused | ValveViewState::Closed => None,
                 };
                 if let Some(res) = &res {
@@ -166,7 +180,13 @@ impl ValveControlView {
                     .scope_builder(
                         UiBuilder::new().id_salt(WIGGLE_KEY).sense(Sense::click()),
                         |ui| {
-                            let visuals = *ui.style().interact(&ui.response());
+                            let mut visuals = *ui.style().interact(&ui.response());
+
+                            // override the visuals if the button is pressed
+                            if let Some(WindowAction::Wiggle) = action.as_ref() {
+                                visuals = ui.visuals().widgets.active;
+                            }
+
                             let shortcut_card = shortcut_ui(ui, &WIGGLE_KEY, &ui.response());
 
                             Frame::canvas(ui.style())
@@ -588,7 +608,7 @@ enum ValveViewState {
     ApertureFocused,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WindowAction {
     // window actions
     CloseWindow,
