@@ -64,7 +64,7 @@ impl LayoutManagerWindow {
 
                 // Layouts table
                 StripBuilder::new(ui)
-                    .size(Size::remainder().at_least(100.0))
+                    .size(Size::initial(200.0))
                     .size(Size::exact(7.0))
                     .size(Size::exact(40.0))
                     .vertical(|mut strip| {
