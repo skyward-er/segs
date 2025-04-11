@@ -1,13 +1,16 @@
 pub mod icons;
-mod labels;
+mod label;
+mod value_display;
 
 use egui::{Theme, Ui};
 use enum_dispatch::enum_dispatch;
 use glam::Vec2;
-use icons::Icon;
-use labels::Label;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter};
+
+use icons::Icon;
+use label::Label;
+use value_display::ValueDisplay;
 
 use crate::mavlink::MavMessage;
 
@@ -15,6 +18,7 @@ use crate::mavlink::MavMessage;
 #[enum_dispatch]
 pub enum Symbol {
     Icon(Icon),
+    ValueDisplay(ValueDisplay),
     Label(Label),
 }
 
