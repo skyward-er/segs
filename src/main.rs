@@ -23,29 +23,33 @@ static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionCo
 static APP_NAME: &str = "segs";
 
 fn main() -> Result<(), eframe::Error> {
-    // Set up logging (USE RUST_LOG=debug to see logs)
-    let env_filter = EnvFilter::builder().from_env_lossy();
-    let registry = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(env_filter));
-
     // Create the logs directory if it doesn't exist and add to the registry
-    if let Some(base_dirs) = directories::BaseDirs::new() {
+    let mut _guard = None;
+    let file_layer = if let Some(base_dirs) = directories::BaseDirs::new() {
         let proj_dir = base_dirs.data_local_dir().join(APP_NAME);
         let logs_dir = proj_dir.join("logs");
         create_dir_all(&logs_dir).log_expect("Failed to create logs directory");
 
-        let file_appender = tracing_appender::rolling::daily(logs_dir, "segs.log");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-        let registry = registry.with(
+        let file_appender = tracing_appender::rolling::daily(&logs_dir, "segs.log");
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+        _guard = Some(guard); // Keep guard alive to flush logs
+        Some(
             tracing_subscriber::fmt::layer()
                 .json()
                 .with_writer(non_blocking),
-        );
-        // Initialize the logger
-        registry.init();
+        )
     } else {
-        registry.init();
-    }
+        None
+    };
+
+    // Set up logging (USE RUST_LOG=debug to see logs)
+    let env_filter = EnvFilter::builder().from_env_lossy();
+
+    // Initialize the logger
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(env_filter))
+        .with(file_layer)
+        .init();
 
     let native_options = eframe::NativeOptions {
         // By modifying the viewport, we can change things like the windows size
