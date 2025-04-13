@@ -11,7 +11,6 @@ pub use message_bundle::MessageBundle;
 use reception_queue::ReceptionQueue;
 
 use std::{
-    collections::HashMap,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -21,7 +20,7 @@ use tracing::error;
 use crate::{
     communication::{Connection, ConnectionError, TransceiverConfigExt},
     error::ErrInstrument,
-    mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, Message, TimedMessage},
+    mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, TimedMessage},
 };
 
 const RECEPTION_QUEUE_INTERVAL: Duration = Duration::from_secs(1);
@@ -34,7 +33,7 @@ const SEGS_COMPONENT_ID: u8 = 1;
 /// dispatching them to the views that are interested in them.
 pub struct MessageBroker {
     /// A map of all messages received so far, indexed by message ID
-    messages: HashMap<u32, Vec<TimedMessage>>,
+    messages: Vec<TimedMessage>,
     /// instant queue used for frequency calculation and reception time
     last_receptions: Arc<Mutex<ReceptionQueue>>,
     /// Connection to the Mavlink listener
@@ -47,7 +46,7 @@ impl MessageBroker {
     /// Creates a new `MessageBroker` with the given channel size and Egui context.
     pub fn new(ctx: egui::Context) -> Self {
         Self {
-            messages: HashMap::new(),
+            messages: Vec::new(),
             // TODO: make this configurable
             last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(RECEPTION_QUEUE_INTERVAL))),
             connection: None,
@@ -88,8 +87,11 @@ impl MessageBroker {
         self.last_receptions.lock().log_unwrap().frequency()
     }
 
-    pub fn get(&self, id: u32) -> &[TimedMessage] {
-        self.messages.get(&id).map_or(&[], |v| v.as_slice())
+    pub fn get(&self, ids: &[u32]) -> Vec<&TimedMessage> {
+        self.messages
+            .iter()
+            .filter(|msg| ids.contains(&msg.id()))
+            .collect()
     }
 
     /// Processes incoming network messages. New messages are added to the
@@ -108,10 +110,7 @@ impl MessageBroker {
                         self.last_receptions.lock().log_unwrap().push(message.time);
 
                         // Store the message in the broker
-                        self.messages
-                            .entry(message.message.message_id())
-                            .or_default()
-                            .push(message);
+                        self.messages.push(message);
                     }
                     self.ctx.request_repaint();
                 }

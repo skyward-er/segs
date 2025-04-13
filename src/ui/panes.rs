@@ -1,16 +1,17 @@
 mod default;
 mod messages_viewer;
 mod pid_drawing_tool;
-pub mod plot;
+mod plot;
+mod valve_control;
 
-use egui_tiles::TileId;
+use egui::Ui;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
 
 use crate::mavlink::{MavMessage, TimedMessage};
 
-use super::app::PaneResponse;
+use super::{app::PaneResponse, shortcuts::ShortcutHandler};
 
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct Pane {
@@ -26,18 +27,15 @@ impl Pane {
 #[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
     /// Renders the UI of the pane.
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse;
-
-    /// Whether the pane contains the pointer.
-    fn contains_pointer(&self) -> bool;
+    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse;
 
     /// Updates the pane state. This method is called before `ui` to allow the
     /// pane to update its state based on the messages received.
-    fn update(&mut self, _messages: &[TimedMessage]) {}
+    fn update(&mut self, _messages: &[&TimedMessage]) {}
 
     /// Returns the ID of the messages this pane is interested in, if any.
-    fn get_message_subscription(&self) -> Option<u32> {
-        None
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(None.into_iter())
     }
 
     /// Checks whether the full message history should be sent to the pane.
@@ -52,20 +50,16 @@ pub trait PaneBehavior {
 }
 
 impl PaneBehavior for Pane {
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: TileId) -> PaneResponse {
-        self.pane.ui(ui, tile_id)
+    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+        self.pane.ui(ui, shortcut_handler)
     }
 
-    fn contains_pointer(&self) -> bool {
-        self.pane.contains_pointer()
-    }
-
-    fn update(&mut self, messages: &[TimedMessage]) {
+    fn update(&mut self, messages: &[&TimedMessage]) {
         self.pane.update(messages)
     }
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        self.pane.get_message_subscription()
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        self.pane.get_message_subscriptions()
     }
 
     fn should_send_message_history(&self) -> bool {
@@ -90,7 +84,10 @@ pub enum PaneKind {
     Plot2D(plot::Plot2DPane),
 
     #[strum(message = "Pid")]
-    PidOld(pid_drawing_tool::PidPane),
+    Pid(pid_drawing_tool::PidPane),
+
+    #[strum(message = "Valve Control")]
+    ValveControl(valve_control::ValveControlPane),
 }
 
 impl Default for PaneKind {

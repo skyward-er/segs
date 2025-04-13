@@ -1,10 +1,15 @@
 use super::PaneBehavior;
+use egui::Ui;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::ui::{
-    app::{PaneAction, PaneResponse},
-    utils::{SizingMemo, vertically_centered},
+use crate::{
+    mavlink::TimedMessage,
+    ui::{
+        app::{PaneAction, PaneResponse},
+        shortcuts::ShortcutHandler,
+        utils::{SizingMemo, vertically_centered},
+    },
 };
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -23,7 +28,7 @@ impl PartialEq for DefaultPane {
 
 impl PaneBehavior for DefaultPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut egui::Ui, tile_id: egui_tiles::TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let parent = vertically_centered(ui, &mut self.centering_memo, |ui| {
@@ -37,7 +42,7 @@ impl PaneBehavior for DefaultPane {
                     debug!("Horizontal Split button clicked");
                 }
                 if ui.button("Widget Gallery").clicked() {
-                    response.set_action(PaneAction::ReplaceThroughGallery(Some(tile_id)));
+                    response.set_action(PaneAction::ReplaceThroughGallery);
                 }
             })
             .response
@@ -45,25 +50,17 @@ impl PaneBehavior for DefaultPane {
 
         self.contains_pointer = parent.contains_pointer();
 
-        if parent
-            .interact(egui::Sense::click_and_drag())
-            .on_hover_cursor(egui::CursorIcon::Grab)
-            .dragged()
-        {
+        if parent.interact(egui::Sense::click_and_drag()).dragged() {
             response.set_drag_started();
         };
 
         response
     }
 
-    fn contains_pointer(&self) -> bool {
-        self.contains_pointer
-    }
+    fn update(&mut self, _messages: &[&TimedMessage]) {}
 
-    fn update(&mut self, _messages: &[crate::mavlink::TimedMessage]) {}
-
-    fn get_message_subscription(&self) -> Option<u32> {
-        None
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(None.into_iter())
     }
 
     fn should_send_message_history(&self) -> bool {

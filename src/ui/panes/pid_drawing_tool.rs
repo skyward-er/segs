@@ -8,7 +8,6 @@ use core::f32;
 use egui::{
     Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
 };
-use egui_tiles::TileId;
 use elements::Element;
 use glam::Vec2;
 use grid::GridInfo;
@@ -20,7 +19,9 @@ use crate::{
     MAVLINK_PROFILE,
     error::ErrInstrument,
     mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
-    ui::{app::PaneResponse, cache::ChangeTracker, utils::egui_to_glam},
+    ui::{
+        app::PaneResponse, cache::ChangeTracker, shortcuts::ShortcutHandler, utils::egui_to_glam,
+    },
 };
 
 use super::PaneBehavior;
@@ -80,7 +81,9 @@ impl PartialEq for PidPane {
 }
 
 impl PaneBehavior for PidPane {
-    fn ui(&mut self, ui: &mut egui::Ui, _: TileId) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+        let mut pane_response = PaneResponse::default();
+
         let theme = PidPane::find_theme(ui.ctx());
 
         if self.center_content && !self.editable {
@@ -132,14 +135,16 @@ impl PaneBehavior for PidPane {
             self.reset_subscriptions();
         }
 
-        PaneResponse::default()
+        // Check if the user is draqging the pane
+        let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
+        if response.dragged() && (ctrl_pressed || !self.editable) {
+            pane_response.set_drag_started();
+        }
+
+        pane_response
     }
 
-    fn contains_pointer(&self) -> bool {
-        false
-    }
-
-    fn update(&mut self, messages: &[TimedMessage]) {
+    fn update(&mut self, messages: &[&TimedMessage]) {
         if let Some(msg) = messages.last() {
             for element in &mut self.elements {
                 element.update(&msg.message, self.message_subscription_id);
@@ -147,8 +152,8 @@ impl PaneBehavior for PidPane {
         }
     }
 
-    fn get_message_subscription(&self) -> Option<u32> {
-        Some(self.message_subscription_id)
+    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
+        Box::new(Some(self.message_subscription_id).into_iter())
     }
 }
 
