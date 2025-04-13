@@ -9,7 +9,7 @@ use crate::{
     utils::units::UnitOfMeasure,
 };
 use egui::{Color32, Ui, Vec2, Vec2b};
-use egui_plot::{AxisHints, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
+use egui_plot::{AxisHints, Corner, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
 use serde::{self, Deserialize, Serialize};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
@@ -124,7 +124,14 @@ impl PaneBehavior for Plot2DPane {
             .x_grid_spacer(log_grid_spacer(4)) // 4 was an arbitrary choice
             .auto_bounds(Vec2b::TRUE)
             .set_margin_fraction(Vec2::splat(0.))
-            .legend(Legend::default())
+            .legend(
+                Legend::default()
+                    .position(Corner::LeftTop)
+                    // force to disable the hiding of the lines due to labels
+                    // changing and egui_plot thinking of them as different plot
+                    // lines
+                    .hidden_items(None),
+            )
             .label_formatter(cursor_formatter);
 
         if self.settings.axes_visible {
@@ -141,11 +148,16 @@ impl PaneBehavior for Plot2DPane {
             for ((field, settings), TimeAwarePlotPoints { points, .. }) in
                 zip(&self.settings.y_fields, &self.line_data)
             {
+                let legend_label = format!(
+                    "{} - {:.5}",
+                    field.name(),
+                    points.last().map(|l| l.y).unwrap_or_default()
+                );
                 plot_ui.line(
                     Line::new(&points[..])
                         .color(settings.color)
                         .width(settings.width)
-                        .name(field.name()),
+                        .name(legend_label),
                 );
             }
             plot_ui
