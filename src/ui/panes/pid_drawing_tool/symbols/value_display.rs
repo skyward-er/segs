@@ -69,7 +69,7 @@ impl SymbolBehavior for ValueDisplay {
             .and_then(|f| f.field().unit.as_deref())
             .unwrap_or("");
         let text = match self.last_value {
-            Some(value) => format!("{:.2} {}", value, unit),
+            Some(value) => format!("{:.5} {}", value, unit),
             None => "N/A".to_string(),
         };
         let text_rect = painter.text(
