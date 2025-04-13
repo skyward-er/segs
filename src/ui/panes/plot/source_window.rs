@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use crate::{MAVLINK_PROFILE, error::ErrInstrument};
 
-use super::{LineSettings, PlotSettings};
+use super::{
+    LineSettings, PlotSettings,
+    fields::{XPlotField, YPlotField},
+};
 
 #[profiling::function]
 pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
@@ -50,35 +53,42 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
     let fields = MAVLINK_PROFILE
         .get_plottable_fields(plot_settings.plot_message_id)
         .log_expect("Invalid message id");
+    let mut x_fields = vec![XPlotField::MsgReceiptTimestamp];
+    let y_fields = fields
+        .clone()
+        .into_iter()
+        .map(|f| f.into())
+        .collect::<Vec<_>>();
+    x_fields.extend(fields.into_iter().map(|f| f.into()));
     // get the first field that is in the list of fields or the previous if valid
     let x_field = &plot_settings.x_field;
-    let new_field_x = fields
-        .iter()
-        .any(|f| f == x_field)
-        .then(|| x_field.to_owned())
-        .or(fields.first().map(|s| s.to_owned()));
-
-    // if there are no fields, reset the field_x and plot_lines
-    let Some(new_field_x) = new_field_x else {
-        plot_settings.clear_fields();
-        return;
+    let new_field_x = if x_fields.iter().any(|f| f == x_field) {
+        x_field.to_owned()
+    } else {
+        XPlotField::MsgReceiptTimestamp
     };
+
     // update the field_x
     plot_settings.x_field = new_field_x;
 
     // if fields are valid, show the combo boxes for the x_axis
     let x_field = &mut plot_settings.x_field;
     egui::ComboBox::from_label("X Axis")
-        .selected_text(&x_field.field().name)
+        .selected_text(x_field.name())
         .show_ui(ui, |ui| {
-            for msg in fields.iter() {
-                ui.selectable_value(x_field, msg.to_owned(), &msg.field().name);
+            for msg in x_fields.iter() {
+                ui.selectable_value(x_field, msg.to_owned(), msg.name());
             }
         });
 
+    // retain only the fields that are in y_fields
+    plot_settings
+        .y_fields
+        .retain(|(field, _)| y_fields.iter().any(|f: &YPlotField| f == field));
+
     // populate the plot_lines with the first field if it is empty and there are more than 1 fields
-    if plot_settings.y_fields.is_empty() && fields.len() > 1 {
-        plot_settings.add_field(fields[1].to_owned());
+    if plot_settings.y_fields.is_empty() && y_fields.len() > 1 {
+        plot_settings.add_field(y_fields[0].clone());
     }
 
     // check how many fields are left and how many are selected
@@ -95,10 +105,10 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
                     "Y Axis".to_owned()
                 };
                 egui::ComboBox::from_label(widget_label)
-                    .selected_text(&field.field().name)
+                    .selected_text(field.name())
                     .show_ui(ui, |ui| {
-                        for msg in fields.iter() {
-                            ui.selectable_value(field, msg.to_owned(), &msg.field().name);
+                        for msg in y_fields.iter() {
+                            ui.selectable_value(field, msg.to_owned(), msg.name());
                         }
                     });
                 ui.color_edit_button_srgba(color);
@@ -114,14 +124,14 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
         });
 
     // if we have fields left, show the add button
-    if fields.len().saturating_sub(plot_lines_len + 1) > 0
+    if y_fields.len().saturating_sub(plot_lines_len + 1) > 0
         && ui
             .button("Add Y Axis")
             .on_hover_text("Add another Y axis")
             .clicked()
     {
         // get the first field that is not in the plot_lines
-        let next_field = fields
+        let next_field = y_fields
             .iter()
             .find(|field| !plot_settings.y_fields.iter().any(|(f, _)| f == *field))
             .log_unwrap();

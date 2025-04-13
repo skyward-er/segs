@@ -9,7 +9,7 @@ mod message_broker;
 mod ui;
 mod utils;
 
-use std::{fs::create_dir_all, sync::LazyLock};
+use std::{fs::create_dir_all, sync::LazyLock, time::Instant};
 
 use error::ErrInstrument;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
@@ -19,6 +19,7 @@ use ui::App;
 
 /// ReflectionContext singleton, used to get access to the Mavlink message definitions
 static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
+static APP_START_TIMESTAMP_ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 static APP_NAME: &str = "segs";
 
@@ -58,6 +59,10 @@ fn main() -> Result<(), eframe::Error> {
             .with_title("Skyward Enhanced Ground Software"),
         ..Default::default()
     };
+
+    // Initialize the starting timestamp
+    let starting_time = &APP_START_TIMESTAMP_ORIGIN;
+    tracing::info!("Starting {} at {:?}", APP_NAME, starting_time);
 
     // CreationContext constains information useful to initilize our app, like storage.
     // Storage allows to store custom data in a way that persist whan you restart the app.

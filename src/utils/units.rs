@@ -4,14 +4,22 @@ use std::{fmt::Display, str::FromStr};
 pub enum UnitOfMeasure {
     Time(TimeUnits),
     Other(String),
+    Adimensional,
 }
 
-impl<T: AsRef<str>> From<T> for UnitOfMeasure {
-    fn from(s: T) -> Self {
-        if let Ok(unit) = TimeUnits::from_str(s.as_ref()) {
-            UnitOfMeasure::Time(unit)
-        } else {
-            UnitOfMeasure::Other(s.as_ref().to_string())
+impl<T: AsRef<str>> From<Option<T>> for UnitOfMeasure {
+    fn from(s: Option<T>) -> Self {
+        let s = s.as_ref();
+        match s {
+            Some(s) if s.as_ref().is_empty() => UnitOfMeasure::Adimensional,
+            Some(s) => {
+                if let Ok(unit) = TimeUnits::from_str(s.as_ref()) {
+                    UnitOfMeasure::Time(unit)
+                } else {
+                    UnitOfMeasure::Other(s.as_ref().to_string())
+                }
+            }
+            None => UnitOfMeasure::Adimensional,
         }
     }
 }
@@ -21,6 +29,7 @@ impl Display for UnitOfMeasure {
         match self {
             UnitOfMeasure::Time(unit) => write!(f, "{}", unit),
             UnitOfMeasure::Other(unit) => write!(f, "{}", unit),
+            UnitOfMeasure::Adimensional => write!(f, ""),
         }
     }
 }

@@ -1,25 +1,24 @@
+mod fields;
 mod source_window;
 
 use super::PaneBehavior;
 use crate::{
-    MAVLINK_PROFILE,
     error::ErrInstrument,
-    mavlink::{
-        MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage,
-        reflection::{FieldLike, IndexedField},
-    },
+    mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage},
     ui::{app::PaneResponse, shortcuts::ShortcutHandler},
     utils::units::UnitOfMeasure,
 };
 use egui::{Color32, Ui, Vec2, Vec2b};
 use egui_plot::{AxisHints, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
 use serde::{self, Deserialize, Serialize};
-use source_window::sources_window;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     iter::zip,
     time::{Duration, Instant},
 };
+
+use fields::{XPlotField, YPlotField};
+use source_window::sources_window;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
@@ -47,31 +46,23 @@ impl PaneBehavior for Plot2DPane {
 
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
 
-        let x_unit = UnitOfMeasure::from(
-            &self
-                .settings
-                .x_field
-                .field()
-                .unit
-                .clone()
-                .unwrap_or_default(),
-        );
+        let x_unit = self.settings.x_field.unit();
         let y_units = self
             .settings
             .y_fields
             .iter()
-            .map(|(field, _)| field.field().unit.as_ref().map(UnitOfMeasure::from))
+            .map(|(field, _)| field.unit())
             .collect::<Vec<_>>();
         // define y_unit as the common unit of the y_fields if they are all the same
-        let y_unit = y_units
-            .iter()
-            .fold(y_units.first().log_unwrap(), |acc, unit| {
-                match (acc, unit) {
-                    (Some(uom), Some(unit)) if uom == unit => acc,
-                    _ => &None,
+        let y_unit = y_units.iter().fold(y_units.first(), |acc, unit| {
+            if let Some(acc) = acc {
+                if acc == unit {
+                    return Some(acc);
                 }
-            });
-        let x_name = self.settings.x_field.field().name.clone();
+            }
+            None
+        });
+        let x_name = self.settings.x_field.name();
 
         let x_axis = match x_unit {
             UnitOfMeasure::Time(ref time_unit) => {
@@ -154,7 +145,7 @@ impl PaneBehavior for Plot2DPane {
                     Line::new(&points[..])
                         .color(settings.color)
                         .width(settings.width)
-                        .name(&field.field().name),
+                        .name(field.name()),
                 );
             }
             plot_ui
@@ -195,10 +186,10 @@ impl PaneBehavior for Plot2DPane {
             .iter()
             .filter(|msg| points_lifespan > &msg.time.elapsed())
         {
-            let x: f64 = x_field.extract_as_f64(&msg.message).log_unwrap();
+            let x: f64 = x_field.extract_from_message(msg).log_unwrap();
             let ys: Vec<f64> = y_fields
                 .iter()
-                .map(|(field, _)| field.extract_as_f64(&msg.message).log_unwrap())
+                .map(|(field, _)| field.extract_from_message(msg).log_unwrap())
                 .collect();
 
             if self.line_data.len() < ys.len() {
@@ -243,9 +234,9 @@ struct PlotSettings {
     /// The message id to plot
     pub(super) plot_message_id: u32,
     /// The field to plot on the x-axis
-    pub(super) x_field: IndexedField,
+    pub(super) x_field: XPlotField,
     /// The fields to plot, with their respective line settings
-    pub(super) y_fields: Vec<(IndexedField, LineSettings)>,
+    pub(super) y_fields: Vec<(YPlotField, LineSettings)>,
     /// Whether to show the axes of the plot
     pub(super) axes_visible: bool,
     /// Points will be shown for this duration before being removed
@@ -253,15 +244,13 @@ struct PlotSettings {
 }
 
 impl PlotSettings {
-    fn add_field(&mut self, field: IndexedField) {
+    fn add_field(&mut self, field: YPlotField) {
         let line_settings = LineSettings::default();
         self.y_fields.push((field, line_settings));
     }
 
     fn clear_fields(&mut self) {
-        self.x_field = 0
-            .to_mav_field(self.plot_message_id, &MAVLINK_PROFILE)
-            .log_unwrap();
+        self.x_field = XPlotField::MsgReceiptTimestamp;
         self.y_fields.clear();
     }
 
@@ -282,11 +271,8 @@ impl PlotSettings {
 impl Default for PlotSettings {
     fn default() -> Self {
         let msg_id = ROCKET_FLIGHT_TM_DATA::ID;
-        let x_field = 0.to_mav_field(msg_id, &MAVLINK_PROFILE).log_unwrap();
-        let y_fields = vec![(
-            1.to_mav_field(msg_id, &MAVLINK_PROFILE).log_unwrap(),
-            LineSettings::default(),
-        )];
+        let x_field = XPlotField::MsgReceiptTimestamp;
+        let y_fields = vec![];
         Self {
             plot_message_id: msg_id,
             x_field,
