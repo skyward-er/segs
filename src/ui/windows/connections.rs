@@ -73,15 +73,24 @@ impl ConnectionsWindow {
         }
 
         match connection_config {
-            ConnectionConfig::Ethernet(EthernetConfiguration { port: recv_port }) => {
-                egui::Grid::new("grid")
-                    .num_columns(2)
-                    .spacing([10.0, 5.0])
-                    .show(ui, |ui| {
-                        ui.label("Ethernet Port:");
-                        ui.add(egui::DragValue::new(recv_port).range(0..=65535).speed(10));
-                        ui.end_row();
+            ConnectionConfig::Ethernet(EthernetConfiguration {
+                send_port,
+                receive_port,
+            }) => {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Send Port:");
+                        ui.add(egui::DragValue::new(send_port).range(0..=65535).speed(10));
                     });
+                    ui.horizontal(|ui| {
+                        ui.label("Receive Port:");
+                        ui.add(
+                            egui::DragValue::new(receive_port)
+                                .range(0..=65535)
+                                .speed(10),
+                        );
+                    });
+                });
             }
             ConnectionConfig::Serial(opt) => {
                 egui::Grid::new("grid")
@@ -180,7 +189,8 @@ pub enum ConnectionConfig {
 
 fn default_ethernet() -> EthernetConfiguration {
     EthernetConfiguration {
-        port: DEFAULT_ETHERNET_PORT,
+        send_port: DEFAULT_ETHERNET_PORT,
+        receive_port: DEFAULT_ETHERNET_PORT,
     }
 }
 

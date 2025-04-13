@@ -3,6 +3,8 @@
 //! Provides functions for listing USB serial ports, finding a STM32 port,
 //! and handling serial connections including message transmission and reception.
 
+use std::time::Duration;
+
 use serialport::{SerialPortInfo, SerialPortType};
 use skyward_mavlink::mavlink::{
     self,
@@ -101,6 +103,9 @@ impl Connectable for SerialConfiguration {
         let serial_edpoint = format!("serial:{}:{}", self.port_name, self.baud_rate);
         let mut mav_connection: BoxedConnection = mavlink::connect(&serial_edpoint)?;
         mav_connection.set_protocol_version(MavlinkVersion::V1);
+        // these two are redundant right now
+        mav_connection.set_read_timeout(Some(Duration::from_millis(100)))?;
+        mav_connection.set_write_timeout(Some(Duration::from_millis(100)))?;
         debug!(
             "Connected to serial port {} with baud rate {}",
             self.port_name, self.baud_rate

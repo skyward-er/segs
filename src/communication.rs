@@ -29,6 +29,7 @@ pub(super) type BoxedConnection = Box<dyn MavConnection<MavMessage> + Send + Syn
 
 mod sealed {
     use std::{
+        io::ErrorKind,
         num::NonZeroUsize,
         sync::{
             Arc,
@@ -93,10 +94,15 @@ mod sealed {
                                 tx.send(msg)
                                     .map_err(|_| CommunicationError::ConnectionClosed)?;
                             }
+                            // Ignore timeouts (they are used to poll the connection and check if this thread should stop)
                             Err(MessageReadError::Io(e)) => {
-                                tracing::error!("Failed to read message: {e:#?}");
-                                running_flag.store(false, Ordering::Relaxed);
-                                return Err(CommunicationError::Io(e));
+                                if e.kind() != ErrorKind::WouldBlock
+                                    && e.kind() != ErrorKind::TimedOut
+                                {
+                                    tracing::error!("Failed to read message: {e:#?}");
+                                    running_flag.store(false, Ordering::Relaxed);
+                                    return Err(CommunicationError::Io(e));
+                                }
                             }
                             Err(MessageReadError::Parse(e)) => {
                                 tracing::error!("Failed to read message: {e:#?}");

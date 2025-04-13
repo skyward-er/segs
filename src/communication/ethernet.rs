@@ -3,6 +3,8 @@
 //! Provides functionality to connect via Ethernet using UDP, allowing message
 //! transmission and reception over a network.
 
+use std::time::Duration;
+
 use skyward_mavlink::mavlink::{
     self,
     error::{MessageReadError, MessageWriteError},
@@ -19,7 +21,8 @@ use super::{
 /// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
-    pub port: u16,
+    pub send_port: u16,
+    pub receive_port: u16,
 }
 
 impl Connectable for EthernetConfiguration {
@@ -28,13 +31,16 @@ impl Connectable for EthernetConfiguration {
     /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let incoming_addr = format!("udpin:0.0.0.0:{}", self.port);
-        let outgoing_addr = format!("udpcast:255.255.255.255:{}", self.port);
+        let incoming_addr = format!("udpin:0.0.0.0:{}", self.receive_port);
+        let outgoing_addr = format!("udpcast:255.255.255.255:{}", self.send_port);
         let mut incoming_conn: BoxedConnection = mavlink::connect(&incoming_addr)?;
         let mut outgoing_conn: BoxedConnection = mavlink::connect(&outgoing_addr)?;
         incoming_conn.set_protocol_version(MavlinkVersion::V1);
+        incoming_conn.set_read_timeout(Some(Duration::from_millis(100)))?;
         outgoing_conn.set_protocol_version(MavlinkVersion::V1);
-        debug!("Ethernet connections set up on port {}", self.port);
+        outgoing_conn.set_write_timeout(Some(Duration::from_millis(100)))?;
+        debug!("Receiving Ethernet set up on port {}", self.receive_port);
+        debug!("Sending Ethernet set up on port {}", self.send_port);
         Ok(EthernetTransceiver {
             incoming_conn,
             outgoing_conn,
