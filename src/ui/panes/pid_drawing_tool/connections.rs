@@ -12,11 +12,11 @@ use super::{
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Connection {
     /// Index of the start element
-    pub start: usize,
+    pub start: u32,
     pub start_anchor: usize,
 
     /// Index of the end element
-    pub end: usize,
+    pub end: u32,
     pub end_anchor: usize,
 
     /// Mid points in grid coordinates
@@ -24,7 +24,7 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(start: usize, start_anchor: usize, end: usize, end_anchor: usize) -> Self {
+    pub fn new(start: u32, start_anchor: usize, end: u32, end_anchor: usize) -> Self {
         Self {
             start,
             start_anchor,
@@ -45,13 +45,13 @@ impl Connection {
         let mut points = Vec::new();
 
         // Append start point
-        points.push(pid.elements[self.start].anchor_point(self.start_anchor));
+        points.push(pid.elements[&self.start].anchor_point(self.start_anchor));
 
         // Append all midpoints
         self.points_g.iter().for_each(|&p| points.push(p));
 
         // Append end point
-        points.push(pid.elements[self.end].anchor_point(self.end_anchor));
+        points.push(pid.elements[&self.end].anchor_point(self.end_anchor));
 
         // Check each segment
         for i in 0..(points.len() - 1) {
@@ -66,7 +66,7 @@ impl Connection {
     }
 
     /// Checks if the connection references the given element index
-    pub fn connected(&self, elem_idx: usize) -> bool {
+    pub fn connected(&self, elem_idx: u32) -> bool {
         self.start == elem_idx || self.end == elem_idx
     }
 
@@ -97,9 +97,9 @@ impl Connection {
     pub fn draw(&self, pid: &PidPane, painter: &Painter, theme: Theme) {
         let color = Connection::line_color(theme);
 
-        let start = pid.elements[self.start].anchor_point(self.start_anchor);
+        let start = pid.elements[&self.start].anchor_point(self.start_anchor);
         let start = pid.grid.grid_to_screen(start);
-        let end = pid.elements[self.end].anchor_point(self.end_anchor);
+        let end = pid.elements[&self.end].anchor_point(self.end_anchor);
         let end = pid.grid.grid_to_screen(end);
 
         // Draw line segments
