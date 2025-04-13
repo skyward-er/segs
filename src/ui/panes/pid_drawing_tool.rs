@@ -3,17 +3,14 @@ mod elements;
 mod grid;
 mod symbols;
 
-use connections::Connection;
 use core::f32;
 use egui::{
     Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
 };
-use elements::Element;
 use glam::Vec2;
-use grid::GridInfo;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
-use symbols::{Symbol, icons::Icon};
 
 use crate::{
     MAVLINK_PROFILE,
@@ -22,15 +19,21 @@ use crate::{
     ui::{
         app::PaneResponse, cache::ChangeTracker, shortcuts::ShortcutHandler, utils::egui_to_glam,
     },
+    utils::id::IdGenerator,
 };
 
 use super::PaneBehavior;
 
+use connections::Connection;
+use elements::Element;
+use grid::GridInfo;
+use symbols::{Symbol, icons::Icon};
+
 #[derive(Clone, Debug)]
 enum Action {
-    Connect(usize),
+    Connect(u32),
     ContextMenu(Vec2),
-    DragElement(usize),
+    DragElement(u32),
     DragConnection(usize, usize),
     DragGrid,
 }
@@ -39,7 +42,7 @@ enum Action {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PidPane {
     // Persistent internal state
-    elements: Vec<Element>,
+    elements: HashMap<u32, Element>,
     connections: Vec<Connection>,
     grid: GridInfo,
     message_subscription_id: u32,
@@ -48,6 +51,8 @@ pub struct PidPane {
     center_content: bool,
 
     // Temporary internal state
+    #[serde(skip)]
+    id_generator: IdGenerator,
     #[serde(skip)]
     action: Option<Action>,
     #[serde(skip)]
@@ -59,11 +64,12 @@ pub struct PidPane {
 impl Default for PidPane {
     fn default() -> Self {
         Self {
-            elements: Vec::new(),
+            elements: HashMap::new(),
             connections: Vec::new(),
             grid: GridInfo::default(),
             message_subscription_id: GSE_TM_DATA::ID,
             center_content: false,
+            id_generator: IdGenerator::new(),
             action: None,
             editable: false,
             is_subs_window_visible: false,
@@ -146,7 +152,7 @@ impl PaneBehavior for PidPane {
 
     fn update(&mut self, messages: &[&TimedMessage]) {
         if let Some(msg) = messages.last() {
-            for element in &mut self.elements {
+            for element in self.elements.values_mut() {
                 element.update(&msg.message, self.message_subscription_id);
             }
         }
@@ -181,10 +187,11 @@ impl PidPane {
     }
 
     /// Returns the index of the element the point is on, if any
-    fn hovers_element(&self, p_s: Vec2) -> Option<usize> {
+    fn hovers_element(&self, p_s: Vec2) -> Option<u32> {
         self.elements
             .iter()
-            .position(|elem| elem.contains(self.grid.screen_to_grid(p_s)))
+            .find(|(_, elem)| elem.contains(self.grid.screen_to_grid(p_s)))
+            .map(|(idx, _)| *idx)
     }
 
     /// Return the connection and segment indexes where the position is on, if any
@@ -245,7 +252,7 @@ impl PidPane {
     }
 
     fn elements_ui(&mut self, ui: &mut Ui, theme: Theme) {
-        for element in &mut self.elements {
+        for element in self.elements.values_mut() {
             ui.scope(|ui| {
                 element.ui(ui, &self.grid, theme, self.message_subscription_id);
             });
@@ -271,7 +278,10 @@ impl PidPane {
                 ui.close_menu();
             }
             let btn_response = Button::new("Delete").ui(ui);
-            self.elements[elem_idx].context_menu(ui);
+            self.elements
+                .get_mut(&elem_idx)
+                .log_unwrap()
+                .context_menu(ui);
             // Handle the delete button
             if btn_response.clicked() {
                 self.delete_element(elem_idx);
@@ -287,14 +297,14 @@ impl PidPane {
             if ui.button("Change start anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
                 conn.start_anchor =
-                    (conn.start_anchor + 1) % self.elements[conn.start].anchor_points_len();
+                    (conn.start_anchor + 1) % self.elements[&conn.start].anchor_points_len();
                 self.action.take();
                 ui.close_menu();
             }
             if ui.button("Change end anchor").clicked() {
                 let conn = &mut self.connections[conn_idx];
                 conn.end_anchor =
-                    (conn.end_anchor + 1) % self.elements[conn.end].anchor_points_len();
+                    (conn.end_anchor + 1) % self.elements[&conn.end].anchor_points_len();
                 self.action.take();
                 ui.close_menu();
             }
@@ -305,20 +315,23 @@ impl PidPane {
                         ui.menu_button("Icons", |ui| {
                             for icon in Icon::iter() {
                                 if ui.button(icon.to_string()).clicked() {
-                                    self.elements.push(Element::new(
-                                        self.grid.screen_to_grid(pointer_pos).round(),
-                                        Symbol::Icon(icon),
-                                    ));
+                                    self.elements.insert(
+                                        self.id_generator.next_id(),
+                                        Element::new(
+                                            self.grid.screen_to_grid(pointer_pos).round(),
+                                            Symbol::Icon(icon),
+                                        ),
+                                    );
                                     self.action.take();
                                     ui.close_menu();
                                 }
                             }
                         });
                     } else if ui.button(symbol.to_string()).clicked() {
-                        self.elements.push(Element::new(
-                            self.grid.screen_to_grid(pointer_pos).round(),
-                            symbol,
-                        ));
+                        self.elements.insert(
+                            self.id_generator.next_id(),
+                            Element::new(self.grid.screen_to_grid(pointer_pos).round(), symbol),
+                        );
                         self.action.take();
                         ui.close_menu();
                     }
@@ -338,12 +351,12 @@ impl PidPane {
     }
 
     /// Removes an element from the diagram
-    fn delete_element(&mut self, elem_idx: usize) {
+    fn delete_element(&mut self, elem_idx: u32) {
         // First delete connection referencing this element
         self.connections.retain(|elem| !elem.connected(elem_idx));
 
         // Then the element
-        self.elements.remove(elem_idx);
+        self.elements.remove(&elem_idx);
     }
 
     fn center(&mut self, ui: &Ui) {
@@ -352,7 +365,7 @@ impl PidPane {
         // Chain elements positions and connection mid points
         let points: Vec<Vec2> = self
             .elements
-            .iter()
+            .values()
             .map(|e| e.center())
             .chain(self.connections.iter().flat_map(|conn| conn.points()))
             .collect();
@@ -436,7 +449,10 @@ impl PidPane {
             }
             Some(Action::DragElement(idx)) => {
                 let pointer_pos_g = self.grid.screen_to_grid(pointer_pos).round();
-                self.elements[idx].set_center_at(pointer_pos_g);
+                self.elements
+                    .get_mut(&idx)
+                    .log_unwrap()
+                    .set_center_at(pointer_pos_g);
             }
             Some(Action::DragConnection(conn_idx, point_idx)) => {
                 let pointer_pos_g = self.grid.screen_to_grid(pointer_pos).round();
@@ -452,7 +468,7 @@ impl PidPane {
     }
 
     fn reset_subscriptions(&mut self) {
-        for element in &mut self.elements {
+        for element in self.elements.values_mut() {
             element.reset_subscriptions();
         }
     }
