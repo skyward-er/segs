@@ -38,12 +38,12 @@ impl ReceptionLed {
     }
 
     fn show_label(&self, ui: &mut Ui) -> Response {
-        if self.active {
-            let text = format!("{} Hz", self.frequency);
-            ui.label(text)
+        let text = if self.frequency > 0.0 {
+            format!("{:.2} msgs/s", self.frequency)
         } else {
-            ui.label("N/A")
-        }
+            "N/A".to_owned()
+        };
+        ui.label(text)
     }
 }
 

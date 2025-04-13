@@ -23,7 +23,7 @@ use crate::{
     mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, TimedMessage},
 };
 
-const RECEPTION_QUEUE_INTERVAL: Duration = Duration::from_secs(1);
+const RECEPTION_QUEUE_INTERVAL: Duration = Duration::from_secs(3);
 const SEGS_SYSTEM_ID: u8 = 1;
 const SEGS_COMPONENT_ID: u8 = 1;
 
