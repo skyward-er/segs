@@ -19,7 +19,7 @@ use skyward_mavlink::{
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     mavlink::{MavMessage, TimedMessage},
@@ -195,6 +195,7 @@ impl PaneBehavior for ValveControlPane {
                 cmd.capture_response(&message.message);
                 // If a response was captured, consume the command and update the valve state
                 if let Some((valve, Some(parameter))) = cmd.consume_response() {
+                    debug!("Valve state updated: {:?}", parameter);
                     self.valves_state.set_parameter_of(valve, parameter);
                 }
             }
@@ -304,7 +305,7 @@ impl ValveControlPane {
             let timing = self.valves_state.get_timing_for(valve);
             let aperture = self.valves_state.get_aperture_for(valve);
 
-            let timing_str = match timing {
+            let timing_str: String = match timing {
                 valves::ParameterValue::Valid(value) => {
                     format!("{} [ms]", value)
                 }
