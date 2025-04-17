@@ -1,8 +1,8 @@
 use crate::MAVLINK_PROFILE;
-use crate::mavlink::reflection::ReflectionContext; // Importa ReflectionContext dal crate mavlink
-use crate::mavlink::{TimedMessage}; // Importa moduli specifici dal crate mavlink
+use crate::mavlink::TimedMessage; // Importa moduli specifici dal crate mavlink
 use crate::ui::panes::{PaneBehavior, PaneResponse}; // Importa i comportamenti e le risposte del pannello
 use crate::ui::shortcuts::ShortcutHandler;
+use egui::Ui;
 use egui::{Response, ScrollArea, Window}; // Importa i moduli necessari da egui
 use serde::{Deserialize, Serialize}; // Importa i moduli per la serializzazione e deserializzazione
 use std::collections::{HashMap, HashSet}; // Importa HashSet e HashMap dalla libreria standard
@@ -39,7 +39,8 @@ impl Default for MessagesViewerPane {
             items: vec![],
             settings: MsgSources::default(),
             available_messages: MAVLINK_PROFILE
-                .get_sorted_msgs().iter()
+                .get_sorted_msgs()
+                .iter()
                 .map(|&s| s.id)
                 .collect(),
             seen_message_types: HashSet::new(),
@@ -54,11 +55,11 @@ impl Default for MessagesViewerPane {
 
 impl PaneBehavior for MessagesViewerPane {
     fn ui(&mut self, ui: &mut egui::Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
-        let response = PaneResponse::default(); // Crea una risposta predefinita del pannello
-        ui.heading("Messages Viewer");
-        if ui.button("Open Message Filter").clicked() {
-            self.settings_visible = true; // Mostra le impostazioni se il pulsante è cliccato
-        }
+        let response = PaneResponse::default(); 
+        ui.horizontal(|ui| {
+            ui.add_space(20.0); 
+            ui.heading("Messages Viewer");
+        });
 
         if self.settings_visible {
             let msg_name = self
@@ -113,7 +114,8 @@ impl PaneBehavior for MessagesViewerPane {
                                 }
 
                                 if select_all {
-                                    if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
+                                    if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg)
+                                    {
                                         for field in &fields {
                                             self.selected_fields.insert(field.id());
                                         }
@@ -126,8 +128,10 @@ impl PaneBehavior for MessagesViewerPane {
 
                                 if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
                                     for field in fields {
-                                        let mut selected = self.selected_fields.contains(&field.id());
-                                        let response: Response = ui.checkbox(&mut selected, field.field().name.clone());
+                                        let mut selected =
+                                            self.selected_fields.contains(&field.id());
+                                        let response: Response =
+                                            ui.checkbox(&mut selected, field.field().name.clone());
                                         if response.clicked() {
                                             if selected {
                                                 self.selected_fields.insert(field.id());
@@ -145,29 +149,40 @@ impl PaneBehavior for MessagesViewerPane {
                     ui.add(egui::Slider::new(&mut self.sampling_frequency, 1.0..=100.0).text("Hz"));
                 });
         }
-        egui::Grid::new("message_viewer").show(ui, |ui| {
-            if let Some(selected_msg) = &self.selected_message {
-                if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
-                    for field in fields {
-                        // Usa field come &str per il controllo
-                        if self.selected_fields.contains(&field.id()) {
-                            let value = self
-                                .field_map
-                                .get(&field.id())
-                                .and_then(|v| v.as_deref())
-                                .unwrap_or("N/A");
+        egui::Frame::default()
+        .fill(ui.visuals().window_fill())
+        .show(ui, |ui| {
+   
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        if let Some(selected_msg) = &self.selected_message {
+                            if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
+                                ui.add_space(20.0); 
+                                egui::Grid::new("message_viewer").show(ui, |ui| {
+                                    for field in fields {
+                                        if self.selected_fields.contains(&field.id()) {
+                                            let value = self
+                                                .field_map
+                                                .get(&field.id())
+                                                .and_then(|v| v.as_deref())
+                                                .unwrap_or("N/A");
 
-                            ui.label(field.field().name.clone());
-                            ui.label(value);
-                            ui.end_row();
+                                            ui.label(field.field().name.clone());
+                                            ui.label("");
+                                            ui.label(value);
+                                            ui.end_row();
+                                        }
+                                    }
+                                });
+                            }
                         }
-                    }
-                }
-            } else {
-                ui.label("No message selected");
-            }
-        });
-
+                    });
+                });
+        })
+        .response
+        .context_menu(|ui| show_menu(ui, &mut self.settings_visible, &mut self.settings));
         response
     }
 
@@ -178,9 +193,7 @@ impl PaneBehavior for MessagesViewerPane {
                     for field in fields {
                         if self.selected_fields.contains(&field.id()) {
                             if let Ok(value) = field.extract_as_f64(&msg.message) {
-                                    self.field_map
-                                        .insert(field.id(), Some(value.to_string()));
-                                
+                                self.field_map.insert(field.id(), Some(value.to_string()));
                             }
                         }
                     }
@@ -195,6 +208,15 @@ impl PaneBehavior for MessagesViewerPane {
 
     fn should_send_message_history(&self) -> bool {
         false
+    }
+}
+
+fn show_menu(ui: &mut Ui, settings_visible: &mut bool, _settings: &mut MsgSources) {
+    ui.set_max_width(200.0); 
+
+    if ui.button("Source Data Settings…").clicked() {
+        *settings_visible = true;
+        ui.close_menu();
     }
 }
 
