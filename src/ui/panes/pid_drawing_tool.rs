@@ -265,6 +265,10 @@ impl PidPane {
         if !self.editable {
             if ui.button("Enable editing").clicked() {
                 self.editable = true;
+                // When we move to editable mode, we need to sync the used ids
+                // with the current elements to avoid reusing them (e.g. when importing a layout)
+                self.id_generator
+                    .sync_used_ids(&self.elements.keys().copied().collect::<Vec<_>>());
                 self.action.take();
                 ui.close_menu();
             }
@@ -357,6 +361,9 @@ impl PidPane {
 
         // Then the element
         self.elements.remove(&elem_idx);
+
+        // Release the id for reuse
+        self.id_generator.release_id(elem_idx);
     }
 
     fn center(&mut self, ui: &Ui) {
