@@ -23,6 +23,13 @@ impl IdGenerator {
         }
     }
 
+    pub fn sync_used_ids(&mut self, used_ids: &[u32]) {
+        self.already_used.clear();
+        for id in used_ids {
+            self.already_used.insert(*id);
+        }
+    }
+
     /// Release an id, making it available for reuse. Do not change the current
     /// id to avoid useless checks and exploit wrapping increment.
     pub fn release_id(&mut self, id: u32) {
