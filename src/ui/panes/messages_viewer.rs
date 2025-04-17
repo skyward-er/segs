@@ -57,8 +57,6 @@ impl PaneBehavior for MessagesViewerPane {
     fn ui(&mut self, ui: &mut egui::Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut pane_response = PaneResponse::default(); // Crea una risposta predefinita del pannello
 
-        // ui.interact(ui.max_rect(), ui.id().with("context_menu"), Sense::click());
-
         if self.settings_visible {
             let msg_name = self
                 .selected_message
@@ -67,6 +65,7 @@ impl PaneBehavior for MessagesViewerPane {
                 .unwrap_or_else(|| "Select a message".to_string());
             // Finestra di configurazione
             Window::new("Messages Viewer Settings")
+                .id(ui.id().with("messages_viewer_settings"))
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut self.settings_visible)
