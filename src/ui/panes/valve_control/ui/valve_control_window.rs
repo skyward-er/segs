@@ -8,8 +8,11 @@ use tracing::info;
 use crate::ui::shortcuts::{ShortcutHandler, ShortcutMode};
 
 use super::{
-    commands::Command, icons::Icon, map_key_to_shortcut, shortcut_widget::ShortcutCard,
-    valves::Valve,
+    commands::Command,
+    icons::Icon,
+    map_key_to_shortcut,
+    shortcut_widget::ShortcutCard,
+    valves::{ParameterValue, Valve, ValveStateManager},
 };
 
 const WIGGLE_KEY: Key = Key::Minus;
@@ -30,12 +33,14 @@ pub struct ValveControlView {
 }
 
 impl ValveControlView {
-    pub fn new(valve: Valve, id: Id) -> ValveControlView {
+    pub fn new(valve: Valve, valve_state: &ValveStateManager, id: Id) -> ValveControlView {
+        let timing_ms = valve_state.get_timing_for(valve).valid_or(100);
+        let aperture_perc = valve_state.get_aperture_for(valve).valid_or(50.0);
         ValveControlView {
             valve,
             state: ValveViewState::Open,
-            timing_ms: 0,
-            aperture_perc: 0.0,
+            timing_ms,
+            aperture_perc,
             id,
         }
     }
@@ -45,7 +50,12 @@ impl ValveControlView {
     }
 
     #[profiling::function]
-    pub fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> Option<Command> {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        valve_state: &ValveStateManager,
+        shortcut_handler: &mut ShortcutHandler,
+    ) -> Option<Command> {
         // Show only if the window is open
         if self.is_closed() {
             return None;
@@ -55,7 +65,7 @@ impl ValveControlView {
         let mut action = self.keyboard_actions(shortcut_handler);
 
         // Draw the view inside the pane
-        ui.scope(self.draw_view_ui(&mut action));
+        ui.scope(self.draw_view_ui(&mut action, valve_state));
 
         // Handle the actions
         self.handle_actions(action, ui.ctx())
@@ -64,7 +74,11 @@ impl ValveControlView {
     // DISCLAIMER: the code for the UI is really ugly, still learning how to use
     // egui and in a hurry due to deadlines. If you know how to do it better
     // feel free to help us
-    fn draw_view_ui(&mut self, action: &mut Option<WindowAction>) -> impl FnOnce(&mut Ui) {
+    fn draw_view_ui(
+        &mut self,
+        action: &mut Option<WindowAction>,
+        valve_state: &ValveStateManager,
+    ) -> impl FnOnce(&mut Ui) {
         |ui: &mut Ui| {
             let aperture_field_focus = self.id.with("aperture_field_focus");
             let timing_field_focus = self.id.with("timing_field_focus");
@@ -75,6 +89,12 @@ impl ValveControlView {
                 .inactive
                 .bg_fill
                 .lerp_to_gamma(Color32::GREEN, 0.3);
+            let missing_fill = ui
+                .visuals()
+                .widgets
+                .inactive
+                .bg_fill
+                .lerp_to_gamma(Color32::YELLOW, 0.3);
             let invalid_fill = ui
                 .visuals()
                 .widgets
@@ -225,6 +245,18 @@ impl ValveControlView {
                 }
             }
 
+            fn show_parameter_label(ui: &mut Ui, label: &str, fill_color: Color32) {
+                Frame::canvas(ui.style())
+                    .outer_margin(0)
+                    .inner_margin(Margin::symmetric(0, 3))
+                    .corner_radius(ui.visuals().noninteractive().corner_radius)
+                    .fill(fill_color)
+                    .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                    .show(ui, |ui| {
+                        Label::new(RichText::new(label).size(14.).strong()).ui(ui);
+                    });
+            }
+
             // valve header
             let valve_header = |ui: &mut Ui| {
                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
@@ -241,7 +273,7 @@ impl ValveControlView {
             };
 
             ui.with_layout(Layout::centered_and_justified(Direction::TopDown), |ui| {
-                ui.set_max_width(350.);
+                ui.set_max_width(410.);
                 ui.set_min_height(50.);
                 StripBuilder::new(ui)
                     .size(Size::exact(5.))
@@ -250,7 +282,7 @@ impl ValveControlView {
                         strip.empty();
                         strip.strip(|builder| {
                             builder
-                                .size(Size::exact(206.))
+                                .size(Size::exact(252.))
                                 .size(Size::initial(50.))
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
@@ -269,7 +301,7 @@ impl ValveControlView {
                         });
                         strip.strip(|builder| {
                             builder
-                                .sizes(Size::initial(85.), 4)
+                                .sizes(Size::initial(100.), 4)
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
                                         builder
@@ -295,20 +327,19 @@ impl ValveControlView {
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        Frame::canvas(ui.style())
-                                            .outer_margin(0)
-                                            .inner_margin(Margin::symmetric(0, 3))
-                                            .corner_radius(
-                                                ui.visuals().noninteractive().corner_radius,
-                                            )
-                                            .fill(invalid_fill)
-                                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                                            .show(ui, |ui| {
-                                                Label::new(
-                                                    RichText::new("0.813").size(14.).strong(),
-                                                )
-                                                .ui(ui);
-                                            });
+                                        let parameter = valve_state.get_aperture_for(self.valve);
+                                        let (label, fill_color) = match parameter {
+                                            ParameterValue::Valid(value) => {
+                                                (format!("{}%", value * 100.), valid_fill)
+                                            }
+                                            ParameterValue::Missing => {
+                                                (parameter.to_string(), missing_fill)
+                                            }
+                                            ParameterValue::Invalid(_) => {
+                                                (parameter.to_string(), invalid_fill)
+                                            }
+                                        };
+                                        show_parameter_label(ui, &label, fill_color);
                                     });
                                     strip.cell(|ui| {
                                         Frame::canvas(ui.style())
@@ -385,7 +416,7 @@ impl ValveControlView {
                         });
                         strip.strip(|builder| {
                             builder
-                                .sizes(Size::initial(85.), 4)
+                                .sizes(Size::initial(100.), 4)
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
                                         builder
@@ -410,19 +441,19 @@ impl ValveControlView {
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        Frame::canvas(ui.style())
-                                            .inner_margin(Margin::same(4))
-                                            .corner_radius(
-                                                ui.visuals().noninteractive().corner_radius,
-                                            )
-                                            .fill(valid_fill)
-                                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                                            .show(ui, |ui| {
-                                                Label::new(
-                                                    RichText::new("650ms").size(14.).strong(),
-                                                )
-                                                .ui(ui);
-                                            });
+                                        let parameter = valve_state.get_timing_for(self.valve);
+                                        let (label, fill_color) = match parameter {
+                                            ParameterValue::Valid(value) => {
+                                                (format!("{}ms", value), valid_fill)
+                                            }
+                                            ParameterValue::Missing => {
+                                                (parameter.to_string(), missing_fill)
+                                            }
+                                            ParameterValue::Invalid(_) => {
+                                                (parameter.to_string(), invalid_fill)
+                                            }
+                                        };
+                                        show_parameter_label(ui, &label, fill_color);
                                     });
                                     strip.cell(|ui| {
                                         Frame::canvas(ui.style())
@@ -462,7 +493,7 @@ impl ValveControlView {
                                                     Vec2::new(ui.available_width(), 0.0),
                                                     DragValue::new(&mut self.timing_ms)
                                                         .speed(1)
-                                                        .range(1..=10000)
+                                                        .range(1..=10000000)
                                                         .fixed_decimals(0)
                                                         .update_while_editing(true)
                                                         .suffix(" [ms]"),
