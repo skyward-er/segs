@@ -33,8 +33,7 @@ impl CommandSM {
         if let Self::WaitingForResponse((instant, cmd)) = self {
             if instant.elapsed() > timeout {
                 let Command { kind, valve } = cmd;
-                // *self = Self::Response(valve, kind.to_invalid_parameter(error));
-                todo!() // TODO
+                *self = Self::Response((*valve, kind.to_missing_parameter()));
             }
         }
     }
@@ -171,6 +170,18 @@ impl CommandKind {
 
     fn to_valid_parameter(&self) -> Option<ValveParameter> {
         (*self).try_into().ok()
+    }
+
+    fn to_missing_parameter(&self) -> Option<ValveParameter> {
+        match self {
+            Self::Wiggle => None,
+            Self::SetAtomicValveTiming(_) => {
+                Some(ValveParameter::AtomicValveTiming(ParameterValue::Missing))
+            }
+            Self::SetValveMaximumAperture(_) => Some(ValveParameter::ValveMaximumAperture(
+                ParameterValue::Missing,
+            )),
+        }
     }
 
     fn to_invalid_parameter(&self, error: u16) -> Option<ValveParameter> {
