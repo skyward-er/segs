@@ -1,51 +1,26 @@
 use crate::MAVLINK_PROFILE;
-use crate::error::ErrInstrument;
-use crate::mavlink::TimedMessage; // Importa moduli specifici dal crate mavlink
-use crate::ui::panes::{PaneBehavior, PaneResponse}; // Importa i comportamenti e le risposte del pannello
+use crate::mavlink::TimedMessage;
+use crate::ui::panes::{PaneBehavior, PaneResponse};
 use crate::ui::shortcuts::ShortcutHandler;
-use egui::{Response, ScrollArea, Sense, UiBuilder, Window}; // Importa i moduli necessari da egui
+use egui::{Response, ScrollArea, Sense, UiBuilder, Window};
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::mavlink::MessageData;
-use skyward_mavlink::orion::ROCKET_FLIGHT_TM_DATA; // Importa i moduli per la serializzazione e deserializzazione
-use std::collections::{HashMap, HashSet}; // Importa HashSet e HashMap dalla libreria standard
+use skyward_mavlink::orion::ROCKET_FLIGHT_TM_DATA;
+use std::collections::{HashMap, HashSet};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct MessagesViewerPane {
-    #[serde(skip)]
-    contains_pointer: bool, // Indica se il puntatore è contenuto nel pannello
-    #[serde(skip)]
-    items: Vec<String>, // Elenco degli elementi visualizzati
-    settings: MsgSources, // Impostazioni del messaggio
-    #[serde(skip)]
-    settings_visible: bool, // Indica se le impostazioni sono visibili
-    #[serde(skip)]
-    seen_message_types: HashSet<u32>, // Tipi di messaggi visti
-    #[serde(skip)]
-    field_map: HashMap<usize, Option<String>>, // Mappa dei campi
-    #[serde(skip)]
-    selected_message: Option<u32>, // Messaggio selezionato
-    #[serde(skip)]
-    selected_fields: HashSet<usize>, // Campi selezionati
-    #[serde(skip)]
-    message_log: Vec<String>, // Registro dei messaggi
-    sampling_frequency: f32, // Frequenza di campionamento
-}
+    // == PANE RELATED ==
+    selected_message: Option<u32>,
+    selected_fields: HashSet<usize>,
 
-impl Default for MessagesViewerPane {
-    fn default() -> Self {
-        Self {
-            contains_pointer: false,
-            settings_visible: false,
-            items: vec![],
-            settings: MsgSources::default(),
-            seen_message_types: HashSet::new(),
-            sampling_frequency: 10.0,
-            selected_message: None,
-            selected_fields: HashSet::new(),
-            message_log: Vec::new(),
-            field_map: HashMap::new(),
-        }
-    }
+    // == TEMP VALUES ==
+    #[serde(skip)]
+    field_map: HashMap<usize, Option<String>>,
+
+    // == UI RELATED ==
+    #[serde(skip)]
+    settings_visible: bool,
 }
 
 impl PaneBehavior for MessagesViewerPane {
@@ -69,12 +44,9 @@ impl PaneBehavior for MessagesViewerPane {
                         .selected_text(msg_name)
                         .show_ui(ui, |ui| {
                             for msg in MAVLINK_PROFILE.get_sorted_msgs() {
-                                let mut current = self.selected_message.unwrap_or(ROCKET_FLIGHT_TM_DATA::ID);
-                                ui.selectable_value(
-                                    &mut current,
-                                    msg.id,
-                                    &msg.name,
-                                );
+                                let mut current =
+                                    self.selected_message.unwrap_or(ROCKET_FLIGHT_TM_DATA::ID);
+                                ui.selectable_value(&mut current, msg.id, &msg.name);
                                 self.selected_message = Some(current);
                             }
                         });
@@ -128,10 +100,6 @@ impl PaneBehavior for MessagesViewerPane {
                                 }
                             });
                     }
-
-                    ui.add_space(7.0);
-                    ui.label("Sampling Frequency (Hz):");
-                    ui.add(egui::Slider::new(&mut self.sampling_frequency, 1.0..=100.0).text("Hz"));
                 });
         }
 
@@ -202,17 +170,5 @@ impl PaneBehavior for MessagesViewerPane {
 
     fn should_send_message_history(&self) -> bool {
         false
-    }
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
-pub struct MsgSources {
-    msg_id: u32,
-    fields_with_checkbox: Vec<(String, bool)>,
-}
-
-impl PartialEq for MsgSources {
-    fn eq(&self, other: &Self) -> bool {
-        self.msg_id == other.msg_id && self.fields_with_checkbox == other.fields_with_checkbox
     }
 }
