@@ -604,12 +604,12 @@ impl ValveControlView {
                 // A window is open, so we can map the keys to control the valve
                 key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
                 key_action_pairs.push((
-                    Modifiers::NONE,
+                    Modifiers::ALT,
                     FOCUS_TIMING_KEY,
                     WindowAction::FocusOnTiming,
                 ));
                 key_action_pairs.push((
-                    Modifiers::NONE,
+                    Modifiers::ALT,
                     FOCUS_APERTURE_KEY,
                     WindowAction::FocusOnAperture,
                 ));

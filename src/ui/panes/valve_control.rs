@@ -456,7 +456,7 @@ impl ValveControlPane {
         shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
         // No window is open, so we can map the keys to open the valve control windows
         for (&valve, &key) in self.valve_key_map.iter() {
-            key_action_pairs.push((Modifiers::NONE, key, PaneAction::OpenValveControl(valve)));
+            key_action_pairs.push((Modifiers::ALT, key, PaneAction::OpenValveControl(valve)));
         }
         shortcut_handler.consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
     }
