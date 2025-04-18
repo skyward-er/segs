@@ -402,12 +402,9 @@ impl ValveControlPane {
                     .sense(Sense::click()),
                 |ui| {
                     let response = ui.response();
-                    let shortcut_key_is_down = ui.ctx().input(|input| input.key_down(shortcut_key));
                     let visuals = ui.style().interact(&response);
 
-                    let (fill_color, btn_fill_color, stroke) = if response.clicked()
-                        || shortcut_key_is_down && self.valve_view.is_none()
-                    {
+                    let (fill_color, btn_fill_color, stroke) = if response.clicked() {
                         let visuals = ui.visuals().widgets.active;
                         (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
                     } else if response.hovered() {
