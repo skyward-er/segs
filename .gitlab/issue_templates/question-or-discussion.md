@@ -1,11 +1,11 @@
 ### Topic
-What is the question or topic?
+_What is the question or topic?_
 
 ### Context
-Provide background or context for your question.
+_Provide background or context for your question._
 
 ### What you've tried
-Mention any solutions or documentation you already checked.
+_Mention any solutions or documentation you already checked._
 
 ### Expected Outcome
-What kind of answer or discussion are you hoping for?
+_What kind of answer or discussion are you hoping for?_

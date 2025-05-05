@@ -1,14 +1,14 @@
 ### Overview
-Describe the enhancement or taask briefly.
+_Describe the enhancement or task briefly._
 
 ### Use Case / Motivation
-Why is this feature useful? Who benefits from it?
+_Why is this feature useful? Who benefits from it?_
 
 ### Proposed Solution
-How you think it should be implemented or designed.
+_How you think it should be implemented or designed._
 
 ### Alternatives Considered
-Any alternative approaches or reasons for discarding them.
+_Any alternative approaches or reasons for discarding them._
 
 ### Related Issues
-Link to any related issues or discussions.
+_Link to any related issues or discussions._
