@@ -12,6 +12,7 @@ mod utils;
 use std::{fs::create_dir_all, sync::LazyLock, time::Instant};
 
 use error::ErrInstrument;
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use mavlink::reflection::ReflectionContext;
@@ -37,7 +38,8 @@ fn main() -> Result<(), eframe::Error> {
         Some(
             tracing_subscriber::fmt::layer()
                 .json()
-                .with_writer(non_blocking),
+                .with_writer(non_blocking)
+                .with_filter(LevelFilter::DEBUG),
         )
     } else {
         None

@@ -19,7 +19,7 @@ use skyward_mavlink::{
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     mavlink::{MavMessage, TimedMessage},
@@ -111,11 +111,14 @@ impl PaneBehavior for ValveControlPane {
     fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
 
+        // process commands to update state
+        self.process_commands();
+
         // Set this to at least double the maximum icon size used
         Icon::init_cache(ui.ctx(), (100, 100));
 
         if let Some(valve_view) = &mut self.valve_view {
-            if let Some(command) = valve_view.ui(ui, shortcut_handler) {
+            if let Some(command) = valve_view.ui(ui, &self.valves_state, shortcut_handler) {
                 self.commands.push(command.into());
             }
 
@@ -146,6 +149,7 @@ impl PaneBehavior for ValveControlPane {
                 Some(PaneAction::OpenValveControl(valve)) => {
                     self.valve_view.replace(ValveControlView::new(
                         valve,
+                        &self.valves_state,
                         ui.id().with(valve.to_string()),
                     ));
                 }
@@ -193,14 +197,7 @@ impl PaneBehavior for ValveControlPane {
             for cmd in self.commands.iter_mut() {
                 // intercept all ACK/NACK/WACK messages
                 cmd.capture_response(&message.message);
-                // If a response was captured, consume the command and update the valve state
-                if let Some((valve, Some(parameter))) = cmd.consume_response() {
-                    self.valves_state.set_parameter_of(valve, parameter);
-                }
             }
-
-            // Remove consumed commands
-            self.commands.retain(|cmd| !cmd.is_consumed());
         }
 
         self.reset_last_refresh();
@@ -218,6 +215,27 @@ impl PaneBehavior for ValveControlPane {
         }
 
         outgoing
+    }
+}
+
+// ┌────────────────────────┐
+// │  STATE UPDATE METHODS  │
+// └────────────────────────┘
+impl ValveControlPane {
+    fn process_commands(&mut self) {
+        // Process the commands
+        for cmd in self.commands.iter_mut() {
+            // If the command is waiting for a response, check if it has expired
+            cmd.cancel_expired(Duration::from_secs(3));
+            // If a response was captured, consume the command and update the valve state
+            if let Some((valve, Some(parameter))) = cmd.consume_response() {
+                debug!("Valve state updated: {:?}", parameter);
+                self.valves_state.set_parameter_of(valve, parameter);
+            }
+        }
+
+        // Remove consumed commands
+        self.commands.retain(|cmd| !cmd.is_consumed());
     }
 }
 
@@ -246,6 +264,7 @@ impl ValveControlPane {
                                 info!("Clicked on valve: {:?}", valve);
                                 self.valve_view = Some(ValveControlView::new(
                                     valve,
+                                    &self.valves_state,
                                     ui.id().with(valve.to_string()),
                                 ));
                             }
@@ -304,7 +323,7 @@ impl ValveControlPane {
             let timing = self.valves_state.get_timing_for(valve);
             let aperture = self.valves_state.get_aperture_for(valve);
 
-            let timing_str = match timing {
+            let timing_str: String = match timing {
                 valves::ParameterValue::Valid(value) => {
                     format!("{} [ms]", value)
                 }
@@ -350,6 +369,18 @@ impl ValveControlPane {
                     ui.set_min_width(80.);
                     ui.horizontal_top(|ui| {
                         ui.add(
+                            Icon::Aperture
+                                .as_image(ui.ctx().theme())
+                                .fit_to_exact_size(icon_size)
+                                .sense(Sense::hover()),
+                        );
+                        let layout_job =
+                            LayoutJob::single_section(aperture_str.clone(), text_format.clone());
+                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                        Label::new(galley).selectable(false).ui(ui);
+                    });
+                    ui.horizontal_top(|ui| {
+                        ui.add(
                             Icon::Timing
                                 .as_image(ui.ctx().theme())
                                 .fit_to_exact_size(icon_size)
@@ -357,22 +388,10 @@ impl ValveControlPane {
                         );
                         ui.allocate_ui(vec2(20., 10.), |ui| {
                             let layout_job =
-                                LayoutJob::single_section(timing_str.clone(), text_format.clone());
+                                LayoutJob::single_section(timing_str.clone(), text_format);
                             let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
                             Label::new(galley).selectable(false).ui(ui);
                         });
-                    });
-                    ui.horizontal_top(|ui| {
-                        ui.add(
-                            Icon::Aperture
-                                .as_image(ui.ctx().theme())
-                                .fit_to_exact_size(icon_size)
-                                .sense(Sense::hover()),
-                        );
-                        let layout_job =
-                            LayoutJob::single_section(aperture_str.clone(), text_format);
-                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
-                        Label::new(galley).selectable(false).ui(ui);
                     });
                 });
             };
@@ -383,12 +402,9 @@ impl ValveControlPane {
                     .sense(Sense::click()),
                 |ui| {
                     let response = ui.response();
-                    let shortcut_key_is_down = ui.ctx().input(|input| input.key_down(shortcut_key));
                     let visuals = ui.style().interact(&response);
 
-                    let (fill_color, btn_fill_color, stroke) = if response.clicked()
-                        || shortcut_key_is_down && self.valve_view.is_none()
-                    {
+                    let (fill_color, btn_fill_color, stroke) = if response.clicked() {
                         let visuals = ui.visuals().widgets.active;
                         (visuals.bg_fill, visuals.bg_fill, visuals.bg_stroke)
                     } else if response.hovered() {
@@ -437,7 +453,7 @@ impl ValveControlPane {
         shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
         // No window is open, so we can map the keys to open the valve control windows
         for (&valve, &key) in self.valve_key_map.iter() {
-            key_action_pairs.push((Modifiers::NONE, key, PaneAction::OpenValveControl(valve)));
+            key_action_pairs.push((Modifiers::ALT, key, PaneAction::OpenValveControl(valve)));
         }
         shortcut_handler.consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
     }

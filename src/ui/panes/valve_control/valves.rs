@@ -11,7 +11,8 @@ use crate::{error::ErrInstrument, mavlink::Servoslist};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValveStateManager {
-    settings: Vec<(Valve, ValveParameter)>,
+    timing_settings: Vec<(Valve, ParameterValue<u32, u16>)>,
+    aperture_settings: Vec<(Valve, ParameterValue<f32, u16>)>,
 }
 
 impl Default for ValveStateManager {
@@ -22,43 +23,50 @@ impl Default for ValveStateManager {
 
 impl ValveStateManager {
     pub fn new() -> Self {
-        let settings = Valve::iter()
-            .flat_map(|valve| ValveParameter::iter().map(move |parameter| (valve, parameter)))
+        let aperture_settings = Valve::iter()
+            .map(|valve| (valve, ParameterValue::default()))
             .collect();
-        Self { settings }
+        let timing_settings = Valve::iter()
+            .map(|valve| (valve, ParameterValue::default()))
+            .collect();
+        Self {
+            aperture_settings,
+            timing_settings,
+        }
     }
 
     pub fn set_parameter_of(&mut self, valve: Valve, parameter: ValveParameter) {
-        let (_, par) = self
-            .settings
-            .iter_mut()
-            .find(|(v, _)| *v == valve)
-            .log_unwrap();
-        *par = parameter;
+        match parameter {
+            ValveParameter::AtomicValveTiming(parameter) => {
+                if let Some((_, par)) = self.timing_settings.iter_mut().find(|(v, _)| *v == valve) {
+                    *par = parameter;
+                }
+            }
+            ValveParameter::ValveMaximumAperture(parameter) => {
+                if let Some((_, par)) = self.aperture_settings.iter_mut().find(|(v, _)| *v == valve)
+                {
+                    *par = parameter;
+                }
+            }
+        }
     }
 
     pub fn get_timing_for(&self, valve: Valve) -> ParameterValue<u32, u16> {
-        for (_, par) in self.settings.iter().filter(|(v, _)| *v == valve) {
-            match par {
-                ValveParameter::AtomicValveTiming(parameter_value) => {
-                    return parameter_value.clone();
-                }
-                _ => continue,
-            };
-        }
-        unreachable!()
+        let (_, par) = self
+            .timing_settings
+            .iter()
+            .find(|(v, _)| *v == valve)
+            .log_unwrap();
+        par.clone()
     }
 
     pub fn get_aperture_for(&self, valve: Valve) -> ParameterValue<f32, u16> {
-        for (_, par) in self.settings.iter().filter(|(v, _)| *v == valve) {
-            match par {
-                ValveParameter::ValveMaximumAperture(parameter_value) => {
-                    return parameter_value.clone();
-                }
-                _ => continue,
-            };
-        }
-        unreachable!()
+        let (_, par) = self
+            .aperture_settings
+            .iter()
+            .find(|(v, _)| *v == valve)
+            .log_unwrap();
+        par.clone()
     }
 }
 
