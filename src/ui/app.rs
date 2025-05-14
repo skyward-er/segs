@@ -45,6 +45,7 @@ pub struct App {
     widget_gallery: WidgetGallery,
     sources_window: ConnectionsWindow,
     layout_manager_window: LayoutManagerWindow,
+    closing_dialog: bool,
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -335,10 +336,41 @@ impl eframe::App for App {
 
         // UNCOMMENT THIS TO ENABLE CONTINOUS MODE
         // ctx.request_repaint();
-    }
 
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        self.layout_manager.save_current_layout(storage);
+        // If the app is closing and the layout is not saved, abort and show a confirmation dialog
+        if !self.closing_dialog
+            && ctx.input(|i| i.viewport().close_requested())
+            && self.layout_manager.is_current_layout_saved(&self.state)
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.closing_dialog = true;
+        }
+        egui::Window::new("Exit confirmation")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            // .fixed_size(egui::Vec2::new(300.0, 100.0))
+            .resizable(false)
+            .open(&mut self.closing_dialog)
+            .show(ctx, |ui| {
+                ui.style_mut().text_styles.insert(
+                    egui::TextStyle::Body,
+                    egui::FontId::new(18.0, eframe::epaint::FontFamily::Proportional),
+                );
+                ui.style_mut().text_styles.insert(
+                    egui::TextStyle::Button,
+                    egui::FontId::new(24.0, eframe::epaint::FontFamily::Proportional),
+                );
+                ui.add_sized(
+                    egui::Vec2::new(400.0, 60.0),
+                    egui::Label::new("The current layout is not saved.\nAre you sure to close the app without saving?").halign(egui::Align::Center)
+                );
+                if ui.add_sized(
+                    egui::Vec2::new(400.0, 60.0),
+                    egui::Button::new("Discard and exit").fill(egui::Color32::DARK_RED)
+                ).clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
     }
 }
 
@@ -386,6 +418,7 @@ impl App {
             shortcut_handler,
             sources_window: ConnectionsWindow::default(),
             layout_manager_window: LayoutManagerWindow::default(),
+            closing_dialog: false,
         }
     }
 

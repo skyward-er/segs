@@ -49,14 +49,6 @@ impl LayoutManager {
         &self.layouts
     }
 
-    /// Saves in permanent storage the file name of the currently displayed layout
-    pub fn save_current_layout(&self, storage: &mut dyn eframe::Storage) {
-        if let Some(current_layout) = self.current_layout.as_ref().and_then(|s| s.to_str()) {
-            storage.set_string(SELECTED_LAYOUT_KEY, current_layout.to_string());
-            trace!("Current layout {:?} saved in storage", current_layout);
-        }
-    }
-
     /// Scans the layout directory and reloads the layouts
     #[profiling::function]
     pub fn reload_layouts(&mut self) {
@@ -88,10 +80,24 @@ impl LayoutManager {
 
     #[profiling::function]
     pub fn save_layout(&mut self, name: &str, state: &AppState) -> anyhow::Result<()> {
+        // 1: Save the current layout
         let path = self.layouts_path.join(name).with_extension("json");
         state.to_file(&path)?;
         self.reload_layouts();
+
+        // 2: Save current layout name
+        self.current_layout = Some(path);
+
         Ok(())
+    }
+
+    pub fn is_current_layout_saved(&self, state: &AppState) -> bool {
+        self.current_layout
+            .as_ref()
+            .and_then(|current_layout| self.get_layout(current_layout))
+            .map_or(false, |saved_layout| {
+                return saved_layout != state;
+            })
     }
 
     #[profiling::function]
