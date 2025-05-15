@@ -22,6 +22,7 @@ pub struct CommandPane {
     message: Option<MessageMap>,
     text: String,
     text_size: f32,
+    show_only_tc: bool,
 
     #[serde(skip)]
     settings_visible: bool,
@@ -33,6 +34,7 @@ impl Default for CommandPane {
             message: None,
             text: String::from("Customize"),
             text_size: 16.0,
+            show_only_tc: true,
             settings_visible: false,
         }
     }
@@ -43,6 +45,7 @@ impl PartialEq for CommandPane {
         self.message == other.message
             && self.text == other.text
             && self.text_size == other.text_size
+            && self.show_only_tc == other.show_only_tc
     }
 }
 
@@ -110,6 +113,9 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
 
     ui.separator();
 
+    // add a checkbox for filtering sendable messages
+    ui.checkbox(&mut pane.show_only_tc, "Show only TC messages");
+
     // Create a combo box for selecting the message kind
     let mut message_id = pane.message.as_ref().map(|m| m.message_id());
     let selected_text = message_id
@@ -119,7 +125,11 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
     egui::ComboBox::from_id_salt(ui.id().with("message_selector"))
         .selected_text(selected_text)
         .show_ui(ui, |ui| {
-            for msg in MAVLINK_PROFILE.get_sorted_msgs() {
+            let mut msgs = MAVLINK_PROFILE.get_sorted_msgs();
+            if pane.show_only_tc {
+                msgs.retain(|m| m.name.ends_with("_TC"));
+            }
+            for msg in msgs {
                 ui.selectable_value(&mut message_id, Some(msg.id), &msg.name);
             }
         });
