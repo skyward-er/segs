@@ -1189,9 +1189,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "errno"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "976dd42dc7e85965fe702eb8164f21f450704bdde31faefd6471dba214cb594e"
+checksum = "cea14ef9355e3beab063703aa9dab15afd25f0667c341310c1e5274bb1d0da18"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
@@ -1825,6 +1825,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "jiff"
+version = "0.2.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f02000660d30638906021176af16b17498bd0d12813dbfe7b276d8bc7f3c0806"
+dependencies = [
+ "jiff-static",
+ "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "jiff-static"
+version = "0.2.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3c30758ddd7188629c6713fc45d1188af4f44c90582311d0c8d8c9907f60c48"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "jiff-tzdb"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1283705eb0a21404d2bfd6eef2a7593d240bc42a0bdb39db0ad6fa2ec026524"
+
+[[package]]
+name = "jiff-tzdb-platform"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "875a5a69ac2bab1a891711cf5eccbec1ce0341ea805560dcd90b7a2e925132e8"
+dependencies = [
+ "jiff-tzdb",
+]
+
+[[package]]
 name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2048,7 +2089,7 @@ dependencies = [
 [[package]]
 name = "mavlink-bindgen"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#3cbf9f0f832d70bc777535810633e5d6c66d8bfd"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#2da5a05033d6f7b2bb2e6bd1ab24a8da42b49a0b"
 dependencies = [
  "crc-any",
  "lazy_static",
@@ -2062,7 +2103,7 @@ dependencies = [
 [[package]]
 name = "mavlink-core"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#3cbf9f0f832d70bc777535810633e5d6c66d8bfd"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#2da5a05033d6f7b2bb2e6bd1ab24a8da42b49a0b"
 dependencies = [
  "byteorder",
  "crc-any",
@@ -2796,6 +2837,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "350e9b48cbc6b0e028b0473b114454c6316e57336ee184ceab6e53f72c178b3e"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3169,6 +3225,7 @@ dependencies = [
  "enum_dispatch",
  "glam",
  "itertools 0.14.0",
+ "jiff",
  "mavlink-bindgen 0.14.0",
  "mint",
  "profiling",
@@ -3363,7 +3420,7 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 [[package]]
 name = "skyward_mavlink"
 version = "0.2.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=required-by-segs#4da0048ee9b848e7f7a359b46f56bd9a72d7b4fc"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=required-by-segs#a8f0ec56e5a98f8f394df89d4ef9f899af4e3ec0"
 dependencies = [
  "bitflags 2.9.1",
  "mavlink-bindgen 0.15.0",
