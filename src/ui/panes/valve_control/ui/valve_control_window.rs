@@ -601,15 +601,16 @@ impl ValveControlView {
         shortcut_handler.activate_mode(ShortcutMode::valve_control());
         match self.state {
             ValveViewState::Open => {
+                let modifier = if cfg!(feature = "conrig") {
+                    Modifiers::NONE
+                } else {
+                    Modifiers::ALT
+                };
                 // A window is open, so we can map the keys to control the valve
-                key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
+                key_action_pairs.push((modifier, WIGGLE_KEY, WindowAction::Wiggle));
+                key_action_pairs.push((modifier, FOCUS_TIMING_KEY, WindowAction::FocusOnTiming));
                 key_action_pairs.push((
-                    Modifiers::ALT,
-                    FOCUS_TIMING_KEY,
-                    WindowAction::FocusOnTiming,
-                ));
-                key_action_pairs.push((
-                    Modifiers::ALT,
+                    modifier,
                     FOCUS_APERTURE_KEY,
                     WindowAction::FocusOnAperture,
                 ));

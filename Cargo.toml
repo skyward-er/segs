@@ -46,6 +46,8 @@ rev = "1b51a25d717993d39004152f215c33f4333e2056"
 features = ["serde"]
 
 [features]
+default = []
+conrig = []
 profiling = ["profiling/profile-with-tracy"]
 
 [package.metadata.packager]
