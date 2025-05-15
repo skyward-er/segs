@@ -162,42 +162,85 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
 
                 ui.horizontal(|ui| {
                     ui.label(format!("{}:", &field.field().name.to_uppercase()));
-                    macro_rules! drag_value_with_range {
-                        ($_type:ty, $min:expr, $max:expr) => {{
-                            let value: &mut $_type = message_map.get_mut_field(field).log_unwrap();
-                            ui.add(egui::DragValue::new(value).range($min..=$max));
-                        }};
-                    }
 
-                    match field.field().mavtype {
-                        MavType::UInt8MavlinkVersion | MavType::UInt8 => {
-                            drag_value_with_range!(u8, 0, u8::MAX)
+                    if let Some(enum_type) = &field.field().enumtype {
+                        let enum_info = MAVLINK_PROFILE.get_enum(enum_type).log_unwrap();
+                        // TODO handle enum advanced options
+                        macro_rules! variant_selector_for {
+                            ($kind:ty) => {{
+                                let variant_ix: &mut $kind =
+                                    message_map.get_mut_field(field).log_unwrap();
+                                let selected_text =
+                                    enum_info.entries[*variant_ix as usize].name.clone();
+                                egui::ComboBox::from_id_salt(ui.id().with("field_selector"))
+                                    .selected_text(selected_text)
+                                    .show_ui(ui, |ui| {
+                                        for (index, variant) in enum_info.entries.iter().enumerate()
+                                        {
+                                            ui.selectable_value(
+                                                variant_ix,
+                                                index as $kind,
+                                                &variant.name,
+                                            );
+                                        }
+                                    });
+                            }};
                         }
-                        MavType::UInt16 => drag_value_with_range!(u16, 0, u16::MAX),
-                        MavType::UInt32 => drag_value_with_range!(u32, 0, u32::MAX),
-                        MavType::UInt64 => drag_value_with_range!(u64, 0, u64::MAX),
-                        MavType::Int8 => drag_value_with_range!(i8, i8::MIN, i8::MAX),
-                        MavType::Int16 => drag_value_with_range!(i16, i16::MIN, i16::MAX),
-                        MavType::Int32 => drag_value_with_range!(i32, i32::MIN, i32::MAX),
-                        MavType::Int64 => drag_value_with_range!(i64, i64::MIN, i64::MAX),
-                        MavType::Float => drag_value_with_range!(f32, f32::MIN, f32::MAX),
-                        MavType::Double => drag_value_with_range!(f64, f64::MIN, f64::MAX),
-                        MavType::Char => {
-                            let value: &mut char = message_map.get_mut_field(field).log_unwrap();
-                            let mut buffer = value.to_string();
-                            ui.add(
-                                egui::TextEdit::singleline(&mut buffer)
-                                    .hint_text("char")
-                                    .char_limit(1),
-                            );
-                            if let Some(c) = buffer.chars().next() {
-                                *value = c;
-                            } else {
-                                warn!("Invalid char input: {}", buffer);
-                                // TODO handle invalid char input (USER ERROR)
+
+                        match field.field().mavtype {
+                            MavType::UInt8 => variant_selector_for!(u8),
+                            MavType::UInt16 => variant_selector_for!(u16),
+                            MavType::UInt32 => variant_selector_for!(u32),
+                            MavType::UInt64 => variant_selector_for!(u64),
+                            _ => {
+                                // TODO handle other enum types
+                                warn!(
+                                    "Enum type {} is not supported for field {}",
+                                    enum_type,
+                                    field.field().name
+                                );
                             }
                         }
-                        MavType::Array(_, _) => warn!("Array types are not supported yet"), // TODO handle array types
+                    } else {
+                        macro_rules! drag_value_with_range {
+                            ($_type:ty, $min:expr, $max:expr) => {{
+                                let value: &mut $_type =
+                                    message_map.get_mut_field(field).log_unwrap();
+                                ui.add(egui::DragValue::new(value).range($min..=$max));
+                            }};
+                        }
+
+                        match field.field().mavtype {
+                            MavType::UInt8MavlinkVersion | MavType::UInt8 => {
+                                drag_value_with_range!(u8, 0, u8::MAX)
+                            }
+                            MavType::UInt16 => drag_value_with_range!(u16, 0, u16::MAX),
+                            MavType::UInt32 => drag_value_with_range!(u32, 0, u32::MAX),
+                            MavType::UInt64 => drag_value_with_range!(u64, 0, u64::MAX),
+                            MavType::Int8 => drag_value_with_range!(i8, i8::MIN, i8::MAX),
+                            MavType::Int16 => drag_value_with_range!(i16, i16::MIN, i16::MAX),
+                            MavType::Int32 => drag_value_with_range!(i32, i32::MIN, i32::MAX),
+                            MavType::Int64 => drag_value_with_range!(i64, i64::MIN, i64::MAX),
+                            MavType::Float => drag_value_with_range!(f32, f32::MIN, f32::MAX),
+                            MavType::Double => drag_value_with_range!(f64, f64::MIN, f64::MAX),
+                            MavType::Char => {
+                                let value: &mut char =
+                                    message_map.get_mut_field(field).log_unwrap();
+                                let mut buffer = value.to_string();
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut buffer)
+                                        .hint_text("char")
+                                        .char_limit(1),
+                                );
+                                if let Some(c) = buffer.chars().next() {
+                                    *value = c;
+                                } else {
+                                    warn!("Invalid char input: {}", buffer);
+                                    // TODO handle invalid char input (USER ERROR)
+                                }
+                            }
+                            MavType::Array(_, _) => warn!("Array types are not supported yet"), // TODO handle array types
+                        }
                     }
                 });
             }
