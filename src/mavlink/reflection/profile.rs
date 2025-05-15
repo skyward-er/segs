@@ -60,6 +60,20 @@ impl ReflectionContext {
         msg.to_mav_message(self).ok()
     }
 
+    /// Get a reference to an enumeration definition by string identifier.
+    ///
+    /// # Arguments
+    /// * `enum_name` - The name of the enumeration.
+    ///
+    /// # Returns
+    /// * `Some(&MavEnum)` if found, otherwise `None`.
+    pub fn get_enum(
+        &'static self,
+        enum_name: &str,
+    ) -> Option<&'static mavlink_bindgen::parser::MavEnum> {
+        self.mavlink_profile.enums.get(enum_name)
+    }
+
     /// Get all fields for a message by its identifier.
     ///
     /// # Arguments
