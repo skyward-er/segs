@@ -19,9 +19,12 @@ use strum::IntoEnumIterator;
 use tracing::error;
 
 use crate::{
-    APP_NAME, MAVLINK_PROFILE,
+    APP_NAME,
     error::ErrInstrument,
-    mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
+    mavlink::{
+        GSE_TM_DATA, MessageData, TimedMessage,
+        reflection::{MAVLINK_PROFILE, MessageLike},
+    },
     ui::{
         app::PaneResponse, cache::ChangeTracker, panes::pid_drawing_tool::pid_data::PidData,
         shortcuts::ShortcutHandler, utils::egui_to_glam,

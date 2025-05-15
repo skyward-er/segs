@@ -6,8 +6,8 @@ use egui::{
 use glam::Vec2;
 
 use crate::{
-    MAVLINK_PROFILE,
     error::ErrInstrument,
+    mavlink::reflection::MAVLINK_PROFILE,
     mavlink::{MavMessage, Message, reflection::IndexedField},
     ui::{
         cache::ChangeTracker,
