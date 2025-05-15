@@ -18,8 +18,6 @@ use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::Subscribe
 use mavlink::reflection::ReflectionContext;
 use ui::App;
 
-/// ReflectionContext singleton, used to get access to the Mavlink message definitions
-static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(ReflectionContext::new);
 static APP_START_TIMESTAMP_ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 static APP_NAME: &str = "segs";

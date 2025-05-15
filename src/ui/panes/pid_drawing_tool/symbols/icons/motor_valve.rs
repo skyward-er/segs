@@ -2,8 +2,8 @@ use egui::{RichText, Ui, Window};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    MAVLINK_PROFILE,
     error::ErrInstrument,
+    mavlink::reflection::MAVLINK_PROFILE,
     mavlink::{MavMessage, Message, reflection::IndexedField},
     ui::cache::ChangeTracker,
 };

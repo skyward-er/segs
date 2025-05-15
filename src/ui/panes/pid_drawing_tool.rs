@@ -13,9 +13,11 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 use crate::{
-    MAVLINK_PROFILE,
     error::ErrInstrument,
-    mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
+    mavlink::{
+        GSE_TM_DATA, MessageData, TimedMessage,
+        reflection::{MAVLINK_PROFILE, MessageLike},
+    },
     ui::{
         app::PaneResponse, cache::ChangeTracker, shortcuts::ShortcutHandler, utils::egui_to_glam,
     },

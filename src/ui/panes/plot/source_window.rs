@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{MAVLINK_PROFILE, error::ErrInstrument};
+use crate::{error::ErrInstrument, mavlink::reflection::MAVLINK_PROFILE};
 
 use super::{
     LineSettings, PlotSettings,
