@@ -1,10 +1,9 @@
+use crate::mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA};
 use crate::mavlink::{TimedMessage, reflection::MAVLINK_PROFILE};
 use crate::ui::panes::{PaneBehavior, PaneResponse};
 use crate::ui::shortcuts::ShortcutHandler;
 use egui::{Response, ScrollArea, Sense, UiBuilder, Window};
 use serde::{Deserialize, Serialize};
-use skyward_mavlink::mavlink::MessageData;
-use skyward_mavlink::orion::ROCKET_FLIGHT_TM_DATA;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
