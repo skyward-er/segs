@@ -10,8 +10,7 @@ use std::time::Instant;
 
 // Re-export from the mavlink crate
 pub use skyward_mavlink::{
-    mavlink::*, orion::*,
-    reflection::ORION_MAVLINK_PROFILE_SERIALIZED as MAVLINK_PROFILE_SERIALIZED,
+    lyra::*, mavlink::*, reflection::LYRA_MAVLINK_PROFILE_SERIALIZED as MAVLINK_PROFILE_SERIALIZED,
 };
 
 /// Default port for the Ethernet connection

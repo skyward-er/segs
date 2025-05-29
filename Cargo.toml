@@ -40,7 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git"
 # rev = "18062c9f6318de079b706a7c110761941fe07a85"
 branch = "required-by-segs"
-features = ["reflection", "orion", "serde"]
+features = ["reflection", "lyra", "serde"]
 
 [dependencies.mavlink-bindgen]
 git = "https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git"
