@@ -40,6 +40,10 @@ pub struct MessageBroker {
     connection: Option<Connection>,
     /// Egui context
     ctx: egui::Context,
+    /// System ID
+    system_id: u8,
+    /// Component ID
+    component_id: u8,
 }
 
 impl MessageBroker {
@@ -51,6 +55,8 @@ impl MessageBroker {
             last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(RECEPTION_QUEUE_INTERVAL))),
             connection: None,
             ctx,
+            system_id: SEGS_SYSTEM_ID,
+            component_id: SEGS_COMPONENT_ID,
         }
     }
 
@@ -62,6 +68,16 @@ impl MessageBroker {
     ) -> Result<(), ConnectionError> {
         self.connection = Some(config.open_connection()?);
         Ok(())
+    }
+
+    /// Sets the system ID used for the Mavlink messages
+    pub fn set_system_id(&mut self, id: u8) -> () {
+        self.system_id = id
+    }
+
+    /// Sets the component ID used for the Mavlink messages
+    pub fn set_component_id(&mut self, id: u8) -> () {
+        self.component_id = id
     }
 
     /// Stop the listener task from listening to incoming messages, if it is
@@ -131,8 +147,8 @@ impl MessageBroker {
         if let Some(connection) = &self.connection {
             for msg in messages {
                 let header = MavHeader {
-                    system_id: SEGS_SYSTEM_ID,
-                    component_id: SEGS_COMPONENT_ID,
+                    system_id: self.system_id,
+                    component_id: self.component_id,
                     ..Default::default()
                 };
                 let frame = MavFrame {
