@@ -20,6 +20,8 @@ pub struct ConnectionsWindow {
     pub visible: bool,
     connection_kind: ConnectionKind,
     connection_config: ConnectionConfig,
+    system_id: u8,
+    component_id: u8,
 }
 
 impl ConnectionsWindow {
@@ -91,6 +93,24 @@ impl ConnectionsWindow {
                         );
                     });
                 });
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("System ID:");
+                        ui.add(
+                            egui::DragValue::new(&mut self.system_id)
+                                .range(0..=255)
+                                .speed(10),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Component ID:");
+                        ui.add(
+                            egui::DragValue::new(&mut self.component_id)
+                                .range(0..=255)
+                                .speed(10),
+                        );
+                    });
+                });
             }
             ConnectionConfig::Serial(opt) => {
                 egui::Grid::new("grid")
@@ -103,26 +123,46 @@ impl ConnectionsWindow {
                                 port_name,
                                 baud_rate,
                             }) => {
-                                ComboBox::from_id_salt("serial_port")
-                                    .selected_text(port_name.as_str())
-                                    .show_ui(ui, |ui| {
-                                        for available_port in
-                                            cached_list_all_usb_ports(ui.ctx()).log_unwrap()
-                                        {
-                                            ui.selectable_value(
-                                                port_name,
-                                                available_port.port_name.clone(),
-                                                available_port.port_name,
-                                            );
-                                        }
+                                ui.vertical(|ui| {
+                                    ui.horizontal(|ui: &mut egui::Ui| {
+                                        ComboBox::from_id_salt("serial_port")
+                                            .selected_text(port_name.as_str())
+                                            .show_ui(ui, |ui| {
+                                                for available_port in
+                                                    cached_list_all_usb_ports(ui.ctx()).log_unwrap()
+                                                {
+                                                    ui.selectable_value(
+                                                        port_name,
+                                                        available_port.port_name.clone(),
+                                                        available_port.port_name,
+                                                    );
+                                                }
+                                            });
+                                        ui.label("Baud Rate:");
+                                        ui.add(
+                                            egui::DragValue::new(baud_rate)
+                                                .range(110..=256000)
+                                                .speed(100),
+                                        );
                                     });
 
-                                ui.label("Baud Rate:");
-                                ui.add(
-                                    egui::DragValue::new(baud_rate)
-                                        .range(110..=256000)
-                                        .speed(100),
-                                );
+                                    ui.horizontal(|ui: &mut egui::Ui| {
+                                        ui.label("System ID:");
+                                        ui.add(
+                                            egui::DragValue::new(&mut self.system_id)
+                                                .range(0..=255)
+                                                .speed(10),
+                                        );
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Component ID:");
+                                        ui.add(
+                                            egui::DragValue::new(&mut self.component_id)
+                                                .range(0..=255)
+                                                .speed(10),
+                                        );
+                                    });
+                                });
                                 ui.end_row();
                             }
                             None => {
@@ -156,6 +196,9 @@ impl ConnectionsWindow {
                                     {
                                         error!("Failed to open connection: {:?}", e); // TODO: handle user erros
                                     }
+                                    message_broker.set_system_id(self.system_id);
+                                    message_broker.set_component_id(self.system_id);
+
                                     *can_be_closed = true;
                                 }
                             },
