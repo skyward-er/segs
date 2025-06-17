@@ -71,6 +71,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         APP_NAME, // This is the app id, used for example by Wayland
         native_options,
-        Box::new(|ctx| Ok(Box::new(App::new(APP_NAME, ctx)))),
+        Box::new(|ctx| Ok(Box::new(App::new(ctx)))),
     )
 }

@@ -15,6 +15,7 @@ use crate::{
     error::ErrInstrument,
     mavlink::MavMessage,
     message_broker::{MessageBroker, MessageBundle},
+    utils::id::PaneId,
 };
 
 use super::{
@@ -50,8 +51,6 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.process_incoming_messages();
 
-        let panes_tree = &mut self.state.panes_tree;
-
         // Get the id of the hovered pane, in order to apply actions to it
         let hovered_pane = self.behavior.tile_id_hovered;
         trace!("Hovered pane: {:?}", hovered_pane);
@@ -85,6 +84,7 @@ impl eframe::App for App {
                     if let Some(hovered_tile) = hovered_pane {
                         profiling::scope!("split_h");
                         if self.maximized_pane.is_none() {
+                            let panes_tree = &mut self.state.panes_tree;
                             debug!("Called SplitH on tile {:?}", hovered_tile);
                             let hovered_tile_pane = panes_tree
                                 .tiles
@@ -108,6 +108,7 @@ impl eframe::App for App {
                     if self.maximized_pane.is_none() {
                         if let Some(hovered_tile) = hovered_pane {
                             debug!("Called SplitV on tile {:?}", hovered_tile);
+                            let panes_tree = &mut self.state.panes_tree;
                             let hovered_tile_pane = panes_tree
                                 .tiles
                                 .remove(hovered_tile)
@@ -128,18 +129,23 @@ impl eframe::App for App {
                 PaneAction::Close => {
                     if let Some(hovered_tile) = hovered_pane {
                         debug!("Called Close on tile {:?}", hovered_tile);
+                        let panes_tree = &mut self.state.panes_tree;
                         // Ignore if the root pane is the only one
                         if panes_tree.tiles.len() != 1 && self.maximized_pane.is_none() {
                             panes_tree.remove_recursively(hovered_tile);
                         }
                     }
                 }
-                PaneAction::Replace(new_pane) => {
+                PaneAction::Replace(mut new_pane) => {
                     debug!(
                         "Called Replace on tile {:?} with pane {:?}",
                         tile_id, new_pane
                     );
-                    panes_tree.tiles.insert(tile_id, Tile::Pane(*new_pane));
+                    new_pane.init(self.state.next_pane_id());
+                    self.state
+                        .panes_tree
+                        .tiles
+                        .insert(tile_id, Tile::Pane(*new_pane));
                 }
                 PaneAction::ReplaceThroughGallery => {
                     self.widget_gallery.replace_tile(tile_id);
@@ -150,6 +156,7 @@ impl eframe::App for App {
                     if self.maximized_pane.is_some() {
                         self.maximized_pane = None;
                     } else if let Some(hovered_tile) = hovered_pane {
+                        let panes_tree = &mut self.state.panes_tree;
                         let hovered_pane_is_default = panes_tree
                             .tiles
                             .get(hovered_tile)
@@ -224,6 +231,7 @@ impl eframe::App for App {
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
+            let panes_tree = &mut self.state.panes_tree;
             if let Some(maximized_pane) = self.maximized_pane {
                 if let Some(Tile::Pane(pane)) = panes_tree.tiles.get_mut(maximized_pane) {
                     maximized_pane_ui(
@@ -262,7 +270,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    pub fn new(app_name: &str, ctx: &CreationContext) -> Self {
+    pub fn new(ctx: &CreationContext) -> Self {
         // Load the image loaders
         egui_extras::install_image_loaders(&ctx.egui_ctx);
 
@@ -270,7 +278,7 @@ impl App {
         super::font::add_font(&ctx.egui_ctx);
 
         let mut layout_manager = if let Some(storage) = ctx.storage {
-            LayoutManager::new(app_name, storage)
+            LayoutManager::new(storage)
         } else {
             LayoutManager::default()
         };
@@ -365,6 +373,7 @@ impl App {
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct AppState {
     pub panes_tree: Tree<Pane>,
+    pub next_pane_id: PaneId,
 }
 
 impl Default for AppState {
@@ -372,8 +381,12 @@ impl Default for AppState {
         let mut tiles = Tiles::default();
         let root = tiles.insert_pane(Pane::default());
         let panes_tree = egui_tiles::Tree::new("main_tree", root, tiles);
+        let next_pane_id = PaneId::new(0);
 
-        Self { panes_tree }
+        Self {
+            panes_tree,
+            next_pane_id,
+        }
     }
 }
 
@@ -401,6 +414,12 @@ impl AppState {
             .map_err(|e| anyhow::anyhow!("Error writing layout: {}", e))?;
 
         Ok(())
+    }
+
+    pub fn next_pane_id(&mut self) -> PaneId {
+        let id = self.next_pane_id;
+        self.next_pane_id = self.next_pane_id.next_id();
+        id
     }
 }
 
