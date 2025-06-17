@@ -1,25 +1,32 @@
 mod connections;
 mod elements;
 mod grid;
+mod pid_data;
 mod symbols;
 
+use anyhow::anyhow;
 use core::f32;
 use egui::{
     Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
+    ahash::{HashMap, HashMapExt},
+    mutex::Mutex,
 };
+use egui_file::FileDialog;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
+use tracing::error;
 
 use crate::{
-    MAVLINK_PROFILE,
+    APP_NAME, MAVLINK_PROFILE,
     error::ErrInstrument,
     mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MessageLike},
     ui::{
-        app::PaneResponse, cache::ChangeTracker, shortcuts::ShortcutHandler, utils::egui_to_glam,
+        app::PaneResponse, cache::ChangeTracker, panes::pid_drawing_tool::pid_data::PidData,
+        shortcuts::ShortcutHandler, utils::egui_to_glam,
     },
-    utils::id::IdGenerator,
+    utils::id::{IdGenerator, PaneId},
 };
 
 use super::PaneBehavior;
@@ -42,6 +49,7 @@ enum Action {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PidPane {
     // Persistent internal state
+    pane_id: PaneId,
     elements: HashMap<u32, Element>,
     connections: Vec<Connection>,
     grid: GridInfo,
@@ -64,6 +72,7 @@ pub struct PidPane {
 impl Default for PidPane {
     fn default() -> Self {
         Self {
+            pane_id: PaneId::from_str("pid_pane"),
             elements: HashMap::new(),
             connections: Vec::new(),
             grid: GridInfo::default(),
@@ -141,6 +150,61 @@ impl PaneBehavior for PidPane {
             self.reset_subscriptions();
         }
 
+        // Spawn file dialogs if needed
+        if let Some(file_dialog) = ui.ctx().memory_mut(|m| {
+            m.data
+                .get_temp::<Arc<Mutex<FileDialog>>>(*(self.pane_id / "load_file_dialog"))
+        }) {
+            let mut file_dialog = file_dialog.lock();
+            if file_dialog.show(ui.ctx()).selected() {
+                if let Some(path) = file_dialog.path() {
+                    match PidData::from_file(path)
+                        .map_err(|e| anyhow!("Failed to load PidPane: {}", e))
+                    {
+                        Ok(pid) => {
+                            self.elements = pid.elements;
+                            self.connections = pid.connections;
+                            self.message_subscription_id = pid.message_subscription_id;
+                        }
+                        Err(e) => {
+                            error!("Failed to load PidPane: {}", e);
+                            // FIXME: Show an error message to the user
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(file_dialog) = ui.ctx().memory_mut(|m| {
+            m.data
+                .get_temp::<Arc<Mutex<FileDialog>>>(*(self.pane_id / "save_file_dialog"))
+        }) {
+            let mut file_dialog = file_dialog.lock();
+            if file_dialog.show(ui.ctx()).selected() {
+                if let Some(path) = file_dialog.path() {
+                    let pid_data = PidData {
+                        elements: self.elements.clone(),
+                        connections: self.connections.clone(),
+                        message_subscription_id: self.message_subscription_id,
+                    };
+                    let path = path.with_extension("pid.json");
+                    match pid_data
+                        .to_file(path)
+                        .map_err(|e| anyhow!("Failed to save PidPane: {}", e))
+                    {
+                        Ok(_) => {
+                            // Successfully saved the file
+                            self.action = None; // Clear the action after saving
+                        }
+                        Err(e) => {
+                            error!("Failed to save PidPane: {}", e);
+                            // FIXME: Show an error message to the user
+                        }
+                    }
+                }
+            }
+        }
+
         // Check if the user is draqging the pane
         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
         if response.dragged() && (ctrl_pressed || !self.editable) {
@@ -160,6 +224,13 @@ impl PaneBehavior for PidPane {
 
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
         Box::new(Some(self.message_subscription_id).into_iter())
+    }
+
+    fn init(&mut self, pane_id: PaneId) {
+        self.pane_id = pane_id;
+        // Initialize the id generator with the current elements ids
+        self.id_generator
+            .sync_used_ids(&self.elements.keys().copied().collect::<Vec<_>>());
     }
 }
 
@@ -273,6 +344,14 @@ impl PidPane {
                 ui.close_menu();
             }
             ui.checkbox(&mut self.center_content, "Center");
+            if ui.button("Save schematic…").clicked() {
+                self.open_save_schematic_dialog(ui.ctx());
+                ui.close_menu();
+            }
+            if ui.button("Load schematic…").clicked() {
+                self.open_load_schematic_dialog(ui.ctx());
+                ui.close_menu();
+            }
             return;
         }
 
@@ -478,6 +557,24 @@ impl PidPane {
         for element in self.elements.values_mut() {
             element.reset_subscriptions();
         }
+    }
+
+    fn open_load_schematic_dialog(&mut self, ctx: &Context) {
+        // Create a new file dialog and store it in the memory
+        let initial_path = eframe::storage_dir(APP_NAME);
+        let mut file_dialog = FileDialog::open_file(initial_path);
+        file_dialog.open();
+        let id = self.pane_id / "load_file_dialog";
+        ctx.memory_mut(|m| m.data.insert_temp(*id, Arc::new(Mutex::new(file_dialog))));
+    }
+
+    fn open_save_schematic_dialog(&mut self, ctx: &Context) {
+        // Create a new file dialog and store it in the memory
+        let initial_path = eframe::storage_dir(APP_NAME);
+        let mut file_dialog = FileDialog::save_file(initial_path);
+        file_dialog.open();
+        let id = self.pane_id / "save_file_dialog";
+        ctx.memory_mut(|m| m.data.insert_temp(*id, Arc::new(Mutex::new(file_dialog))));
     }
 }
 

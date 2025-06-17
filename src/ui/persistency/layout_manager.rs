@@ -7,7 +7,7 @@ use std::{
 
 use tracing::{info, trace, warn};
 
-use crate::error::ErrInstrument;
+use crate::{APP_NAME, error::ErrInstrument};
 
 use super::super::app::AppState;
 
@@ -23,9 +23,9 @@ pub struct LayoutManager {
 
 impl LayoutManager {
     /// Chooses the layouts path and gets the previously selected layout from storage
-    pub fn new(app_name: &str, storage: &dyn eframe::Storage) -> Self {
+    pub fn new(storage: &dyn eframe::Storage) -> Self {
         let mut layout_manager = Self {
-            layouts_path: eframe::storage_dir(app_name)
+            layouts_path: eframe::storage_dir(APP_NAME)
                 .log_expect("Unable to get storage dir")
                 .join(LAYOUTS_DIR),
             current_layout: storage

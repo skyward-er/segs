@@ -9,7 +9,10 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use strum_macros::{self, EnumIter, EnumMessage};
 
-use crate::mavlink::{MavMessage, TimedMessage};
+use crate::{
+    mavlink::{MavMessage, TimedMessage},
+    utils::id::PaneId,
+};
 
 use super::{app::PaneResponse, shortcuts::ShortcutHandler};
 
@@ -47,6 +50,9 @@ pub trait PaneBehavior {
     fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
         Vec::new()
     }
+
+    /// Initializes the pane with the given pane ID. This is called when the pane is inserted into the layout.
+    fn init(&mut self, _pane_id: PaneId) {}
 }
 
 impl PaneBehavior for Pane {
@@ -68,6 +74,10 @@ impl PaneBehavior for Pane {
 
     fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
         self.pane.drain_outgoing_messages()
+    }
+
+    fn init(&mut self, pane_id: PaneId) {
+        self.pane.init(pane_id);
     }
 }
 
