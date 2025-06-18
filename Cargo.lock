@@ -2074,22 +2074,8 @@ dependencies = [
 
 [[package]]
 name = "mavlink-bindgen"
-version = "0.14.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=1b51a25d717993d39004152f215c33f4333e2056#1b51a25d717993d39004152f215c33f4333e2056"
-dependencies = [
- "crc-any",
- "lazy_static",
- "proc-macro2",
- "quick-xml 0.36.2",
- "quote",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "mavlink-bindgen"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#b19275d6d39cc84a850de05124869038e5ee3ade"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=9a06b5bbfe555673f4df968e8756d9b46f5a4a73#9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
 dependencies = [
  "crc-any",
  "lazy_static",
@@ -2103,7 +2089,7 @@ dependencies = [
 [[package]]
 name = "mavlink-core"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?branch=reflection#b19275d6d39cc84a850de05124869038e5ee3ade"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=9a06b5bbfe555673f4df968e8756d9b46f5a4a73#9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
 dependencies = [
  "byteorder",
  "crc-any",
@@ -3232,7 +3218,7 @@ dependencies = [
  "glam",
  "itertools 0.14.0",
  "jiff",
- "mavlink-bindgen 0.14.0",
+ "mavlink-bindgen",
  "mint",
  "profiling",
  "ring-channel",
@@ -3426,10 +3412,10 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 [[package]]
 name = "skyward_mavlink"
 version = "0.2.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?branch=required-by-segs#a8f0ec56e5a98f8f394df89d4ef9f899af4e3ec0"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?rev=2b08fa26437151155127c1348e9867d98de49b89#2b08fa26437151155127c1348e9867d98de49b89"
 dependencies = [
  "bitflags 2.9.1",
- "mavlink-bindgen 0.15.0",
+ "mavlink-bindgen",
  "mavlink-core",
  "num-derive",
  "num-traits",
