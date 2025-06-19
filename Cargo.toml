@@ -22,27 +22,28 @@ egui_file = "0.22"
 enum_dispatch = "0.3"
 glam = { version = "0.29", features = ["serde", "mint"] }
 itertools = "0.14.0"
+jiff = "0.2.13"
 mint = "0.5.9"
 profiling = "1.0"
 ring-channel = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serialport = "4.7"
-thiserror = "2.0"
 strum = "0.26"
 strum_macros = "0.26"
+thiserror = "2.0"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dependencies.skyward_mavlink]
 git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git"
-rev = "18062c9f6318de079b706a7c110761941fe07a85"
+rev = "2b08fa26437151155127c1348e9867d98de49b89"
 features = ["reflection", "orion", "serde"]
 
 [dependencies.mavlink-bindgen]
 git = "https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git"
-rev = "1b51a25d717993d39004152f215c33f4333e2056"
+rev = "9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
 features = ["serde"]
 
 [features]

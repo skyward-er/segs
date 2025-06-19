@@ -1,5 +1,4 @@
-use crate::MAVLINK_PROFILE;
-use crate::mavlink::TimedMessage;
+use crate::mavlink::{TimedMessage, reflection::MAVLINK_PROFILE};
 use crate::ui::panes::{PaneBehavior, PaneResponse};
 use crate::ui::shortcuts::ShortcutHandler;
 use egui::{Response, ScrollArea, Sense, UiBuilder, Window};

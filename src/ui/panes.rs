@@ -1,3 +1,4 @@
+mod command;
 mod default;
 mod messages_viewer;
 mod pid_drawing_tool;
@@ -89,6 +90,9 @@ pub enum PaneKind {
 
     #[strum(message = "Messages Viewer")]
     MessagesViewer(messages_viewer::MessagesViewerPane),
+
+    #[strum(message = "Command")]
+    CommandPane(command::CommandPane),
 
     #[strum(message = "Plot 2D")]
     Plot2D(plot::Plot2DPane),
