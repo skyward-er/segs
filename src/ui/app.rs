@@ -18,6 +18,8 @@ use crate::{
     utils::id::PaneId,
 };
 
+#[cfg(feature = "conrig")]
+use super::windows::CommandSwitchWindow;
 use super::{
     panes::{Pane, PaneBehavior, PaneKind},
     persistency::LayoutManager,
@@ -25,7 +27,7 @@ use super::{
     utils::maximized_pane_ui,
     widget_gallery::WidgetGallery,
     widgets::ReceptionLed,
-    windows::{CommandSwitchWindow, ConnectionsWindow, LayoutManagerWindow},
+    windows::{ConnectionsWindow, LayoutManagerWindow},
 };
 
 pub struct App {
@@ -229,20 +231,22 @@ impl eframe::App for App {
                                 .toggle_open_state(&self.layout_manager);
                         }
 
-                        // Command Shortcuts button
-                        self.state.command_switch_window.show(ui);
-                        if ui
-                            .add(
-                                Button::new("Commands 🔁")
-                                    .stroke(Stroke::NONE)
-                                    .corner_radius(0),
-                            )
-                            .on_hover_text("Open the Layout Manager")
-                            .clicked()
+                        #[cfg(feature = "conrig")]
                         {
-                            self.state.command_switch_window.toggle_open_state();
+                            // Command Shortcuts button
+                            self.state.command_switch_window.show(ui);
+                            if ui
+                                .add(
+                                    Button::new("Commands 🔁")
+                                        .stroke(Stroke::NONE)
+                                        .corner_radius(0),
+                                )
+                                .on_hover_text("Open the Layout Manager")
+                                .clicked()
+                            {
+                                self.state.command_switch_window.toggle_open_state();
+                            }
                         }
-
                         // If a pane is maximized show a visual clue
                         if self.maximized_pane.is_some() {
                             ui.label("Pane Maximized!");
@@ -396,6 +400,7 @@ impl App {
             })
             .flatten()
             .collect();
+        #[cfg(feature = "conrig")]
         outgoing.extend(self.state.command_switch_window.consume_messages_to_send());
         self.message_broker.process_outgoing_messages(outgoing);
     }
@@ -410,6 +415,7 @@ pub struct AppConfig {
 pub struct AppState {
     pub panes_tree: Tree<Pane>,
     pub next_pane_id: PaneId,
+    #[cfg(feature = "conrig")]
     pub command_switch_window: CommandSwitchWindow,
 }
 
@@ -423,6 +429,7 @@ impl Default for AppState {
         Self {
             panes_tree,
             next_pane_id,
+            #[cfg(feature = "conrig")]
             command_switch_window: CommandSwitchWindow::default(),
         }
     }
