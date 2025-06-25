@@ -26,6 +26,7 @@ use crate::{
     ui::{
         app::PaneResponse,
         shortcuts::{ShortcutHandler, ShortcutMode},
+        widgets::ShortcutCard,
     },
 };
 
@@ -33,7 +34,7 @@ use super::PaneBehavior;
 
 use commands::CommandSM;
 use icons::Icon;
-use ui::{ShortcutCard, ValveControlView, map_key_to_shortcut};
+use ui::{ValveControlView, map_key_to_shortcut};
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);

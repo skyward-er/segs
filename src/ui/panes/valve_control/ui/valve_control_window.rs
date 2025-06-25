@@ -5,13 +5,15 @@ use egui::{
 use egui_extras::{Size, StripBuilder};
 use tracing::info;
 
-use crate::ui::shortcuts::{ShortcutHandler, ShortcutMode};
+use crate::ui::{
+    shortcuts::{ShortcutHandler, ShortcutMode},
+    widgets::ShortcutCard,
+};
 
 use super::{
     commands::Command,
     icons::Icon,
     map_key_to_shortcut,
-    shortcut_widget::ShortcutCard,
     valves::{ParameterValue, Valve, ValveStateManager},
 };
 

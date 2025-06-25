@@ -19,7 +19,7 @@ impl Widget for ShortcutCard {
         let is_mac = false;
 
         let shortcut_fmt = self.shortcut.format(&ModifierNames::SYMBOLS, is_mac);
-        let default_style = ui.style().noninteractive();
+        let default_style: &egui::style::WidgetVisuals = ui.style().noninteractive();
         let text_color = self.text_color.unwrap_or(default_style.text_color());
         let fill_color = self.fill_color.unwrap_or(default_style.bg_fill);
         let corner_radius = default_style.corner_radius;

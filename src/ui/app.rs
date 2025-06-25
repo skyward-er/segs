@@ -1,5 +1,5 @@
 use eframe::CreationContext;
-use egui::{Button, Key, Modifiers, Sides};
+use egui::{Button, Key, Modifiers, Sides, Stroke};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -24,8 +24,8 @@ use super::{
     shortcuts::{ShortcutHandler, ShortcutMode},
     utils::maximized_pane_ui,
     widget_gallery::WidgetGallery,
-    widgets::reception_led::ReceptionLed,
-    windows::{ConnectionsWindow, LayoutManagerWindow},
+    widgets::ReceptionLed,
+    windows::{CommandSwitchWindow, ConnectionsWindow, LayoutManagerWindow},
 };
 
 pub struct App {
@@ -43,6 +43,7 @@ pub struct App {
     widget_gallery: WidgetGallery,
     sources_window: ConnectionsWindow,
     layout_manager_window: LayoutManagerWindow,
+    command_switch_window: CommandSwitchWindow,
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -198,26 +199,49 @@ impl eframe::App for App {
                 |ui| ui.add(ReceptionLed::new(reception_led_active, reception_frequency)),
                 |ui| {
                     ui.horizontal(|ui| {
+                        // Theme switcher
                         egui::global_theme_preference_switch(ui);
 
-                        // Window for the sources
-                        self.sources_window
-                            .show_window(ui, &mut self.message_broker);
-
+                        // Connections and Sources button
+                        self.sources_window.show(ui, &mut self.message_broker);
                         if ui
-                            .add(Button::new("🔌").frame(false))
+                            .add(
+                                Button::new(" Sources 🔌")
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(0),
+                            )
                             .on_hover_text("Open the Sources")
                             .clicked()
                         {
                             self.sources_window.visible = !self.sources_window.visible;
                         }
+
+                        // Layout manager button
                         if ui
-                            .add(Button::new("💾").frame(false))
+                            .add(
+                                Button::new("Layouts 💾")
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(0),
+                            )
                             .on_hover_text("Open the Layout Manager")
                             .clicked()
                         {
                             self.layout_manager_window
                                 .toggle_open_state(&self.layout_manager);
+                        }
+
+                        // Command Shortcuts button
+                        self.command_switch_window.show(ui);
+                        if ui
+                            .add(
+                                Button::new("Commands 🔁")
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(0),
+                            )
+                            .on_hover_text("Open the Layout Manager")
+                            .clicked()
+                        {
+                            self.command_switch_window.toggle_open_state();
                         }
 
                         // If a pane is maximized show a visual clue
@@ -313,6 +337,7 @@ impl App {
             shortcut_handler,
             sources_window: ConnectionsWindow::default(),
             layout_manager_window: LayoutManagerWindow::default(),
+            command_switch_window: CommandSwitchWindow::default(),
         }
     }
 
@@ -359,7 +384,7 @@ impl App {
     /// Sends outgoing messages from the panes to the message broker.
     #[profiling::function]
     fn process_outgoing_messages(&mut self) {
-        let outgoing: Vec<(MavHeader, MavMessage)> = self
+        let mut outgoing: Vec<(MavHeader, MavMessage)> = self
             .state
             .panes_tree
             .tiles
@@ -373,6 +398,7 @@ impl App {
             })
             .flatten()
             .collect();
+        outgoing.extend(self.command_switch_window.consume_messages_to_send());
         self.message_broker.process_outgoing_messages(outgoing);
     }
 }
