@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CommandSwitchWindow {
     commands: Vec<Command>,
     #[serde(skip)]
@@ -353,7 +353,7 @@ fn show_single_command_settings(ui: &mut Ui, command: &mut Command) {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct Command {
     id: usize,
     name: String,

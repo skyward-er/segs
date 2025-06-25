@@ -43,7 +43,6 @@ pub struct App {
     widget_gallery: WidgetGallery,
     sources_window: ConnectionsWindow,
     layout_manager_window: LayoutManagerWindow,
-    command_switch_window: CommandSwitchWindow,
 }
 
 // An app must implement the `App` trait to define how the ui is built
@@ -231,7 +230,7 @@ impl eframe::App for App {
                         }
 
                         // Command Shortcuts button
-                        self.command_switch_window.show(ui);
+                        self.state.command_switch_window.show(ui);
                         if ui
                             .add(
                                 Button::new("Commands 🔁")
@@ -241,7 +240,7 @@ impl eframe::App for App {
                             .on_hover_text("Open the Layout Manager")
                             .clicked()
                         {
-                            self.command_switch_window.toggle_open_state();
+                            self.state.command_switch_window.toggle_open_state();
                         }
 
                         // If a pane is maximized show a visual clue
@@ -337,7 +336,6 @@ impl App {
             shortcut_handler,
             sources_window: ConnectionsWindow::default(),
             layout_manager_window: LayoutManagerWindow::default(),
-            command_switch_window: CommandSwitchWindow::default(),
         }
     }
 
@@ -398,7 +396,7 @@ impl App {
             })
             .flatten()
             .collect();
-        outgoing.extend(self.command_switch_window.consume_messages_to_send());
+        outgoing.extend(self.state.command_switch_window.consume_messages_to_send());
         self.message_broker.process_outgoing_messages(outgoing);
     }
 }
@@ -412,6 +410,7 @@ pub struct AppConfig {
 pub struct AppState {
     pub panes_tree: Tree<Pane>,
     pub next_pane_id: PaneId,
+    pub command_switch_window: CommandSwitchWindow,
 }
 
 impl Default for AppState {
@@ -424,6 +423,7 @@ impl Default for AppState {
         Self {
             panes_tree,
             next_pane_id,
+            command_switch_window: CommandSwitchWindow::default(),
         }
     }
 }
