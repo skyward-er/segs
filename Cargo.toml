@@ -12,6 +12,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"], optional = true }
 directories = "6.0.0"
 egui_tiles = "0.12"
 eframe = { version = "0.31", features = ["persistence"] }
@@ -48,6 +49,7 @@ features = ["serde"]
 
 [features]
 profiling = ["profiling/profile-with-tracy"]
+conrig = ["dep:clap"]
 
 [package.metadata.packager]
 product-name = "SEGS"

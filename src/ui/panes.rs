@@ -8,6 +8,7 @@ mod valve_control;
 use egui::Ui;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
+use skyward_mavlink::mavlink::MavHeader;
 use strum_macros::{self, EnumIter, EnumMessage};
 
 use crate::{
@@ -48,7 +49,7 @@ pub trait PaneBehavior {
     }
 
     /// Drains the outgoing messages from the pane.
-    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
         Vec::new()
     }
 
@@ -73,7 +74,7 @@ impl PaneBehavior for Pane {
         self.pane.should_send_message_history()
     }
 
-    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
         self.pane.drain_outgoing_messages()
     }
 

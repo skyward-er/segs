@@ -13,8 +13,8 @@ use tracing::{debug, error, trace};
 
 use crate::{
     error::ErrInstrument,
-    mavlink::MavMessage,
-    message_broker::{MessageBroker, MessageBundle},
+    mavlink::{MavHeader, MavMessage},
+    message_broker::{ConnectionConfig, MessageBroker, MessageBundle},
     utils::id::PaneId,
 };
 
@@ -270,7 +270,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    pub fn new(ctx: &CreationContext) -> Self {
+    pub fn new(ctx: &CreationContext, config: AppConfig) -> Self {
         // Load the image loaders
         egui_extras::install_image_loaders(&ctx.egui_ctx);
 
@@ -294,11 +294,18 @@ impl App {
                 });
         }
 
+        let mut message_broker = MessageBroker::new(ctx.egui_ctx.clone());
+
+        // Start connection if configured
+        if let Some(conf) = config.connection_config {
+            message_broker.open_connection(conf);
+        }
+
         let shortcut_handler = Arc::new(Mutex::new(ShortcutHandler::new(ctx.egui_ctx.clone())));
         Self {
             state,
             layout_manager,
-            message_broker: MessageBroker::new(ctx.egui_ctx.clone()),
+            message_broker,
             widget_gallery: WidgetGallery::default(),
             behavior: AppBehavior::new(Arc::clone(&shortcut_handler)),
             maximized_pane: None,
@@ -352,7 +359,7 @@ impl App {
     /// Sends outgoing messages from the panes to the message broker.
     #[profiling::function]
     fn process_outgoing_messages(&mut self) {
-        let outgoing: Vec<MavMessage> = self
+        let outgoing: Vec<(MavHeader, MavMessage)> = self
             .state
             .panes_tree
             .tiles
@@ -368,6 +375,11 @@ impl App {
             .collect();
         self.message_broker.process_outgoing_messages(outgoing);
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AppConfig {
+    pub connection_config: Option<ConnectionConfig>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]

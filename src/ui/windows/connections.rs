@@ -1,10 +1,11 @@
-use egui::{Align2, Button, ComboBox, Context, RichText, Vec2};
+use egui::{Align2, Button, Color32, ComboBox, Context, RichText, Vec2};
 use egui_extras::{Size, StripBuilder};
 use tracing::{error, warn};
 
 use crate::{
     communication::{
         ConnectionError, EthernetConfiguration, SerialConfiguration,
+        ethernet::DEFAULT_ETHERNET_BROADCAST_IP,
         serial::{
             DEFAULT_BAUD_RATE,
             cached::{cached_first_stm32_port, cached_list_all_usb_ports},
@@ -12,14 +13,14 @@ use crate::{
     },
     error::ErrInstrument,
     mavlink::DEFAULT_ETHERNET_PORT,
-    message_broker::MessageBroker,
+    message_broker::{ConnectionConfig, MessageBroker},
 };
 
 #[derive(Default)]
 pub struct ConnectionsWindow {
     pub visible: bool,
     connection_kind: ConnectionKind,
-    connection_config: ConnectionConfig,
+    connection_config: ConnectionSetting,
 }
 
 impl ConnectionsWindow {
@@ -60,24 +61,56 @@ impl ConnectionsWindow {
         ui.separator();
 
         match (connection_kind, &connection_config) {
-            (ConnectionKind::Ethernet, ConnectionConfig::Ethernet(_)) => {}
-            (ConnectionKind::Serial, ConnectionConfig::Serial(_)) => {}
+            (ConnectionKind::Ethernet, ConnectionSetting::Ethernet(_)) => {}
+            (ConnectionKind::Serial, ConnectionSetting::Serial(_)) => {}
             (ConnectionKind::Ethernet, _) => {
-                *connection_config = ConnectionConfig::Ethernet(default_ethernet());
+                *connection_config = ConnectionSetting::Ethernet(default_ethernet());
             }
             (ConnectionKind::Serial, _) => {
-                *connection_config = ConnectionConfig::Serial(
+                *connection_config = ConnectionSetting::Serial(
                     default_serial(ui.ctx()).log_expect("USER ERROR: issues with serail ports"),
                 );
             }
         }
 
         match connection_config {
-            ConnectionConfig::Ethernet(EthernetConfiguration {
+            ConnectionSetting::Ethernet(EthernetConfiguration {
+                ip_address,
                 send_port,
                 receive_port,
             }) => {
                 ui.vertical(|ui| {
+                    let mut ip_str = ui.ctx().memory(|m| {
+                        m.data
+                            .get_temp(ui.id().with("ip_str"))
+                            .unwrap_or(ip_address.to_string())
+                    });
+
+                    // Validate the IP address format and update the IP address
+                    let mut valid_parse = false;
+                    if let Ok(parsed_ip) = ip_str.parse::<std::net::IpAddr>() {
+                        *ip_address = parsed_ip;
+                        valid_parse = true;
+                    }
+
+                    // Create a TextEdit for the IP address input
+                    let mut textedit = egui::TextEdit::singleline(&mut ip_str)
+                        .hint_text("e.g. 255.255.255.255")
+                        .desired_width(100.0);
+                    if !valid_parse {
+                        textedit = textedit.text_color(ui.style().visuals.error_fg_color);
+                    }
+
+                    // Display the IP address input field
+                    ui.horizontal(|ui| {
+                        ui.label("IP Address:");
+                        ui.add(textedit);
+                    });
+                    // Store the IP address in the UI context memory
+                    ui.ctx().memory_mut(|m| {
+                        m.data.insert_temp(ui.id().with("ip_str"), ip_str.clone());
+                    });
+                    // Display the send and receive ports
                     ui.horizontal(|ui| {
                         ui.label("Send Port:");
                         ui.add(egui::DragValue::new(send_port).range(0..=65535).speed(10));
@@ -92,7 +125,7 @@ impl ConnectionsWindow {
                     });
                 });
             }
-            ConnectionConfig::Serial(opt) => {
+            ConnectionSetting::Serial(opt) => {
                 egui::Grid::new("grid")
                     .num_columns(2)
                     .spacing([10.0, 5.0])
@@ -182,13 +215,14 @@ enum ConnectionKind {
 }
 
 #[derive(Debug, Clone)]
-pub enum ConnectionConfig {
+pub enum ConnectionSetting {
     Ethernet(EthernetConfiguration),
     Serial(Option<SerialConfiguration>),
 }
 
 fn default_ethernet() -> EthernetConfiguration {
     EthernetConfiguration {
+        ip_address: DEFAULT_ETHERNET_BROADCAST_IP,
         send_port: DEFAULT_ETHERNET_PORT,
         receive_port: DEFAULT_ETHERNET_PORT,
     }
@@ -207,19 +241,25 @@ fn default_serial(ctx: &Context) -> Result<Option<SerialConfiguration>, serialpo
     }))
 }
 
-impl ConnectionConfig {
+impl ConnectionSetting {
     fn is_valid(&self) -> bool {
         match self {
-            ConnectionConfig::Ethernet(_) => true,
-            ConnectionConfig::Serial(Some(_)) => true,
-            ConnectionConfig::Serial(None) => false,
+            ConnectionSetting::Ethernet(_) => true,
+            ConnectionSetting::Serial(Some(_)) => true,
+            ConnectionSetting::Serial(None) => false,
         }
     }
 
     fn open_connection(&self, msg_broker: &mut MessageBroker) -> Result<(), ConnectionError> {
         match self {
-            Self::Ethernet(config) => msg_broker.open_connection(config.clone()),
-            Self::Serial(Some(config)) => msg_broker.open_connection(config.clone()),
+            Self::Ethernet(config) => {
+                msg_broker.open_connection(ConnectionConfig::Ethernet(config.clone()));
+                Ok(())
+            }
+            Self::Serial(Some(config)) => {
+                msg_broker.open_connection(ConnectionConfig::Serial(config.clone()));
+                Ok(())
+            }
             Self::Serial(None) => Err(ConnectionError::WrongConfiguration(
                 "No serial port found".to_string(),
             )),
@@ -227,8 +267,8 @@ impl ConnectionConfig {
     }
 }
 
-impl Default for ConnectionConfig {
+impl Default for ConnectionSetting {
     fn default() -> Self {
-        ConnectionConfig::Ethernet(default_ethernet())
+        ConnectionSetting::Ethernet(default_ethernet())
     }
 }

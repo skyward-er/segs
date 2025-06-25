@@ -9,4 +9,4 @@ mod widget_gallery;
 mod widgets;
 pub mod windows;
 
-pub use app::App;
+pub use app::{App, AppConfig};

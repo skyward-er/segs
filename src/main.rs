@@ -2,6 +2,9 @@
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::panic)]
 
+#[cfg(feature = "conrig")]
+mod cli;
+
 mod communication;
 mod error;
 mod mavlink;
@@ -11,12 +14,18 @@ mod utils;
 
 use std::{fs::create_dir_all, sync::LazyLock, time::Instant};
 
+#[cfg(feature = "conrig")]
+use clap::Parser;
 use error::ErrInstrument;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-use mavlink::reflection::ReflectionContext;
+#[cfg(feature = "conrig")]
+use cli::Cli;
 use ui::App;
+
+#[cfg(not(feature = "conrig"))]
+use crate::ui::AppConfig;
 
 static APP_START_TIMESTAMP_ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
@@ -64,11 +73,16 @@ fn main() -> Result<(), eframe::Error> {
     let starting_time = &APP_START_TIMESTAMP_ORIGIN;
     tracing::info!("Starting {} at {:?}", APP_NAME, starting_time);
 
+    #[cfg(not(feature = "conrig"))]
+    let config = AppConfig::default();
+    #[cfg(feature = "conrig")]
+    let config = Cli::parse().into();
+
     // CreationContext constains information useful to initilize our app, like storage.
     // Storage allows to store custom data in a way that persist whan you restart the app.
     eframe::run_native(
         APP_NAME, // This is the app id, used for example by Wayland
         native_options,
-        Box::new(|ctx| Ok(Box::new(App::new(ctx)))),
+        Box::new(|ctx| Ok(Box::new(App::new(ctx, config)))),
     )
 }

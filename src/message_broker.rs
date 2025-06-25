@@ -5,27 +5,24 @@
 //! is responsible for listening to incoming messages from the Mavlink listener,
 //! storing them in a map, and updating the views that are interested in them.
 
+mod connection;
 mod message_bundle;
 mod reception_queue;
-pub use message_bundle::MessageBundle;
+
+use egui::mutex::Mutex;
 use reception_queue::ReceptionQueue;
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
-use tracing::error;
+use tracing::{error, warn};
 
-use crate::{
-    communication::{Connection, ConnectionError, TransceiverConfigExt},
-    error::ErrInstrument,
-    mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, TimedMessage},
-};
+use crate::mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, TimedMessage};
+pub use connection::ConnectionConfig;
+use connection::ConnectionHandler;
+pub use message_bundle::MessageBundle;
 
 const RECEPTION_QUEUE_INTERVAL: Duration = Duration::from_secs(3);
-const SEGS_SYSTEM_ID: u8 = 1;
-const SEGS_COMPONENT_ID: u8 = 1;
+const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The MessageBroker struct contains the state of the message broker.
 ///
@@ -37,7 +34,7 @@ pub struct MessageBroker {
     /// instant queue used for frequency calculation and reception time
     last_receptions: Arc<Mutex<ReceptionQueue>>,
     /// Connection to the Mavlink listener
-    connection: Option<Connection>,
+    connection: ConnectionHandler,
     /// Egui context
     ctx: egui::Context,
 }
@@ -49,42 +46,36 @@ impl MessageBroker {
             messages: Vec::new(),
             // TODO: make this configurable
             last_receptions: Arc::new(Mutex::new(ReceptionQueue::new(RECEPTION_QUEUE_INTERVAL))),
-            connection: None,
+            connection: ConnectionHandler::new(RECONNECT_INTERVAL),
             ctx,
         }
     }
 
     /// Start a listener task that listens to incoming messages from the given
     /// medium (Serial or Ethernet) and stores them in a ring buffer.
-    pub fn open_connection(
-        &mut self,
-        config: impl TransceiverConfigExt,
-    ) -> Result<(), ConnectionError> {
-        self.connection = Some(config.open_connection()?);
-        Ok(())
+    pub fn open_connection(&mut self, config: ConnectionConfig) {
+        self.connection.open_connection(config);
+        self.connection.spawn_handler();
     }
 
     /// Stop the listener task from listening to incoming messages, if it is
     /// running.
     pub fn close_connection(&mut self) {
-        self.connection.take();
+        self.connection.close_connection();
     }
 
     pub fn is_connected(&self) -> bool {
-        self.connection.is_some()
+        self.connection.is_connected()
     }
 
     /// Returns the time since the last message was received.
     pub fn time_since_last_reception(&self) -> Option<Duration> {
-        self.last_receptions
-            .lock()
-            .log_unwrap()
-            .time_since_last_reception()
+        self.last_receptions.lock().time_since_last_reception()
     }
 
     /// Returns the frequency of messages received in the last second.
     pub fn reception_frequency(&self) -> f64 {
-        self.last_receptions.lock().log_unwrap().frequency()
+        self.last_receptions.lock().frequency()
     }
 
     pub fn get(&self, ids: &[u32]) -> Vec<&TimedMessage> {
@@ -99,7 +90,7 @@ impl MessageBroker {
     #[profiling::function]
     pub fn process_incoming_messages(&mut self, bundle: &mut MessageBundle) {
         // process messages only if the connection is open
-        if let Some(connection) = &self.connection {
+        if let Some(connection) = self.connection.connection.read().as_ref() {
             // check for communication errors, and log them
             match connection.retrieve_messages() {
                 Ok(messages) => {
@@ -107,7 +98,7 @@ impl MessageBroker {
                         bundle.insert(message.clone());
 
                         // Update the last reception time
-                        self.last_receptions.lock().log_unwrap().push(message.time);
+                        self.last_receptions.lock().push(message.time);
 
                         // Store the message in the broker
                         self.messages.push(message);
@@ -117,24 +108,19 @@ impl MessageBroker {
                 Err(e) => {
                     error!("Error while receiving messages: {:?}", e);
                     // TODO: user error handling, until them silently close the connection
-                    self.close_connection();
                 }
             }
         }
     }
 
     /// Processes outgoing messages.
-    /// WARNING: This methods blocks the UI, thus a detailed profiling is needed.
-    /// FIXME
+    ///
+    /// **WARNING**: This methods blocks the UI, thus a detailed profiling is needed.
+    // FIXME
     #[profiling::function]
-    pub fn process_outgoing_messages(&mut self, messages: Vec<MavMessage>) {
-        if let Some(connection) = &self.connection {
-            for msg in messages {
-                let header = MavHeader {
-                    system_id: SEGS_SYSTEM_ID,
-                    component_id: SEGS_COMPONENT_ID,
-                    ..Default::default()
-                };
+    pub fn process_outgoing_messages(&mut self, messages: Vec<(MavHeader, MavMessage)>) {
+        if let Some(connection) = self.connection.connection.read().as_ref() {
+            for (header, msg) in messages {
                 let frame = MavFrame {
                     header,
                     msg,

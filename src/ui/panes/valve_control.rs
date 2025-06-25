@@ -15,7 +15,7 @@ use egui::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
-    mavlink::MessageData,
+    mavlink::{MavHeader, MessageData},
     orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
@@ -61,6 +61,8 @@ fn map_symbol_to_key(symbol: char) -> Key {
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct ValveControlPane {
+    system_id: u8,
+
     // INTERNAL
     #[serde(skip)]
     valves_state: ValveStateManager,
@@ -94,6 +96,7 @@ impl Default for ValveControlPane {
             .zip(symbols.into_iter().map(map_symbol_to_key))
             .collect();
         Self {
+            system_id: 1, // Default system ID, can be changed later
             valves_state: ValveStateManager::default(),
             commands: vec![],
             auto_refresh: None,
@@ -162,7 +165,10 @@ impl PaneBehavior for ValveControlPane {
                 .collapsible(true)
                 .movable(true)
                 .open(&mut self.is_settings_window_open)
-                .show(ui.ctx(), Self::settings_window_ui(&mut self.auto_refresh));
+                .show(
+                    ui.ctx(),
+                    Self::settings_window_ui(&mut self.system_id, &mut self.auto_refresh),
+                );
         }
 
         pane_response
@@ -204,13 +210,17 @@ impl PaneBehavior for ValveControlPane {
     }
 
     #[profiling::function]
-    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
         let mut outgoing = vec![];
 
         // Pack and send the next command
         for cmd in self.commands.iter_mut() {
             if let Some(message) = cmd.pack_and_wait() {
-                outgoing.push(message);
+                let header = MavHeader {
+                    system_id: self.system_id,
+                    ..Default::default()
+                };
+                outgoing.push((header, message));
             }
         }
 
@@ -289,11 +299,19 @@ impl ValveControlPane {
         }
     }
 
-    fn settings_window_ui(auto_refresh_setting: &mut Option<Duration>) -> impl FnOnce(&mut Ui) {
+    fn settings_window_ui(
+        system_id: &mut u8,
+        auto_refresh_setting: &mut Option<Duration>,
+    ) -> impl FnOnce(&mut Ui) {
         |ui| {
             profiling::function_scope!("settings_window_ui");
             // Display auto refresh setting
             let mut auto_refresh = auto_refresh_setting.is_some();
+            ui.horizontal(|ui| {
+                let label = ui.label("System ID:");
+                ui.add(DragValue::new(system_id).range(1..=255))
+                    .labelled_by(label.id);
+            });
             ui.horizontal(|ui| {
                 ui.checkbox(&mut auto_refresh, "Auto Refresh");
                 if auto_refresh {

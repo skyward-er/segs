@@ -54,8 +54,6 @@ mod sealed {
         ethernet::EthernetTransceiver, serial::SerialTransceiver,
     };
 
-    pub trait TransceiverConfigSealed {}
-
     /// Trait representing an entity that can be connected.
     pub trait Connectable {
         type Connected: MessageTransceiver;
@@ -121,8 +119,6 @@ mod sealed {
         }
     }
 
-    impl<T: Connectable> TransceiverConfigSealed for T {}
-
     /// Enum representing the different types of transceivers.
     #[enum_dispatch]
     pub(super) enum Transceivers {
@@ -130,19 +126,14 @@ mod sealed {
         Ethernet(EthernetTransceiver),
     }
 }
-
-/// Trait to abstract common configuration types.
-pub trait TransceiverConfig: sealed::TransceiverConfigSealed {}
-impl<T: sealed::TransceiverConfigSealed> TransceiverConfig for T {}
-
 /// Extension trait to open a connection directly from a configuration.
-pub trait TransceiverConfigExt: sealed::Connectable {
+pub trait TransceiverConfig: sealed::Connectable {
     /// Opens a connection and returns a handle to it.
     fn open_connection(&self) -> Result<Connection, ConnectionError> {
         Ok(self.connect()?.open_listening_connection())
     }
 }
-impl<T: sealed::Connectable> TransceiverConfigExt for T {}
+impl<T: sealed::Connectable> TransceiverConfig for T {}
 
 /// Represents an active connection with buffered messages.
 pub struct Connection {

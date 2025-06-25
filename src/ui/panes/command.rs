@@ -1,4 +1,4 @@
-use egui::{Button, RichText, Sense, Ui};
+use egui::{Button, DragValue, RichText, Sense, Ui};
 use jiff::{Unit, Zoned};
 use mavlink_bindgen::parser::MavType;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        MavMessage, Message, TimedMessage,
+        MavHeader, MavMessage, Message, TimedMessage,
         reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible, MessageMap},
     },
     ui::{app::PaneResponse, shortcuts::ShortcutHandler},
@@ -20,13 +20,14 @@ pub struct CommandPane {
     message: Option<MessageMap>,
     text: String,
     text_size: f32,
+    system_id: u8,
     show_only_tc: bool,
 
     #[serde(skip)]
     settings_visible: bool,
     // TODO handle message responses
     #[serde(skip)]
-    commands_to_send: Vec<MavMessage>,
+    commands_to_send: Vec<(MavHeader, MavMessage)>,
 }
 
 impl Default for CommandPane {
@@ -35,6 +36,7 @@ impl Default for CommandPane {
             message: None,
             text: String::from("Customize"),
             text_size: 16.0,
+            system_id: 1, // Default system ID
             show_only_tc: true,
             settings_visible: false,
             commands_to_send: Vec::new(),
@@ -88,8 +90,12 @@ impl PaneBehavior for CommandPane {
                                 .timestamp()
                                 .as_nanosecond() as u64;
                         }
-                        self.commands_to_send
-                            .push(MavMessage::from_map(map).log_unwrap());
+                        let header = MavHeader {
+                            system_id: self.system_id,
+                            ..Default::default()
+                        };
+                        let msg = MavMessage::from_map(map).log_unwrap();
+                        self.commands_to_send.push((header, msg));
                     }
                 }
             })
@@ -118,7 +124,7 @@ impl PaneBehavior for CommandPane {
         Box::new(None.into_iter())
     }
 
-    fn drain_outgoing_messages(&mut self) -> Vec<MavMessage> {
+    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
         self.commands_to_send.drain(..).collect()
     }
 }
@@ -142,6 +148,14 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
     });
 
     ui.separator();
+
+    // add a label for the system ID
+    ui.horizontal(|ui| {
+        let label = ui.label("System ID:");
+        // add a drag value for the system ID
+        ui.add(DragValue::new(&mut pane.system_id).range(1..=255))
+            .labelled_by(label.id);
+    });
 
     // add a checkbox for filtering sendable messages
     ui.checkbox(&mut pane.show_only_tc, "Show only TC messages");
