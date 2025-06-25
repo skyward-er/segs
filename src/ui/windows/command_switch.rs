@@ -115,11 +115,13 @@ fn show_command_switch_window(ui: &mut Ui, window: &mut CommandSwitchWindow) {
                 let shortcut_pressed = ui
                     .ctx()
                     .input_mut(|i| i.consume_shortcut(&cmd.shortcut_comb()[1]));
-                let msg = (shortcut_pressed || cmd_btn.clicked())
-                    .then(|| cmd.message.clone())
-                    .flatten();
+                let actionated = shortcut_pressed || cmd_btn.clicked();
+                let msg = actionated.then(|| cmd.message.clone()).flatten();
                 if let Some(map) = msg {
                     messages_to_send.push(MavMessage::from_map(map).log_unwrap());
+                }
+                if actionated {
+                    *state = VisibileState::Hidden;
                 }
             }
         });

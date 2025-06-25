@@ -606,12 +606,18 @@ impl ValveControlView {
                 // A window is open, so we can map the keys to control the valve
                 key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
                 key_action_pairs.push((
+                    #[cfg(not(feature = "conrig"))]
                     Modifiers::ALT,
+                    #[cfg(feature = "conrig")]
+                    Modifiers::NONE,
                     FOCUS_TIMING_KEY,
                     WindowAction::FocusOnTiming,
                 ));
                 key_action_pairs.push((
+                    #[cfg(not(feature = "conrig"))]
                     Modifiers::ALT,
+                    #[cfg(feature = "conrig")]
+                    Modifiers::NONE,
                     FOCUS_APERTURE_KEY,
                     WindowAction::FocusOnAperture,
                 ));
