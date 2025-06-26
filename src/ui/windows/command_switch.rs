@@ -178,13 +178,13 @@ fn show_command_overview(ui: &mut Ui, commands: &mut Vec<Command>) {
             cmd.ui_visible = true;
         }
     }
-    if commands.len() < 10 {
+    if commands.len() < 9 {
         let plus_btn = ui.add_sized(
             Vec2::new(300.0, 10.0),
             egui::Button::new(RichText::new("+").size(17.0)),
         );
         if plus_btn.clicked() {
-            commands.push(Command::new(commands.len()));
+            commands.push(Command::new(commands.len() + 1));
         }
     }
 }
