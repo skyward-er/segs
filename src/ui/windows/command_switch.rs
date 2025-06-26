@@ -1,4 +1,4 @@
-use egui::{Key, KeyboardShortcut, ModifierNames, Modifiers, RichText, Ui, Vec2};
+use egui::{DragValue, Key, KeyboardShortcut, ModifierNames, Modifiers, RichText, Ui, Vec2};
 use itertools::Itertools;
 use mavlink_bindgen::parser::MavType;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use tracing::warn;
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        MavMessage, Message,
+        MavHeader, MavMessage, Message,
         reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible, MessageMap},
     },
 };
@@ -18,7 +18,7 @@ pub struct CommandSwitchWindow {
     #[serde(skip)]
     state: VisibileState,
     #[serde(skip)]
-    messages_to_send: Vec<MavMessage>,
+    messages_to_send: Vec<(MavHeader, MavMessage)>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -79,7 +79,7 @@ impl CommandSwitchWindow {
         }
     }
 
-    pub fn consume_messages_to_send(&mut self) -> Vec<MavMessage> {
+    pub fn consume_messages_to_send(&mut self) -> Vec<(MavHeader, MavMessage)> {
         if self.messages_to_send.is_empty() {
             return vec![];
         }
@@ -118,7 +118,11 @@ fn show_command_switch_window(ui: &mut Ui, window: &mut CommandSwitchWindow) {
                 let actionated = shortcut_pressed || cmd_btn.clicked();
                 let msg = actionated.then(|| cmd.message.clone()).flatten();
                 if let Some(map) = msg {
-                    messages_to_send.push(MavMessage::from_map(map).log_unwrap());
+                    let header = MavHeader {
+                        system_id: cmd.system_id,
+                        ..Default::default()
+                    };
+                    messages_to_send.push((header, MavMessage::from_map(map).log_unwrap()));
                 }
                 if actionated {
                     *state = VisibileState::Hidden;
@@ -192,6 +196,7 @@ fn show_single_command_settings(ui: &mut Ui, command: &mut Command) {
         message,
         ui_visible,
         show_only_tc,
+        system_id,
         ..
     } = command;
     ui.label(RichText::new("Command Settings:").size(15.0));
@@ -201,6 +206,14 @@ fn show_single_command_settings(ui: &mut Ui, command: &mut Command) {
     ui.horizontal(|ui| {
         ui.label("Name:");
         ui.text_edit_singleline(name);
+    });
+
+    // add a label for the system ID
+    ui.horizontal(|ui| {
+        let label = ui.label("System ID:");
+        // add a drag value for the system ID
+        ui.add(DragValue::new(system_id).range(1..=255))
+            .labelled_by(label.id);
     });
 
     // add a checkbox for filtering sendable messages
@@ -359,6 +372,7 @@ fn show_single_command_settings(ui: &mut Ui, command: &mut Command) {
 struct Command {
     id: usize,
     name: String,
+    system_id: u8,
     message: Option<MessageMap>,
 
     // UI SETTINGS
@@ -373,6 +387,7 @@ impl Command {
         Self {
             id,
             name: String::from("New Command"),
+            system_id: 1,
             message: None,
             ui_visible: false,
             show_only_tc: false,

@@ -48,7 +48,6 @@ rev = "9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
 features = ["serde"]
 
 [features]
-conrig = []
 profiling = ["profiling/profile-with-tracy"]
 conrig = ["dep:clap"]
 
