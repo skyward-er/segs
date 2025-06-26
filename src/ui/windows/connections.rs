@@ -25,7 +25,7 @@ pub struct ConnectionsWindow {
 
 impl ConnectionsWindow {
     #[profiling::function]
-    pub fn show_window(&mut self, ui: &mut egui::Ui, message_broker: &mut MessageBroker) {
+    pub fn show(&mut self, ui: &mut egui::Ui, message_broker: &mut MessageBroker) {
         let mut window_is_open = self.visible;
         let mut can_be_closed = false;
         egui::Window::new("Sources")

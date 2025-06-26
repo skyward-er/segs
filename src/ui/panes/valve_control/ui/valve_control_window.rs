@@ -5,13 +5,15 @@ use egui::{
 use egui_extras::{Size, StripBuilder};
 use tracing::info;
 
-use crate::ui::shortcuts::{ShortcutHandler, ShortcutMode};
+use crate::ui::{
+    shortcuts::{ShortcutHandler, ShortcutMode},
+    widgets::ShortcutCard,
+};
 
 use super::{
     commands::Command,
     icons::Icon,
     map_key_to_shortcut,
-    shortcut_widget::ShortcutCard,
     valves::{ParameterValue, Valve, ValveStateManager},
 };
 
@@ -604,12 +606,18 @@ impl ValveControlView {
                 // A window is open, so we can map the keys to control the valve
                 key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
                 key_action_pairs.push((
+                    #[cfg(not(feature = "conrig"))]
                     Modifiers::ALT,
+                    #[cfg(feature = "conrig")]
+                    Modifiers::NONE,
                     FOCUS_TIMING_KEY,
                     WindowAction::FocusOnTiming,
                 ));
                 key_action_pairs.push((
+                    #[cfg(not(feature = "conrig"))]
                     Modifiers::ALT,
+                    #[cfg(feature = "conrig")]
+                    Modifiers::NONE,
                     FOCUS_APERTURE_KEY,
                     WindowAction::FocusOnAperture,
                 ));
