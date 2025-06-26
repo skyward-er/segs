@@ -622,6 +622,7 @@ impl ValveControlView {
                     WindowAction::FocusOnAperture,
                 ));
                 key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
+                key_action_pairs.push((Modifiers::NONE, Key::Backspace, WindowAction::CloseWindow));
             }
             ValveViewState::TimingFocused => {
                 // The timing field is focused, so we can map the keys to control the timing
