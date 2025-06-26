@@ -241,7 +241,9 @@ impl eframe::App for App {
                                         .stroke(Stroke::NONE)
                                         .corner_radius(0),
                                 )
-                                .on_hover_text("Open the Layout Manager")
+                                .on_hover_text(
+                                    "Open the Quick Commands Switcher Configuration window\n(press / to open the quick command switcher)",
+                                )
                                 .clicked()
                             {
                                 self.state.command_switch_window.toggle_open_state();
