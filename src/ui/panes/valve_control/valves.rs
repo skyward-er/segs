@@ -4,6 +4,7 @@
 
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -71,7 +72,7 @@ impl ValveStateManager {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter, Hash, Serialize, Deserialize)]
 pub enum Valve {
     OxFilling,
     OxRelease,

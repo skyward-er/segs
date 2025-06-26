@@ -82,10 +82,9 @@ pub struct ValveControlPane {
     last_refresh: Option<Instant>,
 
     // UI SETTINGS
+    valve_key_map: HashMap<Valve, Key>,
     #[serde(skip)]
     is_settings_window_open: bool,
-    #[serde(skip)]
-    valve_key_map: HashMap<Valve, Key>,
     #[serde(skip)]
     valve_view: Option<ValveControlView>,
 }
