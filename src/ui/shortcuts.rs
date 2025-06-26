@@ -79,6 +79,10 @@ impl ShortcutHandler {
             self.enabled_shortcuts.clear();
         }
     }
+
+    pub fn is_active(&self, mode: ShortcutMode) -> bool {
+        self.mode_stack.is_active(mode)
+    }
 }
 
 /// Stack layers of keyboard shortcuts. Controls which shortcuts are active at any given time.
@@ -140,6 +144,11 @@ impl ShortcutMode {
     }
 
     #[inline]
+    pub fn operation() -> Self {
+        Self::FirstLayer(FirstLayerModes::Operation)
+    }
+
+    #[inline]
     pub fn valve_control() -> Self {
         Self::SecondLayer(SecondLayerModes::ValveControl)
     }
@@ -153,6 +162,7 @@ pub enum FirstLayerModes {
     /// Shortcuts that are active when the user is in the main menu.
     #[default]
     Composition,
+    Operation,
 }
 
 /// Second layer of keyboard shortcuts, sits on top of the first layer.

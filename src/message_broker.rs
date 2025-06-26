@@ -14,7 +14,7 @@ use reception_queue::ReceptionQueue;
 
 use std::{sync::Arc, time::Duration};
 
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::mavlink::{MavFrame, MavHeader, MavMessage, MavlinkVersion, TimedMessage};
 pub use connection::ConnectionConfig;

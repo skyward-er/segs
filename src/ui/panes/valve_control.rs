@@ -477,7 +477,7 @@ impl ValveControlPane {
             let modifier = Modifiers::NONE;
             key_action_pairs.push((modifier, key, PaneAction::OpenValveControl(valve)));
         }
-        shortcut_handler.consume_if_mode_is(ShortcutMode::composition(), &key_action_pairs[..])
+        shortcut_handler.consume_if_mode_is(ShortcutMode::operation(), &key_action_pairs[..])
     }
 }
 

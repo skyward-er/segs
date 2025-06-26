@@ -1,4 +1,4 @@
-use egui::{Align2, Button, Color32, ComboBox, Context, RichText, Vec2};
+use egui::{Align2, Button, ComboBox, Context, RichText, Vec2};
 use egui_extras::{Size, StripBuilder};
 use tracing::{error, warn};
 
