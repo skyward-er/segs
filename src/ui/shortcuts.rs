@@ -83,6 +83,14 @@ impl ShortcutHandler {
     pub fn is_active(&self, mode: ShortcutMode) -> bool {
         self.mode_stack.is_active(mode)
     }
+
+    pub fn is_in_composition(&self) -> bool {
+        self.mode_stack.is_first_layer(FirstLayerModes::Composition)
+    }
+
+    pub fn is_in_operation(&self) -> bool {
+        self.mode_stack.is_first_layer(FirstLayerModes::Operation)
+    }
 }
 
 /// Stack layers of keyboard shortcuts. Controls which shortcuts are active at any given time.
@@ -102,6 +110,10 @@ impl ShortcutModeStack {
             ShortcutMode::FirstLayer(first) => self.first == first && self.second.is_none(),
             ShortcutMode::SecondLayer(second) => self.second == Some(second),
         }
+    }
+
+    fn is_first_layer(&self, mode: FirstLayerModes) -> bool {
+        self.first == mode
     }
 
     fn activate(&mut self, mode: ShortcutMode) {

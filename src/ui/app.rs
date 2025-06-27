@@ -262,7 +262,7 @@ impl eframe::App for App {
                         }
 
                         // Shortcut mode switcher
-                        if self.shortcut_handler.lock().log_unwrap().is_active(ShortcutMode::operation())&&ui
+                        if self.shortcut_handler.lock().log_unwrap().is_in_operation() && ui
                                 .add(
                                     Button::new("Switch to composition mode")
                                         .stroke(Stroke::NONE)
@@ -277,7 +277,7 @@ impl eframe::App for App {
                                     .lock()
                                     .log_unwrap().activate_mode(ShortcutMode::composition());
                             }
-                        if self.shortcut_handler.lock().log_unwrap().is_active(ShortcutMode::composition())&&ui
+                        if self.shortcut_handler.lock().log_unwrap().is_in_composition() && ui
                                 .add(
                                     Button::new("Switch to operation mode")
                                         .stroke(Stroke::NONE)
