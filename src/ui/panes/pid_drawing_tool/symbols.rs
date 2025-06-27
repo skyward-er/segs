@@ -35,13 +35,13 @@ pub trait SymbolBehavior {
     fn reset_subscriptions(&mut self);
 
     /// Updates the symbol based on the received message.
-    fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32);
+    fn update(&mut self, message: &MavMessage, subscribed_msg_ids: &[u32]);
 
     /// Renders the symbol on the UI.
     fn paint(&mut self, ui: &mut Ui, theme: Theme, pos: Vec2, size: f32, rotation: f32);
 
     /// Renders further elements related to the subscriptions settings
-    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_id: u32);
+    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_ids: &[u32]);
 
     /// Anchor point in grid coordinates relative to the element's center
     ///

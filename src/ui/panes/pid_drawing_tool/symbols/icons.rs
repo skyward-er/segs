@@ -148,9 +148,9 @@ impl Icon {
 }
 
 impl SymbolBehavior for Icon {
-    fn update(&mut self, message: &MavMessage, subscribed_msg_id: u32) {
+    fn update(&mut self, message: &MavMessage, subscribed_msg_ids: &[u32]) {
         if let Icon::MotorValve(state) = self {
-            state.update(message, subscribed_msg_id)
+            state.update(message, subscribed_msg_ids)
         }
     }
 
@@ -168,9 +168,9 @@ impl SymbolBehavior for Icon {
             .paint_at(ui, image_rect);
     }
 
-    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_id: u32) {
+    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_ids: &[u32]) {
         if let Icon::MotorValve(state) = self {
-            state.subscriptions_ui(ui, mavlink_id)
+            state.subscriptions_ui(ui, mavlink_ids)
         }
     }
 

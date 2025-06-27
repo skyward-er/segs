@@ -7,7 +7,8 @@ mod symbols;
 use anyhow::anyhow;
 use core::f32;
 use egui::{
-    Button, Color32, Context, CursorIcon, PointerButton, Response, Sense, Theme, Ui, Widget,
+    Button, Color32, Context, CursorIcon, PointerButton, Response, ScrollArea, Sense, Theme, Ui,
+    Widget,
     ahash::{HashMap, HashMapExt},
     mutex::Mutex,
 };
@@ -21,10 +22,7 @@ use tracing::error;
 use crate::{
     APP_NAME,
     error::ErrInstrument,
-    mavlink::{
-        GSE_TM_DATA, MessageData, TimedMessage,
-        reflection::{MAVLINK_PROFILE, MessageLike},
-    },
+    mavlink::{GSE_TM_DATA, MessageData, TimedMessage, reflection::MAVLINK_PROFILE},
     ui::{
         app::PaneResponse, cache::ChangeTracker, panes::pid_drawing_tool::pid_data::PidData,
         shortcuts::ShortcutHandler, utils::egui_to_glam,
@@ -56,7 +54,7 @@ pub struct PidPane {
     elements: HashMap<u32, Element>,
     connections: Vec<Connection>,
     grid: GridInfo,
-    message_subscription_id: u32,
+    message_subscription_ids: Vec<u32>,
 
     // UI settings
     center_content: bool,
@@ -79,7 +77,7 @@ impl Default for PidPane {
             elements: HashMap::new(),
             connections: Vec::new(),
             grid: GridInfo::default(),
-            message_subscription_id: GSE_TM_DATA::ID,
+            message_subscription_ids: vec![GSE_TM_DATA::ID],
             center_content: false,
             id_generator: IdGenerator::new(),
             action: None,
@@ -139,7 +137,7 @@ impl PaneBehavior for PidPane {
             response.context_menu(|ui| self.draw_context_menu(ui, pointer_pos));
         }
 
-        let change_tracker = ChangeTracker::record_initial_state(self.message_subscription_id);
+        let change_tracker = ChangeTracker::record_initial_state(&self.message_subscription_ids);
         egui::Window::new("Subscription")
             .id(ui.auto_id_with("sub_settings"))
             .auto_sized()
@@ -147,9 +145,9 @@ impl PaneBehavior for PidPane {
             .movable(true)
             .open(&mut self.is_subs_window_visible)
             .show(ui.ctx(), |ui| {
-                subscription_window(ui, &mut self.message_subscription_id)
+                subscription_window(ui, &mut self.message_subscription_ids)
             });
-        if change_tracker.has_changed(self.message_subscription_id) {
+        if change_tracker.has_changed(&self.message_subscription_ids) {
             self.reset_subscriptions();
         }
 
@@ -167,7 +165,7 @@ impl PaneBehavior for PidPane {
                         Ok(pid) => {
                             self.elements = pid.elements;
                             self.connections = pid.connections;
-                            self.message_subscription_id = pid.message_subscription_id;
+                            self.message_subscription_ids = pid.message_subscription_ids;
                         }
                         Err(e) => {
                             error!("Failed to load PidPane: {}", e);
@@ -188,9 +186,9 @@ impl PaneBehavior for PidPane {
                     let pid_data = PidData {
                         elements: self.elements.clone(),
                         connections: self.connections.clone(),
-                        message_subscription_id: self.message_subscription_id,
+                        message_subscription_ids: self.message_subscription_ids.clone(),
                     };
-                    let path = path.with_extension("pid.json");
+                    let path = path.with_extension("json");
                     match pid_data
                         .to_file(path)
                         .map_err(|e| anyhow!("Failed to save PidPane: {}", e))
@@ -220,13 +218,14 @@ impl PaneBehavior for PidPane {
     fn update(&mut self, messages: &[&TimedMessage]) {
         if let Some(msg) = messages.last() {
             for element in self.elements.values_mut() {
-                element.update(&msg.message, self.message_subscription_id);
+                element.update(&msg.message, &self.message_subscription_ids[..]);
             }
         }
     }
 
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(Some(self.message_subscription_id).into_iter())
+        let ids = self.message_subscription_ids.clone();
+        Box::new(ids.into_iter())
     }
 
     fn init(&mut self, pane_id: PaneId) {
@@ -328,7 +327,7 @@ impl PidPane {
     fn elements_ui(&mut self, ui: &mut Ui, theme: Theme) {
         for element in self.elements.values_mut() {
             ui.scope(|ui| {
-                element.ui(ui, &self.grid, theme, self.message_subscription_id);
+                element.ui(ui, &self.grid, theme, &self.message_subscription_ids);
             });
         }
     }
@@ -581,13 +580,24 @@ impl PidPane {
     }
 }
 
-fn subscription_window(ui: &mut Ui, msg_id: &mut u32) {
-    let current_msg = msg_id.to_mav_message(&MAVLINK_PROFILE).log_unwrap();
-    egui::ComboBox::from_label("Message subscription")
-        .selected_text(current_msg.name.as_str())
-        .show_ui(ui, |ui| {
+fn subscription_window(ui: &mut Ui, msg_ids: &mut Vec<u32>) {
+    ui.label("Select Fields:");
+    ScrollArea::both()
+        .auto_shrink([false, true])
+        .max_width(300.0)
+        .max_height(300.0)
+        .show(ui, |ui| {
             for msg in MAVLINK_PROFILE.get_sorted_msgs() {
-                ui.selectable_value(msg_id, msg.id, &msg.name);
+                let mut selected = msg_ids.contains(&msg.id);
+                let response: Response = ui.checkbox(&mut selected, &msg.name);
+                if response.clicked() {
+                    if selected {
+                        msg_ids.push(msg.id);
+                    } else {
+                        msg_ids.retain(|&id| id != msg.id);
+                    }
+                    msg_ids.sort_unstable();
+                }
             }
         });
 }

@@ -34,7 +34,7 @@ impl Default for Label {
 }
 
 impl SymbolBehavior for Label {
-    fn update(&mut self, _message: &MavMessage, _subscribed_msg_id: u32) {}
+    fn update(&mut self, _message: &MavMessage, _subscribed_msg_ids: &[u32]) {}
 
     fn reset_subscriptions(&mut self) {}
 
@@ -65,7 +65,7 @@ impl SymbolBehavior for Label {
         );
     }
 
-    fn subscriptions_ui(&mut self, ui: &mut Ui, _mavlink_id: u32) {
+    fn subscriptions_ui(&mut self, ui: &mut Ui, _mavlink_ids: &[u32]) {
         Window::new("Label Customization")
             .id(ui.auto_id_with("customization_settings"))
             .auto_sized()
