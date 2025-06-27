@@ -160,8 +160,8 @@ impl ShortcutMode {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum FirstLayerModes {
     /// Shortcuts that are active when the user is in the main menu.
-    #[default]
     Composition,
+    #[default]
     Operation,
 }
 
