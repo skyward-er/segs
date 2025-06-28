@@ -216,7 +216,7 @@ impl PaneBehavior for PidPane {
     }
 
     fn update(&mut self, messages: &[&TimedMessage]) {
-        if let Some(msg) = messages.last() {
+        for msg in messages {
             for element in self.elements.values_mut() {
                 element.update(&msg.message, &self.message_subscription_ids[..]);
             }
