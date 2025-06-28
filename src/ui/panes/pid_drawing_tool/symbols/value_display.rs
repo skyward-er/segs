@@ -161,8 +161,8 @@ fn subscription_window(ui: &mut Ui, msg_ids: &[u32], field: &mut Option<IndexedF
 
     // Get all fields available for subscription
     let fields = MAVLINK_PROFILE
-        .get_all_state_fields(current_msg_id)
-        .log_unwrap();
+        .get_plottable_fields(current_msg_id)
+        .log_expect("Invalid message id");
 
     // If no fields available for subscription
     if fields.is_empty() {
