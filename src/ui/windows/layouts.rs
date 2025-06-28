@@ -8,10 +8,7 @@ use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_file::FileDialog;
 use tracing::{debug, error};
 
-use crate::{
-    error::ErrInstrument,
-    ui::{app::AppState, persistency::LayoutManager},
-};
+use crate::{error::ErrInstrument, ui::persistency::LayoutManager};
 
 #[derive(Default)]
 pub struct LayoutManagerWindow {
@@ -28,20 +25,16 @@ impl LayoutManagerWindow {
 
         if self.visible {
             // When opening, we set the selection to the current layout
-            self.selection = layout_manager.current_layout().cloned();
+            self.selection = layout_manager.selected().cloned();
         } else {
             // When closing, we delete also the file dialog
             self.file_dialog.take();
         }
     }
 
+    /// Currently selected layout in the list, gets reset to the displayed layout when the dialog is opened
     #[profiling::function]
-    pub fn show(
-        &mut self,
-        ctx: &Context,
-        layout_manager: &mut LayoutManager,
-        state: &mut AppState,
-    ) {
+    pub fn show(&mut self, ctx: &Context, layout_manager: &mut LayoutManager) {
         let LayoutManagerWindow {
             visible: window_visible,
             file_dialog,
@@ -56,11 +49,7 @@ impl LayoutManagerWindow {
                 // the current content of the layouts folder
                 layout_manager.reload_layouts();
 
-                let changed = selection
-                    .as_ref()
-                    .and_then(|path| layout_manager.get_layout(path))
-                    .map(|layout| layout != state)
-                    .unwrap_or(true);
+                let changed = !layout_manager.is_saved();
 
                 // Layouts table
                 StripBuilder::new(ui)
@@ -68,9 +57,7 @@ impl LayoutManagerWindow {
                     .size(Size::exact(7.0))
                     .size(Size::exact(40.0))
                     .vertical(|mut strip| {
-                        strip.cell(|ui| {
-                            show_layouts_table(ui, layout_manager, state, selection, changed)
-                        });
+                        strip.cell(|ui| show_layouts_table(ui, layout_manager, selection, changed));
                         strip.cell(|ui| {
                             ui.add(Separator::default().spacing(7.0));
                         });
@@ -78,7 +65,6 @@ impl LayoutManagerWindow {
                             show_action_buttons(
                                 builder,
                                 layout_manager,
-                                state,
                                 file_dialog,
                                 text_input,
                                 selection,
@@ -93,7 +79,6 @@ impl LayoutManagerWindow {
 fn show_layouts_table(
     ui: &mut Ui,
     layout_manager: &mut LayoutManager,
-    state: &mut AppState,
     selection: &mut Option<PathBuf>,
     changed: bool,
 ) {
@@ -109,7 +94,7 @@ fn show_layouts_table(
             let mut to_open: Option<PathBuf> = None;
             let mut to_delete: Option<PathBuf> = None;
 
-            for key in layout_manager.layouts().keys() {
+            for key in layout_manager.layouts() {
                 let name = key.to_str().log_expect("Unable to convert path to string");
                 let is_selected = selection
                     .as_ref()
@@ -157,7 +142,7 @@ fn show_layouts_table(
             }
             if let Some(to_open) = to_open {
                 // FIXME when error dialog will be implemented this will be changed
-                if layout_manager.load_layout(&to_open, state).is_ok() {
+                if layout_manager.load_layout(&to_open).is_ok() {
                     selection.replace(to_open.clone());
                 } else {
                     error!("Error opening layout: {:?}", to_open);
@@ -174,7 +159,6 @@ fn show_layouts_table(
 fn show_action_buttons(
     builder: StripBuilder,
     layout_manager: &mut LayoutManager,
-    state: &mut AppState,
     file_dialog: &mut Option<FileDialog>,
     text_input: &mut String,
     selection: &mut Option<PathBuf>,
@@ -189,7 +173,7 @@ fn show_action_buttons(
                 Button::new("Load empty"),
             );
             if open_empty_resp.clicked() {
-                *state = AppState::default();
+                layout_manager.load_default();
                 selection.take();
             }
 
@@ -226,7 +210,7 @@ fn show_action_buttons(
                         debug!("Layout imported in {}", destination.to_str().log_unwrap());
                         selection.replace(file_name.into());
                         layout_manager.reload_layouts();
-                        if let Err(e) = layout_manager.load_layout(file_name, state) {
+                        if let Err(e) = layout_manager.load_layout(file_name) {
                             // FIXME when error dialog will be implemented this will be changed
                             error!("Error loading imported layout: {:?}", e);
                         }
@@ -262,9 +246,10 @@ fn show_action_buttons(
 
             if to_save {
                 let name = text_input.clone();
-                if let Err(e) = layout_manager.save_layout(&name, state) {
+                if let Err(e) = layout_manager.save_current() {
                     // FIXME when error dialog will be implemented this will be changed
                     error!("Error saving layout: {:?}", e);
+                    panic!("Error saving layout: {:?}", e);
                 } else {
                     layout_manager.reload_layouts();
                     selection.replace(name.clone().into());
