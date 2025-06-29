@@ -15,50 +15,50 @@
 //! with minimal effort.
 
 use super::super::app::AppState;
-use crate::{APP_NAME, error::ErrInstrument};
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-use tracing::{info, trace, warn};
+use crate::ui::persistency::layout_store::{LayoutLocalStore, LayoutStore, LayoutStoreKey};
+use anyhow::{Result, anyhow};
+use egui::ahash::HashMap;
 
-static LAYOUTS_DIR: &str = "layouts";
-static SELECTED_LAYOUT_KEY: &str = "selected_layout";
+mod storage_keys {
+    pub(super) static LOCAL_STORE: &str = "local";
+    pub(super) static SELECTED: &str = "selected_layout";
+}
+
+/// Reference to a layout in a specific store
+pub type LayoutRef = (String, LayoutStoreKey);
 
 #[derive(Default)]
 pub struct LayoutManager {
-    layouts_path: PathBuf, // Path to the layout directory on the system
-    layouts: BTreeMap<PathBuf, AppState>,
-    selected: Option<PathBuf>,
+    stores: HashMap<String, Box<dyn LayoutStore>>,
+    selected: Option<LayoutRef>, // (store id, layout id)
     current: AppState,
 }
 
 impl LayoutManager {
+    /// SEGS will store in [eframe::Storage] the list of configured stores and the id the last selected layout
     pub fn from_storage(storage: &dyn eframe::Storage) -> Self {
-        let selected = storage
-            .get_string(SELECTED_LAYOUT_KEY)
-            .map(|path| PathBuf::from_str(&path).log_expect("Path is not valid"));
+        let mut layout_manager = LayoutManager::default();
 
-        let mut layout_manager = Self {
-            layouts_path: eframe::storage_dir(APP_NAME)
-                .log_expect("Unable to get storage dir")
-                .join(LAYOUTS_DIR),
-            selected: selected.clone(),
-            ..Self::default()
-        };
-        layout_manager.reload_layouts();
-        layout_manager.current = selected
-            .as_ref()
-            .and_then(|selected| layout_manager.layouts.get(selected).cloned())
-            .unwrap_or_default();
+        println!("Creating layout manager from storage");
 
-        println!("LayoutManager loaded. Selected layout is {:#?}", selected);
+        // Try to load the local store. When this fails, add a local store with a default path
+        let mut local_store =
+            eframe::get_value::<LayoutLocalStore>(storage, storage_keys::LOCAL_STORE)
+                .unwrap_or_default();
+        if let Err(e) = local_store.pull_all() {
+            println!("Error pulling layouts from local storage: {:?}", e);
+        }
+        layout_manager
+            .stores
+            .insert("local".to_string(), Box::from(local_store));
+
+        // Get previously selected layout, if available
+        layout_manager.selected = eframe::get_value::<LayoutRef>(storage, storage_keys::SELECTED);
+
         layout_manager
     }
 
-    pub fn selected(&self) -> Option<&PathBuf> {
+    pub fn selected(&self) -> Option<&LayoutRef> {
         self.selected.as_ref()
     }
 
@@ -73,71 +73,69 @@ impl LayoutManager {
 
     /// TODO: This should check if the current is not saved
     #[profiling::function]
-    pub fn load_layout(&mut self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let layout = self
-            .layouts
-            .get(path.as_ref())
-            .ok_or(anyhow::anyhow!("Layout not found"))?;
-        self.current = layout.clone();
-        self.selected = Some(path.as_ref().into());
+    pub fn load_layout(&mut self, key: &LayoutRef) -> Result<()> {
+        let store = self.stores.get(&key.0).ok_or(anyhow!("Store not found"))?;
+        self.current = store.get(&key.1)?.clone();
+        self.selected = Some(key.clone());
         Ok(())
     }
 
-    pub fn layouts(&self) -> Vec<&PathBuf> {
-        self.layouts.keys().collect()
+    pub fn stores(&self) -> &HashMap<String, Box<dyn LayoutStore>> {
+        &self.stores
     }
 
-    pub fn layouts_path(&self) -> &PathBuf {
-        &self.layouts_path
-    }
-
-    /// Scans the layout directory and reloads the layouts
-    #[profiling::function]
-    pub fn reload_layouts(&mut self) {
-        if let Ok(files) = self.layouts_path.read_dir() {
-            trace!("Reloading layouts from {:?}", self.layouts_path);
-            self.layouts = files
-                .flatten()
-                .map(|path| path.path())
-                .flat_map(|path| match AppState::from_file(&path) {
-                    Ok(layout) => {
-                        let path: PathBuf = path
-                            .file_stem()
-                            .log_expect("Unable to get file stem")
-                            .into();
-                        Some((path, layout))
-                    }
-                    Err(e) => {
-                        warn!("Error loading layout at {:?}: {:?}", path, e);
-                        None
-                    }
-                })
-                .collect();
-        }
+    pub fn get_store_mut(&mut self, store_name: &String) -> Result<&mut Box<dyn LayoutStore>> {
+        self.stores
+            .get_mut(store_name)
+            .ok_or(anyhow!("Store not found"))
     }
 
     #[profiling::function]
-    pub fn save_current(&self) -> anyhow::Result<()> {
-        let current_layout = self
-            .selected
-            .as_ref()
-            .ok_or(anyhow::anyhow!("No selected layout to save onto"))?;
-        self.current.to_file(current_layout)
+    pub fn pull_all(&mut self) {
+        self.stores.iter_mut().for_each(|store| {
+            // TODO: How do we handle failures here?
+            store.1.pull_all();
+        });
     }
 
-    pub fn is_saved(&self) -> bool {
-        self.selected
-            .as_ref()
-            .and_then(|current_layout| self.layouts.get(current_layout))
-            .is_some_and(|saved_layout| saved_layout == &self.current)
+    /// Saves the current layout to the selected ref regardless if the store has the ref or not
+    #[profiling::function]
+    pub fn save(&mut self) -> Result<()> {
+        let selected = self.selected.clone().ok_or(anyhow!("No layout selected"))?;
+        let current = self.current.clone();
+        let store = self.get_store_mut(&selected.0)?;
+        store.push(&selected.1, &current)?;
+        Ok(())
     }
 
-    /// TODO: Should it check if we are deliting the selected layout?
-    pub fn delete(&mut self, key: &PathBuf) -> anyhow::Result<()> {
-        if self.layouts.contains_key(key) {
-            info!("Deleting layout {:?}", key);
-            fs::remove_file(self.layouts_path.join(key).with_extension("json"))?;
+    /// Saves the current layout to the given ref and makes it the selected on, regardless if the store has the ref or not
+    pub fn save_new(&mut self, key: &LayoutRef) -> Result<()> {
+        let current = self.current.clone();
+        let store = self.get_store_mut(&key.0)?;
+        store.push(&key.1, &current)?;
+        self.selected = Some(key.clone());
+        Ok(())
+    }
+
+    /// Checks if the current layout matches the local copy of the selected one
+    pub fn is_saved(&self) -> Result<bool> {
+        // If the current layout is still the default one, and there is no layout selected, we consider it saved
+        if self.current == AppState::default() && self.selected.is_none() {
+            return Ok(true);
         }
+        let selected = self.selected.clone().ok_or(anyhow!("No layout selected"))?;
+        let store = self
+            .stores
+            .get(&selected.0)
+            .ok_or(anyhow!("Store not found"))?;
+        Ok(store.get(&selected.1)? == &self.current)
+    }
+
+    /// Deletes the given layout
+    pub fn delete(&mut self, key: &LayoutRef) -> Result<()> {
+        self.selected.take_if(|selected| selected == key);
+        let store = self.get_store_mut(&key.0)?;
+        store.delete(&key.1)?;
         Ok(())
     }
 }

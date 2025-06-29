@@ -22,7 +22,7 @@ use crate::{
 use super::windows::CommandSwitchWindow;
 use super::{
     panes::{Pane, PaneBehavior, PaneKind},
-    persistency::LayoutManager,
+    persistency::layout_manager::LayoutManager,
     shortcuts::{ShortcutHandler, ShortcutMode},
     utils::maximized_pane_ui,
     widget_gallery::WidgetGallery,
@@ -239,8 +239,7 @@ impl eframe::App for App {
                             .on_hover_text("Open the Layout Manager")
                             .clicked()
                         {
-                            self.layout_manager_window
-                                .toggle_open_state(&self.layout_manager);
+                            self.layout_manager_window.toggle_open_state();
                         }
 
                         #[cfg(feature = "conrig")]
@@ -340,7 +339,7 @@ impl eframe::App for App {
         // If the app is closing and the layout is not saved, abort and show a confirmation dialog
         if !self.closing_dialog
             && ctx.input(|i| i.viewport().close_requested())
-            && !self.layout_manager.is_saved()
+            && !self.layout_manager.is_saved().unwrap_or(false)
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.closing_dialog = true;
@@ -369,7 +368,7 @@ impl eframe::App for App {
                         egui::Vec2::new(200.0, 60.0),
                         egui::Button::new("Save").fill(egui::Color32::DARK_GREEN)
                     ).clicked() {
-                        let _ = self.layout_manager.save_current();
+                        let _ = self.layout_manager.save();
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     if ui.add_sized(
