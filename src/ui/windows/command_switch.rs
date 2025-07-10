@@ -5,7 +5,6 @@ mod state;
 use egui::{Key, KeyboardShortcut, ModifierNames, Modifiers, RichText, Ui, Vec2};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 use crate::{
     error::ErrInstrument,
@@ -13,7 +12,6 @@ use crate::{
         MavHeader, MavMessage,
         reflection::{MapConvertible, MessageMap},
     },
-    ui::windows::command_switch::configurable::ConfigurableCommand,
 };
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -309,15 +307,12 @@ impl Command {
         });
         // If the command kind is changed, update the command
         if command_kind != current_kind {
-            *self = match command_kind {
-                CommandKind::Configurable => Command::Configurable(ConfigurableCommand {
-                    base: self.base().clone(),
-                    ..ConfigurableCommand::new(self.base().id)
-                }),
-                CommandKind::Direct => Command::Direct(direct::DirectCommand {
-                    base: self.base().clone(),
-                }),
+            let mut new_cmd = match command_kind {
+                CommandKind::Configurable => Self::configurable(self.base().id),
+                CommandKind::Direct => Self::direct(self.base().id),
             };
+            *new_cmd.base_mut() = self.base().clone();
+            *self = new_cmd;
         }
 
         match self {

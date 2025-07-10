@@ -25,7 +25,10 @@ use super::BaseCommand;
 pub struct ConfigurableCommand {
     pub base: BaseCommand,
     pub(super) selected_fields: HashSet<usize>,
+    #[serde(skip)]
     pub parameters_window_visible: bool,
+    #[serde(skip)]
+    focused_key: Option<Key>,
 }
 
 impl ConfigurableCommand {
@@ -34,6 +37,7 @@ impl ConfigurableCommand {
             base: BaseCommand::new(id),
             selected_fields: HashSet::new(),
             parameters_window_visible: false,
+            focused_key: None,
         }
     }
 
@@ -53,6 +57,7 @@ impl ConfigurableCommand {
                 },
             selected_fields,
             parameters_window_visible,
+            focused_key,
         } = self;
         if let Some(message) = message {
             ui.horizontal(|ui| {
@@ -66,14 +71,51 @@ impl ConfigurableCommand {
                 ui.label(RichText::new("No fields selected for configuration").italics());
             }
 
-            for field_id in selected_fields.iter() {
+            let keys = vec![
+                Key::Num1,
+                Key::Num2,
+                Key::Num3,
+                Key::Num4,
+                Key::Num5,
+                Key::Num6,
+                Key::Num7,
+                Key::Num8,
+                Key::Num9,
+            ];
+            for (field_id, key) in selected_fields.iter().zip(keys) {
                 let field = field_id
                     .to_mav_field(message.message_id(), &MAVLINK_PROFILE)
                     .log_unwrap();
-                ui.horizontal(|ui| {
-                    ui.label(format!("{}: ", field.field().name.to_uppercase()));
-                    field_editor(field, message, ui);
-                });
+                let focus_requested = focused_key.is_some_and(|k| k == key);
+                let response = ui
+                    .horizontal(|ui| {
+                        let shortcut_response = if focused_key.is_some() {
+                            shortcut_btn(ui, "", Some(Key::Enter))
+                        } else {
+                            shortcut_btn(ui, "", Some(key))
+                        };
+                        if shortcut_response.clicked() {
+                            if focus_requested {
+                                focused_key.take();
+                            } else {
+                                focused_key.replace(key);
+                            }
+                        }
+                        ui.label(format!("{}: ", field.field().name.to_uppercase()));
+                        field_editor(field, message, ui)
+                    })
+                    .inner;
+                // if the field looses focus or the key is pressed, update the focus state
+                if focused_key.is_none() && !response.lost_focus() {
+                    response.surrender_focus();
+                }
+                if response.lost_focus() && focused_key.is_some() {
+                    focused_key.take();
+                }
+                // if the key is pressed and the field has no focus, request focus
+                if focused_key.is_some_and(|k| k == key) && !response.has_focus() {
+                    response.request_focus();
+                }
             }
         } else {
             // Show an error if the message is not set
@@ -90,19 +132,15 @@ impl ConfigurableCommand {
             ui,
             |ui| {
                 // Back button to close the parameters window
-                let backspace_pressed = ui.ctx().input_mut(|i| {
-                    i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Backspace))
-                });
-                if shortcut_btn(ui, "BACK", Key::Backspace).clicked() || backspace_pressed {
+                let key = focused_key.map(|_| Key::Enter).unwrap_or(Key::Backspace);
+                if shortcut_btn(ui, "BACK", Some(key)).clicked() {
                     back_invoked = true;
                 }
             },
             |ui| {
                 // Enter button to send the command with the selected parameters
-                let plus_pressed = ui.ctx().input_mut(|i| {
-                    i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Plus))
-                });
-                if shortcut_btn(ui, "SEND", Key::Plus).clicked() || plus_pressed {
+                let key = focused_key.map(|_| Key::Enter).unwrap_or(Key::Plus);
+                if shortcut_btn(ui, "SEND", Some(key)).clicked() {
                     send_invoked = true;
                 }
             },
@@ -127,49 +165,62 @@ impl ConfigurableCommand {
     }
 }
 
-// TODO: convert this into a widget
-fn shortcut_btn(ui: &mut Ui, text: &str, key: Key) -> Response {
-    ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
-        let shortcut = KeyboardShortcut::new(Modifiers::NONE, key);
-        let shortcut_detected = ui.ctx().input_mut(|i| i.consume_shortcut(&shortcut));
+// TODO: convert this into a widget (and remove code duplication)
+fn shortcut_btn(ui: &mut Ui, text: &str, key: Option<Key>) -> Response {
+    let shortcut = key.map(|key| KeyboardShortcut::new(Modifiers::NONE, key));
+    let shortcut_detected = shortcut
+        .map(|shortcut| ui.ctx().input_mut(|i| i.consume_shortcut(&shortcut)))
+        .unwrap_or(false);
+    let mut res = ui
+        .scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
+            let mut visuals = *ui.style().interact(&ui.response());
 
-        ui.response().flags.insert(Flags::FAKE_PRIMARY_CLICKED);
-        let mut visuals = *ui.style().interact(&ui.response());
-
-        // override the visuals if the button is pressed
-        if shortcut_detected {
-            visuals = ui.visuals().widgets.active;
-        }
-        let vis = ui.visuals();
-        let uvis = ui.style().interact(&ui.response());
-        let shortcut_card = ShortcutCard::new(shortcut)
-            .text_color(vis.strong_text_color())
-            .fill_color(vis.gray_out(uvis.bg_fill))
-            .margin(Margin::symmetric(5, 2))
-            .text_size(12.);
-
-        Frame::canvas(ui.style())
-            .inner_margin(Margin::symmetric(4, 2))
-            .outer_margin(0)
-            .corner_radius(ui.visuals().noninteractive().corner_radius)
-            .fill(visuals.bg_fill)
-            .stroke(Stroke::new(1., Color32::TRANSPARENT))
-            .show(ui, |ui| {
-                ui.set_height(ui.available_height());
-                ui.horizontal_centered(|ui| {
-                    ui.set_height(15.);
-                    ui.add_space(1.);
-                    Label::new(RichText::new(text).size(14.).color(visuals.text_color()))
-                        .selectable(false)
-                        .ui(ui);
-                    shortcut_card.ui(ui);
-                });
+            // override the visuals if the button is pressed
+            if shortcut_detected {
+                visuals = ui.visuals().widgets.active;
+            }
+            let vis = ui.visuals();
+            let uvis = ui.style().interact(&ui.response());
+            let shortcut_card = shortcut.map(|shortcut| {
+                ShortcutCard::new(shortcut)
+                    .text_color(vis.strong_text_color())
+                    .fill_color(vis.gray_out(uvis.bg_fill))
+                    .margin(Margin::symmetric(5, 0))
+                    .text_size(12.)
             });
-    })
-    .response
+
+            Frame::canvas(ui.style())
+                .inner_margin(Margin::symmetric(4, 2))
+                .outer_margin(0)
+                .corner_radius(ui.visuals().noninteractive().corner_radius)
+                .fill(visuals.bg_fill)
+                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                .show(ui, |ui| {
+                    ui.set_height(ui.available_height());
+                    ui.horizontal_centered(|ui| {
+                        ui.set_height(15.);
+                        if !text.is_empty() {
+                            ui.add_space(1.);
+                            Label::new(RichText::new(text).size(14.).color(visuals.text_color()))
+                                .selectable(false)
+                                .ui(ui);
+                        }
+                        if let Some(shortcut_card) = shortcut_card {
+                            shortcut_card.ui(ui);
+                        }
+                    });
+                });
+        })
+        .response;
+
+    if shortcut_detected {
+        res.flags.insert(Flags::FAKE_PRIMARY_CLICKED);
+    }
+    res
 }
 
-fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) {
+// TODO: convert this into a widget (and remove code duplication)
+fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) -> Response {
     // show the combo box for enum types
     if let Some(enum_type) = &field.field().enumtype {
         let enum_info = MAVLINK_PROFILE.get_enum(enum_type).log_unwrap();
@@ -184,7 +235,8 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
                         for (index, variant) in enum_info.entries.iter().enumerate() {
                             ui.selectable_value(variant_ix, index as $kind, &variant.name);
                         }
-                    });
+                    })
+                    .response
             }};
         }
         match field.field().mavtype {
@@ -199,6 +251,7 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
                     enum_type,
                     field.field().name
                 );
+                ui.response()
             }
         }
     } else {
@@ -206,7 +259,11 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
         macro_rules! drag_value_with_range {
             ($_type:ty, $min:expr, $max:expr) => {{
                 let value: &mut $_type = message_map.get_mut_field(field).log_unwrap();
-                ui.add(egui::DragValue::new(value).range($min..=$max));
+                ui.add(
+                    egui::DragValue::new(value)
+                        .range($min..=$max)
+                        .clamp_existing_to_range(true),
+                )
             }};
         }
 
@@ -236,7 +293,7 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
             MavType::Char => {
                 let value: &mut char = message_map.get_mut_field(field).log_unwrap();
                 let mut buffer = value.to_string();
-                ui.add(
+                let res = ui.add(
                     egui::TextEdit::singleline(&mut buffer)
                         .hint_text("char")
                         .char_limit(1),
@@ -247,9 +304,11 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
                     warn!("Invalid char input: {}", buffer);
                     // TODO handle invalid char input (USER ERROR)
                 }
+                res
             }
             MavType::Array(_, _) => {
-                warn!("Array types are not supported yet")
+                warn!("Array types are not supported yet");
+                ui.response()
             }
         }
     }
