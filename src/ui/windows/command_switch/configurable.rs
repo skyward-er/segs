@@ -105,16 +105,19 @@ impl ConfigurableCommand {
                         field_editor(field, message, ui)
                     })
                     .inner;
+                // if the field is focused, set the focus state
+                if response.gained_focus() && focused_key.is_none() {
+                    focused_key.replace(key);
+                }
+                if focused_key.is_some_and(|k| k == key) && !response.has_focus() {
+                    response.request_focus();
+                }
                 // if the field looses focus or the key is pressed, update the focus state
                 if focused_key.is_none() && !response.lost_focus() {
                     response.surrender_focus();
                 }
                 if response.lost_focus() && focused_key.is_some() {
                     focused_key.take();
-                }
-                // if the key is pressed and the field has no focus, request focus
-                if focused_key.is_some_and(|k| k == key) && !response.has_focus() {
-                    response.request_focus();
                 }
             }
         } else {
