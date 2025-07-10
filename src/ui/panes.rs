@@ -16,7 +16,7 @@ use crate::{
     utils::id::PaneId,
 };
 
-use super::{app::PaneResponse, shortcuts::ShortcutHandler};
+use super::app::PaneResponse;
 
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize, Debug)]
 pub struct Pane {
@@ -32,7 +32,7 @@ impl Pane {
 #[enum_dispatch(PaneKind)]
 pub trait PaneBehavior {
     /// Renders the UI of the pane.
-    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse;
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse;
 
     /// Updates the pane state. This method is called before `ui` to allow the
     /// pane to update its state based on the messages received.
@@ -58,8 +58,8 @@ pub trait PaneBehavior {
 }
 
 impl PaneBehavior for Pane {
-    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
-        self.pane.ui(ui, shortcut_handler)
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
+        self.pane.ui(ui)
     }
 
     fn update(&mut self, messages: &[&TimedMessage]) {

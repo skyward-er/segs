@@ -5,7 +5,7 @@ use super::PaneBehavior;
 use crate::{
     error::ErrInstrument,
     mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage},
-    ui::{app::PaneResponse, shortcuts::ShortcutHandler},
+    ui::app::PaneResponse,
     utils::units::UnitOfMeasure,
 };
 use egui::{Color32, Ui, Vec2, Vec2b};
@@ -40,7 +40,7 @@ impl PartialEq for Plot2DPane {
 
 impl PaneBehavior for Plot2DPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
         let data_settings_digest = self.settings.data_digest();
 
@@ -73,7 +73,7 @@ impl PaneBehavior for Plot2DPane {
                     // all the following numbers are arbitrary
                     // they are chosen based on common sense
                     if r_span_in_nanos < 4e3 {
-                        format!("{:.0}ns", m_in_nanos)
+                        format!("{m_in_nanos:.0}ns")
                     } else if r_span_in_nanos < 4e6 {
                         format!("{:.0}µs", m_in_nanos / 1e3)
                     } else if r_span_in_nanos < 4e9 {
@@ -102,10 +102,10 @@ impl PaneBehavior for Plot2DPane {
         let y_axis = AxisHints::new_y().placement(HPlacement::Right);
 
         let cursor_formatter = |name: &str, value: &PlotPoint| {
-            let x_unit = format!(" [{}]", x_unit);
+            let x_unit = format!(" [{x_unit}]");
             let y_unit = y_unit
                 .as_ref()
-                .map(|unit| format!(" [{}]", unit))
+                .map(|unit| format!(" [{unit}]"))
                 .unwrap_or_default();
             if name.is_empty() {
                 format!(

@@ -82,7 +82,7 @@ fn subscription_window(ui: &mut Ui, msg_ids: &[u32], field: &mut Option<IndexedF
             }
         });
     // reset field if the message is changed
-    if msg_digest.has_changed(&current_msg_id) {
+    if msg_digest.has_changed(current_msg_id) {
         *field = None;
     }
 

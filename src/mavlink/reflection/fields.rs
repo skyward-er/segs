@@ -94,7 +94,7 @@ impl IndexedField {
         let value = message
             .get_field(self.id)
             .ok_or("Field not found".to_string())?;
-        let str_value = format!("{:?}", value);
+        let str_value = format!("{value:?}");
         Ok(str_value)
     }
 }
@@ -241,7 +241,7 @@ impl<'de> serde::Deserialize<'de> for IndexedField {
         let field = de
             .id
             .to_mav_field(de.msg_id, &MAVLINK_PROFILE)
-            .map_err(|u| serde::de::Error::custom(format!("Invalid field: {}", u)))?;
+            .map_err(|u| serde::de::Error::custom(format!("Invalid field: {u}")))?;
         Ok(field)
     }
 }

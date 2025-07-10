@@ -16,7 +16,7 @@ pub use skyward_mavlink::mavlink::reflection::{FieldType, MapConvertible, Messag
 
 use super::MAVLINK_PROFILE_SERIALIZED;
 
-pub use conversion::{FieldLike, MessageLike};
+pub use conversion::FieldLike;
 pub use fields::IndexedField;
 pub use profile::ReflectionContext;
 

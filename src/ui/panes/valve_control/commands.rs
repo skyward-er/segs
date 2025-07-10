@@ -168,11 +168,11 @@ impl CommandKind {
         }
     }
 
-    fn to_valid_parameter(&self) -> Option<ValveParameter> {
-        (*self).try_into().ok()
+    fn to_valid_parameter(self) -> Option<ValveParameter> {
+        self.try_into().ok()
     }
 
-    fn to_missing_parameter(&self) -> Option<ValveParameter> {
+    fn to_missing_parameter(self) -> Option<ValveParameter> {
         match self {
             Self::Wiggle => None,
             Self::SetAtomicValveTiming(_) => {
@@ -184,7 +184,7 @@ impl CommandKind {
         }
     }
 
-    fn to_invalid_parameter(&self, error: u16) -> Option<ValveParameter> {
+    fn to_invalid_parameter(self, error: u16) -> Option<ValveParameter> {
         match self {
             Self::Wiggle => None,
             Self::SetAtomicValveTiming(_) => Some(ValveParameter::AtomicValveTiming(
