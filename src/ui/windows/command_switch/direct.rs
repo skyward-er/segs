@@ -27,7 +27,7 @@ pub fn show_command_settings(ui: &mut Ui, command: &mut DirectCommand) {
                 name,
                 system_id,
                 message,
-                ui_visible,
+                settings_window_visible: ui_visible,
                 show_only_tc,
                 ..
             },

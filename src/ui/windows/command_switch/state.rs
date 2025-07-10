@@ -96,6 +96,24 @@ impl StateManager {
         }
     }
 
+    pub fn set_configurable_command_dialog(&mut self) {
+        if self.state != VisibileState::ConfigurableCommandDialog {
+            self.previous_state = self.state;
+            self.state = VisibileState::ConfigurableCommandDialog;
+        }
+    }
+
+    pub fn set_command_switch(&mut self) {
+        if self.state != VisibileState::CommandSwitch {
+            self.previous_state = self.state;
+            self.state = VisibileState::CommandSwitch;
+        }
+    }
+
+    pub fn is_configurable_command_dialog(&self) -> bool {
+        self.state == VisibileState::ConfigurableCommandDialog
+    }
+
     /// Check if the current state is in CommandCatalog or CommandSettings mode.
     pub fn is_catalog(&self) -> bool {
         self.state.is_catalog()

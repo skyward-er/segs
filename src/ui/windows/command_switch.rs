@@ -5,6 +5,7 @@ mod state;
 use egui::{Key, KeyboardShortcut, ModifierNames, Modifiers, RichText, Ui, Vec2};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::{
     error::ErrInstrument,
@@ -68,37 +69,76 @@ fn show_command_switch_window(ui: &mut Ui, window: &mut CommandSwitchWindow) {
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .open(&mut visible)
         .show(ui.ctx(), |ui| {
-            for cmd in commands.iter_mut() {
-                #[cfg(target_os = "macos")]
-                let is_mac = true;
-                #[cfg(not(target_os = "macos"))]
-                let is_mac = false;
-                let shortcut_text =
-                    cmd.base().shortcut_comb()[1].format(&ModifierNames::SYMBOLS, is_mac);
-                let text =
-                    RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
-                let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
+            // check if there are any commands with visible parameters window
+            let cmd = commands
+                .iter_mut()
+                .find(|cmd| matches!(cmd, Command::Configurable(c) if c.parameters_window_visible));
 
-                // catch called shortcuts
-                let shortcut_pressed = ui
-                    .ctx()
-                    .input_mut(|i| i.consume_shortcut(&cmd.base().shortcut_comb()[1]));
-                let actionated = shortcut_pressed || cmd_btn.clicked();
-                let msg = actionated.then(|| cmd.base().message.clone()).flatten();
-                if let Some(map) = msg {
-                    let header = MavHeader {
-                        system_id: cmd.base().system_id,
-                        ..Default::default()
-                    };
-                    messages_to_send.push((header, MavMessage::from_map(map).log_unwrap()));
-                }
-                if actionated {
-                    state.hide();
-                }
+            // make sure the state is coherent with individual window visibility
+            // settings (since they change from inside interaction)
+            if cmd.is_none() {
+                state.set_command_switch();
+            } else {
+                state.set_configurable_command_dialog();
+            }
+
+            // show the appropriate ui based
+            if let Some(Command::Configurable(cmd)) = cmd {
+                cmd.show_operative_parameters(state, messages_to_send, ui);
+            } else {
+                show_switch_list(state, commands, messages_to_send, ui);
             }
         });
     if !visible {
         state.hide();
+    }
+}
+
+fn show_switch_list(
+    state: &mut state::StateManager,
+    commands: &mut [Command],
+    messages_to_send: &mut Vec<(MavHeader, MavMessage)>,
+    ui: &mut Ui,
+) {
+    for cmd in commands.iter_mut() {
+        #[cfg(target_os = "macos")]
+        let is_mac = true;
+        #[cfg(not(target_os = "macos"))]
+        let is_mac = false;
+        let shortcut_text = cmd.base().shortcut_comb()[1].format(&ModifierNames::SYMBOLS, is_mac);
+        let text = RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
+        let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
+
+        // catch called shortcuts
+        let shortcut_pressed = ui
+            .ctx()
+            .input_mut(|i| i.consume_shortcut(&cmd.base().shortcut_comb()[1]));
+        let actionated = shortcut_pressed || cmd_btn.clicked();
+
+        if actionated {
+            match cmd {
+                Command::Configurable(cmd) => {
+                    // change state to show the configurable command dialog
+                    state.set_configurable_command_dialog();
+                    cmd.parameters_window_visible = true;
+                }
+                Command::Direct(cmd) => {
+                    let BaseCommand {
+                        system_id, message, ..
+                    } = cmd.base.to_owned();
+                    if let Some(map) = message {
+                        // append the message to the list of messages to send
+                        let header = MavHeader {
+                            system_id,
+                            ..Default::default()
+                        };
+                        messages_to_send.push((header, MavMessage::from_map(map).log_unwrap()));
+                        // close the command switch window
+                        state.hide();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -114,12 +154,15 @@ fn show_command_catalog(ui: &mut Ui, window: &mut CommandSwitchWindow) {
         .collapsible(false)
         .open(&mut visible)
         .show(ui.ctx(), |ui| {
-            if commands.iter().all(|cmd| !cmd.base().ui_visible) {
+            if commands
+                .iter()
+                .all(|cmd| !cmd.base().settings_window_visible)
+            {
                 show_catalog_list(ui, commands);
             } else {
                 let cmd = commands
                     .iter_mut()
-                    .find(|cmd| cmd.base().ui_visible)
+                    .find(|cmd| cmd.base().settings_window_visible)
                     .log_unwrap();
                 cmd.show_settings(ui);
             }
@@ -144,7 +187,7 @@ fn show_catalog_list(ui: &mut Ui, commands: &mut Vec<Command>) {
         let text = RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
         let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
         if cmd_btn.clicked() {
-            cmd.base_mut().ui_visible = true;
+            cmd.base_mut().settings_window_visible = true;
         }
     }
     if commands.len() < 9 {
@@ -168,7 +211,7 @@ struct BaseCommand {
 
     // UI SETTINGS
     #[serde(skip)]
-    ui_visible: bool,
+    settings_window_visible: bool,
     #[serde(skip)]
     show_only_tc: bool,
 }
@@ -180,7 +223,7 @@ impl BaseCommand {
             name: String::from("New Command"),
             system_id: 1,
             message: None,
-            ui_visible: false,
+            settings_window_visible: false,
             show_only_tc: false,
         }
     }

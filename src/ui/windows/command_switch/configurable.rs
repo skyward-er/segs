@@ -1,18 +1,22 @@
 use egui::{
-    DragValue, RichText, Ui,
+    Color32, DragValue, Frame, Key, KeyboardShortcut, Label, Margin, Modifiers, Response, RichText,
+    Sense, Sides, Stroke, Ui, UiBuilder, Widget,
     ahash::{HashSet, HashSetExt},
+    response::Flags,
 };
 use mavlink_bindgen::parser::MavType;
 use serde::{Deserialize, Serialize};
-use skyward_mavlink::mavlink::Message;
 use tracing::warn;
 
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        MavMessage,
-        reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible},
+        MavHeader, MavMessage, Message,
+        reflection::{
+            FieldLike, FieldLookup, IndexedField, MAVLINK_PROFILE, MapConvertible, MessageMap,
+        },
     },
+    ui::widgets::ShortcutCard,
 };
 
 use super::BaseCommand;
@@ -21,6 +25,7 @@ use super::BaseCommand;
 pub struct ConfigurableCommand {
     pub base: BaseCommand,
     pub(super) selected_fields: HashSet<usize>,
+    pub parameters_window_visible: bool,
 }
 
 impl ConfigurableCommand {
@@ -28,6 +33,224 @@ impl ConfigurableCommand {
         Self {
             base: BaseCommand::new(id),
             selected_fields: HashSet::new(),
+            parameters_window_visible: false,
+        }
+    }
+
+    pub fn show_operative_parameters(
+        &mut self,
+        state: &mut super::state::StateManager,
+        messages_to_send: &mut Vec<(MavHeader, MavMessage)>,
+        ui: &mut Ui,
+    ) {
+        let ConfigurableCommand {
+            base:
+                BaseCommand {
+                    name,
+                    message,
+                    system_id,
+                    ..
+                },
+            selected_fields,
+            parameters_window_visible,
+        } = self;
+        if let Some(message) = message {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(name.as_str()).size(15.0).strong());
+                ui.label(RichText::new("- Parameters").size(15.0));
+            });
+            ui.separator();
+
+            // Short discaimer if the command has no fields selected
+            if selected_fields.is_empty() {
+                ui.label(RichText::new("No fields selected for configuration").italics());
+            }
+
+            for field_id in selected_fields.iter() {
+                let field = field_id
+                    .to_mav_field(message.message_id(), &MAVLINK_PROFILE)
+                    .log_unwrap();
+                ui.horizontal(|ui| {
+                    ui.label(format!("{}: ", field.field().name.to_uppercase()));
+                    field_editor(field, message, ui);
+                });
+            }
+        } else {
+            // Show an error if the message is not set
+            ui.label(
+                RichText::new("No message selected for configuration").color(egui::Color32::RED),
+            );
+        }
+
+        // Lower buttons
+        ui.separator();
+        let mut back_invoked = false;
+        let mut send_invoked = false;
+        Sides::new().show(
+            ui,
+            |ui| {
+                // Back button to close the parameters window
+                let backspace_pressed = ui.ctx().input_mut(|i| {
+                    i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Backspace))
+                });
+                if shortcut_btn(ui, "BACK", Key::Backspace).clicked() || backspace_pressed {
+                    back_invoked = true;
+                }
+            },
+            |ui| {
+                // Enter button to send the command with the selected parameters
+                let plus_pressed = ui.ctx().input_mut(|i| {
+                    i.consume_shortcut(&KeyboardShortcut::new(Modifiers::NONE, Key::Plus))
+                });
+                if shortcut_btn(ui, "SEND", Key::Plus).clicked() || plus_pressed {
+                    send_invoked = true;
+                }
+            },
+        );
+        if back_invoked {
+            *parameters_window_visible = false;
+        }
+
+        if send_invoked {
+            if let Some(map) = message {
+                // append the message to the list of messages to send
+                let header = MavHeader {
+                    system_id: *system_id,
+                    ..Default::default()
+                };
+                messages_to_send.push((header, MavMessage::from_map(map.clone()).log_unwrap()));
+                // close the command switch window
+                state.hide();
+            }
+            *parameters_window_visible = false;
+        }
+    }
+}
+
+// TODO: convert this into a widget
+fn shortcut_btn(ui: &mut Ui, text: &str, key: Key) -> Response {
+    ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
+        let shortcut = KeyboardShortcut::new(Modifiers::NONE, key);
+        let shortcut_detected = ui.ctx().input_mut(|i| i.consume_shortcut(&shortcut));
+
+        ui.response().flags.insert(Flags::FAKE_PRIMARY_CLICKED);
+        let mut visuals = *ui.style().interact(&ui.response());
+
+        // override the visuals if the button is pressed
+        if shortcut_detected {
+            visuals = ui.visuals().widgets.active;
+        }
+        let vis = ui.visuals();
+        let uvis = ui.style().interact(&ui.response());
+        let shortcut_card = ShortcutCard::new(shortcut)
+            .text_color(vis.strong_text_color())
+            .fill_color(vis.gray_out(uvis.bg_fill))
+            .margin(Margin::symmetric(5, 2))
+            .text_size(12.);
+
+        Frame::canvas(ui.style())
+            .inner_margin(Margin::symmetric(4, 2))
+            .outer_margin(0)
+            .corner_radius(ui.visuals().noninteractive().corner_radius)
+            .fill(visuals.bg_fill)
+            .stroke(Stroke::new(1., Color32::TRANSPARENT))
+            .show(ui, |ui| {
+                ui.set_height(ui.available_height());
+                ui.horizontal_centered(|ui| {
+                    ui.set_height(15.);
+                    ui.add_space(1.);
+                    Label::new(RichText::new(text).size(14.).color(visuals.text_color()))
+                        .selectable(false)
+                        .ui(ui);
+                    shortcut_card.ui(ui);
+                });
+            });
+    })
+    .response
+}
+
+fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) {
+    // show the combo box for enum types
+    if let Some(enum_type) = &field.field().enumtype {
+        let enum_info = MAVLINK_PROFILE.get_enum(enum_type).log_unwrap();
+        // TODO handle enum advanced options
+        macro_rules! variant_selector_for {
+            ($kind:ty) => {{
+                let variant_ix: &mut $kind = message_map.get_mut_field(field).log_unwrap();
+                let selected_text = enum_info.entries[*variant_ix as usize].name.clone();
+                egui::ComboBox::from_id_salt(ui.id().with("field_selector"))
+                    .selected_text(selected_text)
+                    .show_ui(ui, |ui| {
+                        for (index, variant) in enum_info.entries.iter().enumerate() {
+                            ui.selectable_value(variant_ix, index as $kind, &variant.name);
+                        }
+                    });
+            }};
+        }
+        match field.field().mavtype {
+            MavType::UInt8 => variant_selector_for!(u8),
+            MavType::UInt16 => variant_selector_for!(u16),
+            MavType::UInt32 => variant_selector_for!(u32),
+            MavType::UInt64 => variant_selector_for!(u64),
+            _ => {
+                // TODO handle other enum types
+                warn!(
+                    "Enum type {} is not supported for field {}",
+                    enum_type,
+                    field.field().name
+                );
+            }
+        }
+    } else {
+        // show the drag value for numeric types and text box for char types
+        macro_rules! drag_value_with_range {
+            ($_type:ty, $min:expr, $max:expr) => {{
+                let value: &mut $_type = message_map.get_mut_field(field).log_unwrap();
+                ui.add(egui::DragValue::new(value).range($min..=$max));
+            }};
+        }
+
+        match field.field().mavtype {
+            MavType::UInt8MavlinkVersion | MavType::UInt8 => {
+                drag_value_with_range!(u8, 0, u8::MAX)
+            }
+            MavType::UInt16 => drag_value_with_range!(u16, 0, u16::MAX),
+            MavType::UInt32 => drag_value_with_range!(u32, 0, u32::MAX),
+            MavType::UInt64 => drag_value_with_range!(u64, 0, u64::MAX),
+            MavType::Int8 => drag_value_with_range!(i8, i8::MIN, i8::MAX),
+            MavType::Int16 => {
+                drag_value_with_range!(i16, i16::MIN, i16::MAX)
+            }
+            MavType::Int32 => {
+                drag_value_with_range!(i32, i32::MIN, i32::MAX)
+            }
+            MavType::Int64 => {
+                drag_value_with_range!(i64, i64::MIN, i64::MAX)
+            }
+            MavType::Float => {
+                drag_value_with_range!(f32, f32::MIN, f32::MAX)
+            }
+            MavType::Double => {
+                drag_value_with_range!(f64, f64::MIN, f64::MAX)
+            }
+            MavType::Char => {
+                let value: &mut char = message_map.get_mut_field(field).log_unwrap();
+                let mut buffer = value.to_string();
+                ui.add(
+                    egui::TextEdit::singleline(&mut buffer)
+                        .hint_text("char")
+                        .char_limit(1),
+                );
+                if let Some(c) = buffer.chars().next() {
+                    *value = c;
+                } else {
+                    warn!("Invalid char input: {}", buffer);
+                    // TODO handle invalid char input (USER ERROR)
+                }
+            }
+            MavType::Array(_, _) => {
+                warn!("Array types are not supported yet")
+            }
         }
     }
 }
@@ -39,11 +262,12 @@ pub fn show_command_settings(ui: &mut Ui, command: &mut ConfigurableCommand) {
                 name,
                 system_id,
                 message,
-                ui_visible,
+                settings_window_visible,
                 show_only_tc,
                 ..
             },
         selected_fields,
+        ..
     } = command;
     // Command text
     ui.horizontal(|ui| {
@@ -112,6 +336,7 @@ pub fn show_command_settings(ui: &mut Ui, command: &mut ConfigurableCommand) {
             f.field().name.to_lowercase() != "timestamp"
         });
 
+        let num_checked = selected_fields.len();
         if !settable_fields.is_empty() {
             ui.group(|ui| {
                 for field in settable_fields {
@@ -124,7 +349,11 @@ pub fn show_command_settings(ui: &mut Ui, command: &mut ConfigurableCommand) {
                             format!("{}: ", field.field().name.to_uppercase())
                         };
                         ui.checkbox(&mut field_present, text);
-                        if field_present {
+                        if field_present && num_checked >= 9 {
+                            warn!(
+                                "Maximum number of fields selected for configuration reached (9)."
+                            );
+                        } else if field_present {
                             // Add the field to the selected fieldss
                             selected_fields.insert(field.id());
                         } else {
@@ -235,10 +464,17 @@ pub fn show_command_settings(ui: &mut Ui, command: &mut ConfigurableCommand) {
         ui.label(
             RichText::new("Check the fields you'd like to configure in operation mode").italics(),
         );
+
+        if num_checked >= 9 {
+            ui.label(
+                RichText::new("Maximum number of fields selected for configuration reached (9). Deselect some fields to continue.")
+                    .color(egui::Color32::RED),
+            );
+        }
     }
 
     ui.separator();
     if ui.button("⬅ Back").clicked() {
-        *ui_visible = false;
+        *settings_window_visible = false;
     }
 }
