@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use egui::{
     Align, Color32, Context, Direction, DragValue, Frame, Id, Key, Label, Layout, Margin,
     Modifiers, Response, RichText, Sense, Stroke, Ui, UiBuilder, Vec2, Widget,
@@ -6,7 +8,7 @@ use egui_extras::{Size, StripBuilder};
 use tracing::info;
 
 use crate::ui::{
-    shortcuts::{ShortcutHandler, ShortcutMode},
+    shortcuts::{ShortcutHandler, ShortcutHandlerExt},
     widgets::ShortcutCard,
 };
 
@@ -52,19 +54,17 @@ impl ValveControlView {
     }
 
     #[profiling::function]
-    pub fn ui(
-        &mut self,
-        ui: &mut Ui,
-        valve_state: &ValveStateManager,
-        shortcut_handler: &mut ShortcutHandler,
-    ) -> Option<Command> {
+    pub fn ui(&mut self, ui: &mut Ui, valve_state: &ValveStateManager) -> Option<Command> {
         // Show only if the window is open
         if self.is_closed() {
             return None;
         }
 
         // Capture the keyboard shortcuts
-        let mut action = self.keyboard_actions(shortcut_handler);
+        let mut action = self.keyboard_actions(
+            ui.id().with("shortcut_lease"),
+            ui.ctx().shortcuts().lock().deref_mut(),
+        );
 
         // Draw the view inside the pane
         ui.scope(self.draw_view_ui(&mut action, valve_state));
@@ -597,46 +597,52 @@ impl ValveControlView {
 
 impl ValveControlView {
     #[profiling::function]
-    fn keyboard_actions(&self, shortcut_handler: &mut ShortcutHandler) -> Option<WindowAction> {
-        let mut key_action_pairs = Vec::new();
-
-        shortcut_handler.activate_mode(ShortcutMode::valve_control());
-        match self.state {
-            ValveViewState::Open => {
-                // A window is open, so we can map the keys to control the valve
-                key_action_pairs.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
-                key_action_pairs.push((
-                    #[cfg(not(feature = "conrig"))]
-                    Modifiers::ALT,
-                    #[cfg(feature = "conrig")]
-                    Modifiers::NONE,
-                    FOCUS_TIMING_KEY,
-                    WindowAction::FocusOnTiming,
-                ));
-                key_action_pairs.push((
-                    #[cfg(not(feature = "conrig"))]
-                    Modifiers::ALT,
-                    #[cfg(feature = "conrig")]
-                    Modifiers::NONE,
-                    FOCUS_APERTURE_KEY,
-                    WindowAction::FocusOnAperture,
-                ));
-                key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
-                key_action_pairs.push((Modifiers::NONE, Key::Backspace, WindowAction::CloseWindow));
-            }
-            ValveViewState::TimingFocused => {
-                // The timing field is focused, so we can map the keys to control the timing
-                key_action_pairs.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
-                key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
-            }
-            ValveViewState::ApertureFocused => {
-                // The aperture field is focused, so we can map the keys to control the aperture
-                key_action_pairs.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetAperture));
-                key_action_pairs.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
-            }
-            ValveViewState::Closed => {}
-        }
-        shortcut_handler.consume_if_mode_is(ShortcutMode::valve_control(), &key_action_pairs[..])
+    fn keyboard_actions(
+        &self,
+        id: Id,
+        shortcut_handler: &mut ShortcutHandler,
+    ) -> Option<WindowAction> {
+        shortcut_handler.capture_actions(id, Box::new(()), |s| {
+            let mut actions = Vec::new();
+            if s.is_operation_mode() && !s.is_command_switch_active {
+                match self.state {
+                    ValveViewState::Open => {
+                        // A window is open, so we can map the keys to control the valve
+                        actions.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
+                        actions.push((
+                            #[cfg(not(feature = "conrig"))]
+                            Modifiers::ALT,
+                            #[cfg(feature = "conrig")]
+                            Modifiers::NONE,
+                            FOCUS_TIMING_KEY,
+                            WindowAction::FocusOnTiming,
+                        ));
+                        actions.push((
+                            #[cfg(not(feature = "conrig"))]
+                            Modifiers::ALT,
+                            #[cfg(feature = "conrig")]
+                            Modifiers::NONE,
+                            FOCUS_APERTURE_KEY,
+                            WindowAction::FocusOnAperture,
+                        ));
+                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
+                        actions.push((Modifiers::NONE, Key::Backspace, WindowAction::CloseWindow));
+                    }
+                    ValveViewState::TimingFocused => {
+                        // The timing field is focused, so we can map the keys to control the timing
+                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
+                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                    }
+                    ValveViewState::ApertureFocused => {
+                        // The aperture field is focused, so we can map the keys to control the aperture
+                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetAperture));
+                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                    }
+                    ValveViewState::Closed => {}
+                }
+            };
+            actions
+        })
     }
 }
 

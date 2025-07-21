@@ -5,7 +5,7 @@ use super::PaneBehavior;
 use crate::{
     error::ErrInstrument,
     mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage},
-    ui::{app::PaneResponse, shortcuts::ShortcutHandler},
+    ui::app::PaneResponse,
     utils::units::UnitOfMeasure,
 };
 use egui::{Color32, Ui, Vec2, Vec2b};
@@ -40,7 +40,7 @@ impl PartialEq for Plot2DPane {
 
 impl PaneBehavior for Plot2DPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
         let data_settings_digest = self.settings.data_digest();
 

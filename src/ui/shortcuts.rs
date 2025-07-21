@@ -1,168 +1,104 @@
-use std::collections::HashSet;
+use std::sync::Arc;
 
-use egui::{Context, Key, KeyboardShortcut, Modifiers};
+use egui::{Context, Id, IdMap, Key, KeyboardShortcut, Modifiers, mutex::Mutex};
 
 /// Contains all keyboard shortcuts added by the UI.
 ///
 /// [`ShortcutHandler`] is used to register shortcuts and consume them, while
 /// keeping tracks of all enabled shortcuts and filter active shortcut based on
 /// UI views and modes (see [`ShortcutModeStack`]).
-#[derive(Debug, Clone)]
 pub struct ShortcutHandler {
     /// The egui context. Needed to consume shortcuts.
     ctx: Context,
 
-    /// Set of all enabled shortcuts.
-    enabled_shortcuts: HashSet<KeyboardShortcut>,
+    current_term: u32,
+    active_leases: IdMap<(u32, Box<dyn ShortcutLease>)>,
 
     /// Stack layers of keyboard shortcuts. Controls which shortcuts are active at any given time.
-    mode_stack: ShortcutModeStack,
+    shortcut_state: ShortcutAppState,
 }
 
 impl ShortcutHandler {
     pub fn new(ctx: Context) -> Self {
         Self {
             ctx,
-            enabled_shortcuts: Default::default(),
-            mode_stack: Default::default(),
+            current_term: 0,
+            active_leases: IdMap::default(),
+            shortcut_state: ShortcutAppState::default(),
         }
     }
 
-    fn add_shortcut_action_pair<A>(
+    pub fn move_term(&mut self) {
+        self.current_term = self.current_term.wrapping_add(1);
+
+        // first remove all leases that are no longer active and call their `once_ended` method
+        let mut ids_to_remove = Vec::new();
+        for (id, (term, lease)) in self.active_leases.iter_mut() {
+            if self.current_term.wrapping_add(term.wrapping_neg()) > 1 {
+                lease.once_ended(&mut self.shortcut_state);
+                ids_to_remove.push(*id);
+            }
+        }
+        for id in ids_to_remove {
+            self.active_leases.remove(&id);
+        }
+
+        // then call `while_active` for all active leases
+        for (_, (_, lease)) in self.active_leases.iter_mut() {
+            lease.while_active(&mut self.shortcut_state);
+        }
+    }
+
+    pub fn capture_actions<A>(
         &mut self,
-        modifier: Modifiers,
-        key: Key,
-        action: A,
-        mode: ShortcutMode,
+        id: impl Into<Id>,
+        lease: Box<dyn ShortcutLease>,
+        function: impl FnOnce(&ShortcutAppState) -> Vec<(Modifiers, Key, A)>,
     ) -> Option<A> {
-        let shortcut = KeyboardShortcut::new(modifier, key);
-        if self.mode_stack.is_active(mode) {
-            let action = self
+        self.active_leases
+            .insert(id.into(), (self.current_term, lease));
+        let mut captured_action: Option<A> = None;
+        let actions = function(&self.shortcut_state);
+        for (modifier, key, action) in actions {
+            let shortcut = KeyboardShortcut::new(modifier, key);
+            captured_action = captured_action.or(self
                 .ctx
-                .input_mut(|i| i.consume_shortcut(&shortcut).then_some(action));
-            self.enabled_shortcuts.insert(shortcut);
-            action
-        } else {
-            None
+                .input_mut(|i| i.consume_shortcut(&shortcut).then_some(action)));
         }
+
+        captured_action
     }
 
-    /// Consume the keyboard shortcut provided and return the action associated
-    /// with it if the active mode is the provided one.
-    pub fn consume_if_mode_is<A: Clone>(
-        &mut self,
-        mode: ShortcutMode,
-        shortcuts: &[(Modifiers, Key, A)],
-    ) -> Option<A> {
-        for (modifier, key, action) in shortcuts {
-            if let Some(action) = self.add_shortcut_action_pair(*modifier, *key, action, mode) {
-                return Some(action.clone());
-            };
-        }
-        None
+    pub fn set_operation_mode(&mut self) {
+        self.shortcut_state.ui_mode = UiModes::Operation;
     }
 
-    /// Activate a mode (see [`ShortcutModeStack`] for more).
-    #[inline]
-    pub fn activate_mode(&mut self, mode: ShortcutMode) {
-        if !self.mode_stack.is_active(mode) {
-            self.mode_stack.activate(mode);
-            self.enabled_shortcuts.clear();
-        }
+    pub fn set_composition_mode(&mut self) {
+        self.shortcut_state.ui_mode = UiModes::Composition;
     }
 
-    /// Deactivate a mode, switching back to the previous layer (if any).
-    #[inline]
-    pub fn deactivate_mode(&mut self, mode: ShortcutMode) {
-        if self.mode_stack.is_active(mode) {
-            self.mode_stack.deactivate(mode);
-            self.enabled_shortcuts.clear();
-        }
+    pub fn is_in_operation_mode(&self) -> bool {
+        self.shortcut_state.is_operation_mode()
     }
 
-    pub fn is_active(&self, mode: ShortcutMode) -> bool {
-        self.mode_stack.is_active(mode)
-    }
-
-    pub fn is_in_composition(&self) -> bool {
-        self.mode_stack.is_first_layer(FirstLayerModes::Composition)
-    }
-
-    pub fn is_in_operation(&self) -> bool {
-        self.mode_stack.is_first_layer(FirstLayerModes::Operation)
+    pub fn is_in_composition_mode(&self) -> bool {
+        self.shortcut_state.is_composition_mode()
     }
 }
 
-/// Stack layers of keyboard shortcuts. Controls which shortcuts are active at any given time.
-///
-/// The first layer is the default layer, which is active when the user is in the main view.
-/// The second layer is active when the user is in a modal/dialog/window that needs full keyboard control.
-/// When the modal/dialog/window is closed the second layer is removed and the first layer is active again.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-struct ShortcutModeStack {
-    first: FirstLayerModes,
-    second: Option<SecondLayerModes>,
+#[derive(Debug, Clone, Default)]
+pub struct ShortcutAppState {
+    pub is_command_switch_active: bool,
+    pub ui_mode: UiModes,
 }
 
-impl ShortcutModeStack {
-    fn is_active(&self, mode: ShortcutMode) -> bool {
-        match mode {
-            ShortcutMode::FirstLayer(first) => self.first == first && self.second.is_none(),
-            ShortcutMode::SecondLayer(second) => self.second == Some(second),
-        }
+impl ShortcutAppState {
+    pub fn is_operation_mode(&self) -> bool {
+        self.ui_mode == UiModes::Operation
     }
 
-    fn is_first_layer(&self, mode: FirstLayerModes) -> bool {
-        self.first == mode
-    }
-
-    fn activate(&mut self, mode: ShortcutMode) {
-        match mode {
-            ShortcutMode::FirstLayer(first) => {
-                self.first = first;
-                self.second = None;
-            }
-            ShortcutMode::SecondLayer(second) => self.second = Some(second),
-        }
-    }
-
-    fn deactivate(&mut self, mode: ShortcutMode) {
-        match mode {
-            ShortcutMode::FirstLayer(first) => {
-                if self.first == first {
-                    self.first = FirstLayerModes::default();
-                }
-            }
-            ShortcutMode::SecondLayer(second) => {
-                if self.second == Some(second) {
-                    self.second = None;
-                }
-            }
-        }
-    }
-}
-
-/// Layers of keyboard shortcuts. See [`ShortcutModeStack`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShortcutMode {
-    FirstLayer(FirstLayerModes),
-    SecondLayer(SecondLayerModes),
-}
-
-impl ShortcutMode {
-    #[inline]
-    pub fn composition() -> Self {
-        Self::FirstLayer(FirstLayerModes::Composition)
-    }
-
-    #[inline]
-    pub fn operation() -> Self {
-        Self::FirstLayer(FirstLayerModes::Operation)
-    }
-
-    #[inline]
-    pub fn valve_control() -> Self {
-        Self::SecondLayer(SecondLayerModes::ValveControl)
+    pub fn is_composition_mode(&self) -> bool {
+        self.ui_mode == UiModes::Composition
     }
 }
 
@@ -170,18 +106,40 @@ impl ShortcutMode {
 ///
 /// Active when the user is on the main view choosing how to customize their layout.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum FirstLayerModes {
+pub enum UiModes {
     /// Shortcuts that are active when the user is in the main menu.
     Composition,
     #[default]
     Operation,
 }
 
-/// Second layer of keyboard shortcuts, sits on top of the first layer.
-///
-/// Active when the user is in a modal, dialog or window that needs full keyboard control.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SecondLayerModes {
-    /// Shortcuts that are active when the user is in the main menu.
-    ValveControl,
+pub trait ShortcutLease: Send + Sync {
+    /// Called when the lease is active.
+    #[allow(unused_variables)]
+    fn while_active(&mut self, state: &mut ShortcutAppState) {}
+
+    /// Called when the lease ends.
+    #[allow(unused_variables)]
+    fn once_ended(&mut self, state: &mut ShortcutAppState) {}
+}
+
+impl ShortcutLease for () {}
+
+pub trait ShortcutHandlerExt {
+    fn shortcuts(&self) -> Arc<Mutex<ShortcutHandler>>;
+}
+
+impl ShortcutHandlerExt for Context {
+    fn shortcuts(&self) -> Arc<Mutex<ShortcutHandler>> {
+        self.memory_mut(|w| {
+            if let Some(arc) = w.data.get_temp("shortcut_handler".into()) {
+                arc
+            } else {
+                let handler = Arc::new(Mutex::new(ShortcutHandler::new(self.clone())));
+                w.data
+                    .insert_temp("shortcut_handler".into(), handler.clone());
+                handler
+            }
+        })
+    }
 }

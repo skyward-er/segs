@@ -10,7 +10,7 @@ use crate::{
         MavHeader, MavMessage, Message, TimedMessage,
         reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible, MessageMap},
     },
-    ui::{app::PaneResponse, shortcuts::ShortcutHandler},
+    ui::app::PaneResponse,
 };
 
 use super::PaneBehavior;
@@ -55,7 +55,7 @@ impl PartialEq for CommandPane {
 
 impl PaneBehavior for CommandPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let parent = ui

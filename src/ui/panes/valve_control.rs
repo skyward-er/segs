@@ -5,11 +5,12 @@ mod valves;
 
 use std::{
     collections::HashMap,
+    ops::DerefMut,
     time::{Duration, Instant},
 };
 
 use egui::{
-    Color32, DragValue, FontId, Frame, Grid, Key, Label, Modifiers, Response, RichText, Sense,
+    Color32, DragValue, FontId, Frame, Grid, Id, Key, Label, Modifiers, Response, RichText, Sense,
     Stroke, TextFormat, Ui, UiBuilder, Vec2, Widget, Window, text::LayoutJob, vec2,
 };
 use itertools::Itertools;
@@ -25,7 +26,7 @@ use crate::{
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
-        shortcuts::{ShortcutHandler, ShortcutMode},
+        shortcuts::{ShortcutHandler, ShortcutHandlerExt, ShortcutLease},
         widgets::ShortcutCard,
     },
 };
@@ -111,7 +112,7 @@ impl Default for ValveControlPane {
 
 impl PaneBehavior for ValveControlPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui, shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut pane_response = PaneResponse::default();
 
         // process commands to update state
@@ -121,7 +122,7 @@ impl PaneBehavior for ValveControlPane {
         Icon::init_cache(ui.ctx(), (100, 100));
 
         if let Some(valve_view) = &mut self.valve_view {
-            if let Some(command) = valve_view.ui(ui, &self.valves_state, shortcut_handler) {
+            if let Some(command) = valve_view.ui(ui, &self.valves_state) {
                 self.commands.push(command.into());
             }
 
@@ -145,7 +146,10 @@ impl PaneBehavior for ValveControlPane {
             }
 
             // capture actions from keyboard shortcuts
-            let action = self.keyboard_actions(shortcut_handler);
+            let action = self.keyboard_actions(
+                ui.id().with("shortcut_lease"),
+                ui.ctx().shortcuts().lock().deref_mut(),
+            );
 
             match action {
                 // Open the valve control window if the action is to open it
@@ -466,18 +470,25 @@ impl ValveControlPane {
     }
 
     #[profiling::function]
-    fn keyboard_actions(&self, shortcut_handler: &mut ShortcutHandler) -> Option<PaneAction> {
-        let mut key_action_pairs = Vec::new();
-        shortcut_handler.deactivate_mode(ShortcutMode::valve_control());
-        // No window is open, so we can map the keys to open the valve control windows
-        for (&valve, &key) in self.valve_key_map.iter() {
-            #[cfg(not(feature = "conrig"))]
-            let modifier = Modifiers::ALT;
-            #[cfg(feature = "conrig")]
-            let modifier = Modifiers::NONE;
-            key_action_pairs.push((modifier, key, PaneAction::OpenValveControl(valve)));
-        }
-        shortcut_handler.consume_if_mode_is(ShortcutMode::operation(), &key_action_pairs[..])
+    fn keyboard_actions(
+        &self,
+        id: Id,
+        shortcut_handler: &mut ShortcutHandler,
+    ) -> Option<PaneAction> {
+        shortcut_handler.capture_actions(id, Box::new(()), |s| {
+            let mut actions = Vec::new();
+            if s.is_operation_mode() && !s.is_command_switch_active {
+                // No window is open, so we can map the keys to open the valve control windows
+                for (&valve, &key) in self.valve_key_map.iter() {
+                    #[cfg(not(feature = "conrig"))]
+                    let modifier = Modifiers::ALT;
+                    #[cfg(feature = "conrig")]
+                    let modifier = Modifiers::NONE;
+                    actions.push((modifier, key, PaneAction::OpenValveControl(valve)));
+                }
+            }
+            actions
+        })
     }
 }
 

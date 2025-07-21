@@ -12,6 +12,7 @@ use crate::{
         MavHeader, MavMessage,
         reflection::{MapConvertible, MessageMap},
     },
+    ui::shortcuts::{ShortcutAppState, ShortcutHandlerExt, ShortcutLease},
 };
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -31,7 +32,12 @@ impl CommandSwitchWindow {
     pub fn show(&mut self, ui: &mut Ui) {
         let slash_pressed = ui
             .ctx()
-            .input_mut(|i| i.consume_key(Modifiers::NONE, Key::Slash));
+            .shortcuts()
+            .lock()
+            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |_| {
+                vec![(Modifiers::NONE, Key::Slash, true)]
+            })
+            .unwrap_or_default();
         if !self.commands.is_empty() && slash_pressed {
             // If the slash key is pressed, toggle the visibility of the command switch window
             self.state.switch_command();
@@ -92,6 +98,18 @@ fn show_command_switch_window(ui: &mut Ui, window: &mut CommandSwitchWindow) {
     }
 }
 
+struct CommandSwitchLease;
+
+impl ShortcutLease for CommandSwitchLease {
+    fn once_ended(&mut self, state: &mut ShortcutAppState) {
+        state.is_command_switch_active = false;
+    }
+
+    fn while_active(&mut self, state: &mut ShortcutAppState) {
+        state.is_command_switch_active = true;
+    }
+}
+
 fn show_switch_list(
     state: &mut state::StateManager,
     commands: &mut [Command],
@@ -108,10 +126,18 @@ fn show_switch_list(
         let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
 
         // catch called shortcuts
-        let shortcut_pressed = ui
-            .ctx()
-            .input_mut(|i| i.consume_shortcut(&cmd.base().shortcut_comb()[1]));
-        let actionated = shortcut_pressed || cmd_btn.clicked();
+        let shortcut_pressed = ui.ctx().shortcuts().lock().capture_actions(
+            ui.id().with("shortcut_lease"),
+            Box::new(CommandSwitchLease),
+            |s| {
+                if s.is_operation_mode() {
+                    vec![(Modifiers::NONE, cmd.base().shortcut_keys()[1], true)]
+                } else {
+                    vec![]
+                }
+            },
+        );
+        let actionated = shortcut_pressed.unwrap_or_default() || cmd_btn.clicked();
 
         if actionated {
             match cmd {
@@ -226,7 +252,7 @@ impl BaseCommand {
         }
     }
 
-    fn shortcut_comb(&self) -> Vec<KeyboardShortcut> {
+    fn shortcut_keys(&self) -> Vec<Key> {
         let key = match self.id {
             0 => Key::Num0,
             1 => Key::Num1,
@@ -240,10 +266,14 @@ impl BaseCommand {
             9 => Key::Num9,
             _ => panic!("Command ID must be between 0 and 9"),
         };
-        vec![
-            KeyboardShortcut::new(Modifiers::NONE, Key::Slash),
-            KeyboardShortcut::new(Modifiers::NONE, key),
-        ]
+        vec![Key::Slash, key]
+    }
+
+    fn shortcut_comb(&self) -> Vec<KeyboardShortcut> {
+        self.shortcut_keys()
+            .into_iter()
+            .map(|k| KeyboardShortcut::new(Modifiers::NONE, k))
+            .collect()
     }
 }
 

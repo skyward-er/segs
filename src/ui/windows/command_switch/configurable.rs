@@ -16,7 +16,7 @@ use crate::{
             FieldLike, FieldLookup, IndexedField, MAVLINK_PROFILE, MapConvertible, MessageMap,
         },
     },
-    ui::widgets::ShortcutCard,
+    ui::{shortcuts::ShortcutHandlerExt, widgets::ShortcutCard},
 };
 
 use super::BaseCommand;
@@ -171,9 +171,22 @@ impl ConfigurableCommand {
 // TODO: convert this into a widget (and remove code duplication)
 fn shortcut_btn(ui: &mut Ui, text: &str, key: Option<Key>) -> Response {
     let shortcut = key.map(|key| KeyboardShortcut::new(Modifiers::NONE, key));
-    let shortcut_detected = shortcut
-        .map(|shortcut| ui.ctx().input_mut(|i| i.consume_shortcut(&shortcut)))
-        .unwrap_or(false);
+    let shortcut_detected = ui
+        .ctx()
+        .shortcuts()
+        .lock()
+        .capture_actions(
+            ui.id().with("shortcut_lease"),
+            Box::new(super::CommandSwitchLease),
+            |_| {
+                if let Some(key) = key {
+                    vec![(Modifiers::NONE, key, true)]
+                } else {
+                    vec![]
+                }
+            },
+        )
+        .unwrap_or_default();
     let mut res = ui
         .scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
             let mut visuals = *ui.style().interact(&ui.response());
