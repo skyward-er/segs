@@ -271,6 +271,18 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
         }
     } else {
         // show the drag value for numeric types and text box for char types
+        macro_rules! drag_value_with_range_float {
+            ($_type:ty, $min:expr, $max:expr) => {{
+                let value: &mut $_type = message_map.get_mut_field(field).log_unwrap();
+                ui.add(
+                    egui::DragValue::new(value)
+                        .range($min..=$max)
+                        .clamp_existing_to_range(true)
+                        .min_decimals(0)
+                        .max_decimals(8),
+                )
+            }};
+        }
         macro_rules! drag_value_with_range {
             ($_type:ty, $min:expr, $max:expr) => {{
                 let value: &mut $_type = message_map.get_mut_field(field).log_unwrap();
@@ -300,10 +312,10 @@ fn field_editor(field: IndexedField, message_map: &mut MessageMap, ui: &mut Ui) 
                 drag_value_with_range!(i64, i64::MIN, i64::MAX)
             }
             MavType::Float => {
-                drag_value_with_range!(f32, f32::MIN, f32::MAX)
+                drag_value_with_range_float!(f32, f32::MIN, f32::MAX)
             }
             MavType::Double => {
-                drag_value_with_range!(f64, f64::MIN, f64::MAX)
+                drag_value_with_range_float!(f64, f64::MIN, f64::MAX)
             }
             MavType::Char => {
                 let value: &mut char = message_map.get_mut_field(field).log_unwrap();
