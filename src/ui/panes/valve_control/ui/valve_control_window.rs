@@ -446,7 +446,7 @@ impl ValveControlView {
                                         let parameter = valve_state.get_timing_for(self.valve);
                                         let (label, fill_color) = match parameter {
                                             ParameterValue::Valid(value) => {
-                                                (format!("{}ms", value), valid_fill)
+                                                (format!("{value}ms"), valid_fill)
                                             }
                                             ParameterValue::Missing => {
                                                 (parameter.to_string(), missing_fill)

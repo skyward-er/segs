@@ -26,7 +26,7 @@ use crate::{
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
-        shortcuts::{ShortcutHandler, ShortcutHandlerExt, ShortcutLease},
+        shortcuts::{ShortcutHandler, ShortcutHandlerExt},
         widgets::ShortcutCard,
     },
 };
@@ -347,11 +347,11 @@ impl ValveControlPane {
 
             let timing_str: String = match timing {
                 valves::ParameterValue::Valid(value) => {
-                    format!("{} [ms]", value)
+                    format!("{value} [ms]")
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR({})", err_id)
+                    format!("ERROR({err_id})")
                 }
             };
             let aperture_str = match aperture {
@@ -360,7 +360,7 @@ impl ValveControlPane {
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR({})", err_id)
+                    format!("ERROR({err_id})")
                 }
             };
             let text_color = ui.visuals().text_color();

@@ -19,7 +19,7 @@ where
             Ok(t) => t,
             Err(e) => {
                 error!("{}: {:?}", msg, e);
-                panic!("{}: {:?}", msg, e);
+                panic!("{msg}: {e:?}");
             }
         }
     }
@@ -29,7 +29,7 @@ where
             Ok(t) => t,
             Err(e) => {
                 error!("Called unwrap on an Err value: {:?}", e);
-                panic!("Called unwrap on an Err value: {:?}", e);
+                panic!("Called unwrap on an Err value: {e:?}");
             }
         }
     }
@@ -43,7 +43,7 @@ impl<T> ErrInstrument for Option<T> {
             Some(t) => t,
             None => {
                 error!("{}", msg);
-                panic!("{}", msg);
+                panic!("{msg}");
             }
         }
     }

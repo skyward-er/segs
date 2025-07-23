@@ -135,15 +135,14 @@ impl ConfigurableCommand {
             ui,
             |ui| {
                 // Back button to close the parameters window
-                let key = focused_key.map(|_| Key::Enter).unwrap_or(Key::Backspace);
-                if shortcut_btn(ui, "BACK", Some(key)).clicked() {
+                let key = focused_key.xor(Some(Key::Backspace));
+                if shortcut_btn(ui, "BACK", key).clicked() {
                     back_invoked = true;
                 }
             },
             |ui| {
-                // Enter button to send the command with the selected parameters
-                let key = focused_key.map(|_| Key::Enter).unwrap_or(Key::Plus);
-                if shortcut_btn(ui, "SEND", Some(key)).clicked() {
+                let key = focused_key.xor(Some(Key::Plus));
+                if shortcut_btn(ui, "SEND", key).clicked() {
                     send_invoked = true;
                 }
             },
