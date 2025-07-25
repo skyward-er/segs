@@ -2,6 +2,11 @@ use eframe::CreationContext;
 use egui::{Button, Key, Modifiers, Sides, Stroke};
 use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tree};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "conrig")]
+use skyward_mavlink::{
+    mavlink::MessageData,
+    orion::{ACK_TM_DATA, NACK_TM_DATA},
+};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -420,6 +425,18 @@ impl App {
             "Panes message processing messages took {:?}",
             start.elapsed()
         );
+
+        // Handle acknowledgements in the command switch window
+        #[cfg(feature = "conrig")]
+        self.state.command_switch_window.handle_acknowledgements(
+            self.message_bundle
+                .get(&[ACK_TM_DATA::ID, NACK_TM_DATA::ID])
+                .iter()
+                .map(|m| &m.message)
+                .collect(),
+        );
+
+        // Reset the message bundle after processing
         self.message_bundle.reset();
     }
 

@@ -1,19 +1,29 @@
+mod command;
 mod configurable;
 mod direct;
 mod state;
 
-use egui::{Key, KeyboardShortcut, ModifierNames, Modifiers, RichText, Ui, Vec2};
+use std::{
+    collections::HashSet,
+    time::{Duration, Instant},
+};
+
+use egui::{Color32, Key, ModifierNames, Modifiers, RichText, Ui, Vec2};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     error::ErrInstrument,
-    mavlink::{
-        MavHeader, MavMessage,
-        reflection::{MapConvertible, MessageMap},
+    mavlink::{MavHeader, MavMessage, reflection::MapConvertible},
+    ui::{
+        shortcuts::{ShortcutAppState, ShortcutHandlerExt, ShortcutLease},
+        windows::command_switch::command::ReplyState,
     },
-    ui::shortcuts::{ShortcutAppState, ShortcutHandlerExt, ShortcutLease},
 };
+
+use command::{BaseCommand, Command};
+
+const MAXIMUM_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CommandSwitchWindow {
@@ -39,10 +49,22 @@ impl CommandSwitchWindow {
             })
             .unwrap_or_default();
         if !self.commands.is_empty() && slash_pressed {
-            // If the slash key is pressed, toggle the visibility of the command switch window
+            // First reset the reply state of all commands
+            for cmd in self.commands.iter_mut() {
+                cmd.base_mut().reply_state.reset();
+            }
+            // Then toggle the visibility of the command switch window
             self.state.switch_command();
         }
         if self.state.is_command_switch() {
+            // Update the the state of the expired commands
+            for cmd in self.commands.iter_mut() {
+                if let ReplyState::WaitingForReply(instant) = cmd.base().reply_state {
+                    if instant.elapsed() > MAXIMUM_REPLY_TIMEOUT {
+                        cmd.base_mut().reply_state = ReplyState::TimeoutNack;
+                    }
+                }
+            }
             // Show the command switch window
             show_command_switch_window(ui, self);
         } else {
@@ -55,6 +77,32 @@ impl CommandSwitchWindow {
             return vec![];
         }
         std::mem::take(&mut self.messages_to_send)
+    }
+
+    pub fn handle_acknowledgements(&mut self, messages: Vec<&MavMessage>) {
+        let mut acks_ids = HashSet::new();
+        let mut nacks_ids = HashSet::new();
+        for message in messages {
+            match message {
+                MavMessage::ACK_TM(ack) => {
+                    acks_ids.insert(ack.recv_msgid as usize);
+                }
+                MavMessage::NACK_TM(nack) => {
+                    nacks_ids.insert(nack.recv_msgid as usize);
+                }
+                _ => continue,
+            }
+        }
+        for cmd in self.commands.iter_mut() {
+            let base = cmd.base_mut();
+            if let ReplyState::WaitingForReply(instant) = base.reply_state {
+                if acks_ids.contains(&base.id) {
+                    base.reply_state = ReplyState::ExplicitAck;
+                } else if nacks_ids.contains(&base.id) {
+                    base.reply_state = ReplyState::ExplicitNack;
+                }
+            }
+        }
     }
 }
 
@@ -123,14 +171,43 @@ fn show_switch_list(
         let is_mac = false;
         let shortcut_text = cmd.base().shortcut_comb()[1].format(&ModifierNames::SYMBOLS, is_mac);
         let text = RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
-        let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
+        let cmd_btn = ui
+            .add_enabled_ui(cmd.base().reply_state.is_enabled(), |ui| {
+                let valid_fill = ui
+                    .visuals()
+                    .widgets
+                    .inactive
+                    .bg_fill
+                    .lerp_to_gamma(Color32::GREEN, 0.3);
+                let missing_fill = ui
+                    .visuals()
+                    .widgets
+                    .inactive
+                    .bg_fill
+                    .lerp_to_gamma(Color32::YELLOW, 0.3);
+                let invalid_fill = ui
+                    .visuals()
+                    .widgets
+                    .inactive
+                    .bg_fill
+                    .lerp_to_gamma(Color32::RED, 0.3);
+                let mut btn = egui::Button::new(text);
+                btn = match cmd.base().reply_state {
+                    ReplyState::ReadyForInvocation | ReplyState::WaitingForReply(_) => btn,
+                    ReplyState::ExplicitAck => btn.fill(valid_fill),
+                    ReplyState::ExplicitNack => btn.fill(invalid_fill),
+                    ReplyState::TimeoutNack => btn.fill(missing_fill),
+                };
+                ui.add_sized(Vec2::new(300.0, 10.0), btn)
+            })
+            .inner;
 
         // catch called shortcuts
         let shortcut_pressed = ui.ctx().shortcuts().lock().capture_actions(
             ui.id().with("shortcut_lease"),
             Box::new(CommandSwitchLease),
             |s| {
-                if s.is_operation_mode() {
+                if s.is_operation_mode() && cmd.base().reply_state.is_enabled() {
                     vec![(Modifiers::NONE, cmd.base().shortcut_keys()[1], true)]
                 } else {
                     vec![]
@@ -148,17 +225,21 @@ fn show_switch_list(
                 }
                 Command::Direct(cmd) => {
                     let BaseCommand {
-                        system_id, message, ..
-                    } = cmd.base.to_owned();
+                        system_id,
+                        message,
+                        reply_state,
+                        ..
+                    } = &mut cmd.base;
                     if let Some(map) = message {
                         // append the message to the list of messages to send
                         let header = MavHeader {
-                            system_id,
+                            system_id: *system_id,
                             ..Default::default()
                         };
-                        messages_to_send.push((header, MavMessage::from_map(map).log_unwrap()));
-                        // close the command switch window
-                        state.hide();
+                        messages_to_send
+                            .push((header, MavMessage::from_map(map.clone()).log_unwrap()));
+                        // Update the reply state to waiting for reply
+                        *reply_state = ReplyState::WaitingForReply(Instant::now());
                     }
                 }
             }
@@ -221,133 +302,6 @@ fn show_catalog_list(ui: &mut Ui, commands: &mut Vec<Command>) {
         );
         if plus_btn.clicked() {
             commands.push(Command::direct(commands.len() + 1));
-        }
-    }
-}
-
-/// Command Base on which all commands are built upon, containing common fields
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct BaseCommand {
-    id: usize,
-    name: String,
-    system_id: u8,
-    message: Option<MessageMap>,
-
-    // UI SETTINGS
-    #[serde(skip)]
-    settings_window_visible: bool,
-    #[serde(skip)]
-    show_only_tc: bool,
-}
-
-impl BaseCommand {
-    fn new(id: usize) -> Self {
-        Self {
-            id,
-            name: String::from("New Command"),
-            system_id: 1,
-            message: None,
-            settings_window_visible: false,
-            show_only_tc: false,
-        }
-    }
-
-    fn shortcut_keys(&self) -> Vec<Key> {
-        let key = match self.id {
-            0 => Key::Num0,
-            1 => Key::Num1,
-            2 => Key::Num2,
-            3 => Key::Num3,
-            4 => Key::Num4,
-            5 => Key::Num5,
-            6 => Key::Num6,
-            7 => Key::Num7,
-            8 => Key::Num8,
-            9 => Key::Num9,
-            _ => panic!("Command ID must be between 0 and 9"),
-        };
-        vec![Key::Slash, key]
-    }
-
-    fn shortcut_comb(&self) -> Vec<KeyboardShortcut> {
-        self.shortcut_keys()
-            .into_iter()
-            .map(|k| KeyboardShortcut::new(Modifiers::NONE, k))
-            .collect()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-enum Command {
-    Configurable(configurable::ConfigurableCommand),
-    Direct(direct::DirectCommand),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum CommandKind {
-    Configurable,
-    Direct,
-}
-
-impl CommandKind {
-    fn from_command(command: &Command) -> Self {
-        match command {
-            Command::Configurable(_) => CommandKind::Configurable,
-            Command::Direct(_) => CommandKind::Direct,
-        }
-    }
-}
-
-impl Command {
-    fn direct(id: usize) -> Self {
-        Command::Direct(direct::DirectCommand {
-            base: BaseCommand::new(id),
-        })
-    }
-
-    fn configurable(id: usize) -> Self {
-        Command::Configurable(configurable::ConfigurableCommand::new(id))
-    }
-
-    fn base(&self) -> &BaseCommand {
-        match self {
-            Command::Configurable(cmd) => &cmd.base,
-            Command::Direct(cmd) => &cmd.base,
-        }
-    }
-
-    fn base_mut(&mut self) -> &mut BaseCommand {
-        match self {
-            Command::Configurable(cmd) => &mut cmd.base,
-            Command::Direct(cmd) => &mut cmd.base,
-        }
-    }
-
-    fn show_settings(&mut self, ui: &mut Ui) {
-        // Common title and separator
-        ui.label(RichText::new("Command Settings:").size(15.0));
-        ui.separator();
-
-        // Radio buttons to select the command type
-        let current_kind = CommandKind::from_command(self);
-        let mut command_kind = current_kind;
-        ui.horizontal(|ui| {
-            ui.radio_value(&mut command_kind, CommandKind::Configurable, "Configurable");
-            ui.radio_value(&mut command_kind, CommandKind::Direct, "Direct");
-        });
-        // If the command kind is changed, update the command
-        if command_kind != current_kind {
-            let mut new_cmd = match command_kind {
-                CommandKind::Configurable => Self::configurable(self.base().id),
-                CommandKind::Direct => Self::direct(self.base().id),
-            };
-            *new_cmd.base_mut() = self.base().clone();
-            *self = new_cmd;
-        }
-
-        match self {
-            Command::Configurable(cmd) => configurable::show_command_settings(ui, cmd),
-            Command::Direct(cmd) => direct::show_command_settings(ui, cmd),
         }
     }
 }
