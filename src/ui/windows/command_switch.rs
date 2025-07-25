@@ -303,6 +303,13 @@ fn command_btn(ui: &mut Ui, cmd: &Command) -> Response {
                     .stroke(Stroke::NONE)
                     .inner_margin(Margin::symmetric(5, 0))
                     .corner_radius(ui.style().noninteractive().corner_radius);
+                let reply_tag_text = match cmd.base().reply_state {
+                    ReplyState::ReadyForInvocation => "",
+                    ReplyState::WaitingForReply(_) => "WAITING",
+                    ReplyState::ExplicitAck => "ACK",
+                    ReplyState::TimeoutNack => "TIMEOUT",
+                    ReplyState::ExplicitNack => "NACK",
+                };
 
                 Frame::canvas(ui.style())
                     .inner_margin(Margin::symmetric(4, 2))
@@ -325,40 +332,16 @@ fn command_btn(ui: &mut Ui, cmd: &Command) -> Response {
                             .selectable(false)
                             .ui(ui);
                             ui.add_space(1.);
-                            match cmd.base().reply_state {
-                                ReplyState::ReadyForInvocation => (),
-                                ReplyState::WaitingForReply(_) => {
-                                    reply_tag.show(ui, |ui| {
-                                        let text = RichText::new("WAITING")
+                            if !matches!(cmd.base().reply_state, ReplyState::ReadyForInvocation) {
+                                reply_tag.show(ui, |ui| {
+                                    Label::new(
+                                        RichText::new(reply_tag_text)
                                             .color(visuals.text_color())
-                                            .size(12.);
-                                        Label::new(text).selectable(false).ui(ui);
-                                    });
-                                }
-                                ReplyState::ExplicitAck => {
-                                    reply_tag.show(ui, |ui| {
-                                        let text = RichText::new("ACK")
-                                            .color(visuals.text_color())
-                                            .size(12.);
-                                        Label::new(text).selectable(false).ui(ui);
-                                    });
-                                }
-                                ReplyState::TimeoutNack => {
-                                    reply_tag.show(ui, |ui| {
-                                        let text = RichText::new("TIMEOUT")
-                                            .color(visuals.text_color())
-                                            .size(12.);
-                                        Label::new(text).selectable(false).ui(ui);
-                                    });
-                                }
-                                ReplyState::ExplicitNack => {
-                                    reply_tag.show(ui, |ui| {
-                                        let text = RichText::new("NACK")
-                                            .color(visuals.text_color())
-                                            .size(12.);
-                                        Label::new(text).selectable(false).ui(ui);
-                                    });
-                                }
+                                            .size(12.),
+                                    )
+                                    .selectable(false)
+                                    .ui(ui);
+                                });
                             }
                         });
                     });
