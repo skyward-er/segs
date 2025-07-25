@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use egui::{
     Color32, DragValue, Frame, Key, KeyboardShortcut, Label, Margin, Modifiers, Response, RichText,
     Sense, Sides, Stroke, Ui, UiBuilder, Widget,
@@ -19,7 +21,7 @@ use crate::{
     ui::{shortcuts::ShortcutHandlerExt, widgets::ShortcutCard},
 };
 
-use super::BaseCommand;
+use super::{BaseCommand, ReplyState};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConfigurableCommand {
@@ -53,6 +55,7 @@ impl ConfigurableCommand {
                     name,
                     message,
                     system_id,
+                    reply_state,
                     ..
                 },
             selected_fields,
@@ -159,8 +162,7 @@ impl ConfigurableCommand {
                     ..Default::default()
                 };
                 messages_to_send.push((header, MavMessage::from_map(map.clone()).log_unwrap()));
-                // close the command switch window
-                state.hide();
+                *reply_state = ReplyState::WaitingForReply(Instant::now());
             }
             *parameters_window_visible = false;
         }
