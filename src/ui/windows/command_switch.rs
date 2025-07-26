@@ -48,8 +48,12 @@ impl CommandSwitchWindow {
             .ctx()
             .shortcuts()
             .lock()
-            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |_| {
-                vec![(Modifiers::NONE, Key::Slash, true)]
+            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |s| {
+                if s.is_operation_mode() {
+                    vec![(Modifiers::NONE, Key::Slash, true)]
+                } else {
+                    vec![]
+                }
             })
             .unwrap_or_default();
         if !self.commands.is_empty() && slash_pressed {
@@ -89,20 +93,20 @@ impl CommandSwitchWindow {
         for message in messages {
             match message {
                 MavMessage::ACK_TM(ack) => {
-                    acks_ids.insert(ack.recv_msgid as usize);
+                    acks_ids.insert(ack.recv_msgid as u32);
                 }
                 MavMessage::NACK_TM(nack) => {
-                    nacks_ids.insert(nack.recv_msgid as usize);
+                    nacks_ids.insert(nack.recv_msgid as u32);
                 }
                 _ => continue,
             }
         }
         for cmd in self.commands.iter_mut() {
             let base = cmd.base_mut();
-            if let ReplyState::WaitingForReply(instant) = base.reply_state {
-                if acks_ids.contains(&base.id) {
+            if let (ReplyState::WaitingForReply(_), Some(msg)) = (base.reply_state, &base.message) {
+                if acks_ids.contains(&msg.message_id()) {
                     base.reply_state = ReplyState::ExplicitAck;
-                } else if nacks_ids.contains(&base.id) {
+                } else if nacks_ids.contains(&msg.message_id()) {
                     base.reply_state = ReplyState::ExplicitNack;
                 }
             }
