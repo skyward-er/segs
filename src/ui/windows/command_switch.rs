@@ -48,8 +48,12 @@ impl CommandSwitchWindow {
             .ctx()
             .shortcuts()
             .lock()
-            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |_| {
-                vec![(Modifiers::NONE, Key::Slash, true)]
+            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |s| {
+                if s.is_operation_mode() {
+                    vec![(Modifiers::NONE, Key::Slash, true)]
+                } else {
+                    vec![]
+                }
             })
             .unwrap_or_default();
         if !self.commands.is_empty() && slash_pressed {
@@ -89,20 +93,20 @@ impl CommandSwitchWindow {
         for message in messages {
             match message {
                 MavMessage::ACK_TM(ack) => {
-                    acks_ids.insert(ack.recv_msgid as usize);
+                    acks_ids.insert(ack.recv_msgid as u32);
                 }
                 MavMessage::NACK_TM(nack) => {
-                    nacks_ids.insert(nack.recv_msgid as usize);
+                    nacks_ids.insert(nack.recv_msgid as u32);
                 }
                 _ => continue,
             }
         }
         for cmd in self.commands.iter_mut() {
             let base = cmd.base_mut();
-            if let ReplyState::WaitingForReply(instant) = base.reply_state {
-                if acks_ids.contains(&base.id) {
+            if let (ReplyState::WaitingForReply(_), Some(msg)) = (base.reply_state, &base.message) {
+                if acks_ids.contains(&msg.message_id()) {
                     base.reply_state = ReplyState::ExplicitAck;
-                } else if nacks_ids.contains(&base.id) {
+                } else if nacks_ids.contains(&msg.message_id()) {
                     base.reply_state = ReplyState::ExplicitNack;
                 }
             }
@@ -169,58 +173,6 @@ fn show_switch_list(
     ui: &mut Ui,
 ) {
     for cmd in commands.iter_mut() {
-        // #[cfg(target_os = "macos")]
-        // let is_mac = true;
-        // #[cfg(not(target_os = "macos"))]
-        // let is_mac = false;
-        // let shortcut_text = cmd.base().shortcut_comb()[1].format(&ModifierNames::SYMBOLS, is_mac);
-        // let text = RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
-        // let cmd_btn = ui
-        //     .add_enabled_ui(cmd.base().reply_state.is_enabled(), |ui| {
-        //         let valid_fill = ui
-        //             .visuals()
-        //             .widgets
-        //             .inactive
-        //             .bg_fill
-        //             .lerp_to_gamma(Color32::GREEN, 0.3);
-        //         let missing_fill = ui
-        //             .visuals()
-        //             .widgets
-        //             .inactive
-        //             .bg_fill
-        //             .lerp_to_gamma(Color32::YELLOW, 0.3);
-        //         let invalid_fill = ui
-        //             .visuals()
-        //             .widgets
-        //             .inactive
-        //             .bg_fill
-        //             .lerp_to_gamma(Color32::RED, 0.3);
-        //         let mut btn = egui::Button::new(text);
-        //         btn = match cmd.base().reply_state {
-        //             ReplyState::ReadyForInvocation | ReplyState::WaitingForReply(_) => btn,
-        //             ReplyState::ExplicitAck => btn.fill(valid_fill),
-        //             ReplyState::ExplicitNack => btn.fill(invalid_fill),
-        //             ReplyState::TimeoutNack => btn.fill(missing_fill),
-        //         };
-        //         ui.add_sized(Vec2::new(300.0, 10.0), btn)
-        //     })
-        //     .inner;
-
-        // // catch called shortcuts
-        // let shortcut_pressed = ui.ctx().shortcuts().lock().capture_actions(
-        //     ui.id().with("shortcut_lease"),
-        //     Box::new(CommandSwitchLease),
-        //     |s| {
-        //         if s.is_operation_mode() && cmd.base().reply_state.is_enabled() {
-        //             vec![(Modifiers::NONE, cmd.base().shortcut_keys()[1], true)]
-        //         } else {
-        //             vec![]
-        //         }
-        //     },
-        // );
-        // let actionated = shortcut_pressed.unwrap_or_default() || cmd_btn.clicked();
-
-        // if actionated {
         if command_btn(ui, cmd).clicked() {
             match cmd {
                 Command::Configurable(cmd) => {
