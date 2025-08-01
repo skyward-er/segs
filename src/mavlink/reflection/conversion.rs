@@ -50,7 +50,7 @@ impl MessageLike for u32 {
     fn to_mav_message<'b>(&self, ctx: &'b ReflectionContext) -> Result<&'b MavMessage, String> {
         ctx.id_msg_map
             .get(self)
-            .ok_or_else(|| format!("Message {} not found", self))
+            .ok_or_else(|| format!("Message {self} not found"))
     }
 }
 
@@ -62,7 +62,7 @@ impl MessageLike for &str {
             .iter()
             .find(|(_, m)| m.name == *self)
             .map(|(_, m)| m)
-            .ok_or_else(|| format!("Message {} not found", self))
+            .ok_or_else(|| format!("Message {self} not found"))
     }
 }
 
@@ -117,7 +117,7 @@ impl FieldLike for usize {
                     field: f,
                 })
             })
-            .ok_or_else(|| format!("Field {} not found in message {}", self, msg_id))
+            .ok_or_else(|| format!("Field {self} not found in message {msg_id}"))
     }
 }
 
@@ -140,6 +140,6 @@ impl FieldLike for &str {
                         field: f,
                     })
             })
-            .ok_or_else(|| format!("Field {} not found in message {}", self, msg_id))
+            .ok_or_else(|| format!("Field {self} not found in message {msg_id}"))
     }
 }

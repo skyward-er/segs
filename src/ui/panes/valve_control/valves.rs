@@ -150,9 +150,9 @@ impl<T, E> ParameterValue<T, E> {
 impl<T: Display, E: Display> Display for ParameterValue<T, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Valid(value) => write!(f, "{}", value),
+            Self::Valid(value) => write!(f, "{value}"),
             Self::Missing => write!(f, "MISSING"),
-            Self::Invalid(error) => write!(f, "INVALID: {}", error),
+            Self::Invalid(error) => write!(f, "INVALID: {error}"),
         }
     }
 }

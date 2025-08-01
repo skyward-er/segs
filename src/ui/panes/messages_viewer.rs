@@ -1,6 +1,5 @@
 use crate::mavlink::{TimedMessage, reflection::MAVLINK_PROFILE};
 use crate::ui::panes::{PaneBehavior, PaneResponse};
-use crate::ui::shortcuts::ShortcutHandler;
 use egui::{Response, ScrollArea, Sense, UiBuilder, Window};
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::mavlink::MessageData;
@@ -23,7 +22,7 @@ pub struct MessagesViewerPane {
 }
 
 impl PaneBehavior for MessagesViewerPane {
-    fn ui(&mut self, ui: &mut egui::Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut egui::Ui) -> PaneResponse {
         let mut pane_response = PaneResponse::default(); // Crea una risposta predefinita del pannello
 
         if self.settings_visible {

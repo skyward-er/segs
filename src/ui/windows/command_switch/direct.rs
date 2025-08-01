@@ -1,167 +1,56 @@
-use egui::{Button, DragValue, RichText, Sense, Ui};
-use jiff::{Unit, Zoned};
+use egui::{DragValue, Ui};
 use mavlink_bindgen::parser::MavType;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use skyward_mavlink::mavlink::Message;
+use tracing::warn;
 
 use crate::{
     error::ErrInstrument,
     mavlink::{
-        MavHeader, MavMessage, Message, TimedMessage,
-        reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible, MessageMap},
+        MavMessage,
+        reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible},
     },
-    ui::app::PaneResponse,
 };
 
-use super::PaneBehavior;
+use super::BaseCommand;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CommandPane {
-    message: Option<MessageMap>,
-    text: String,
-    text_size: f32,
-    system_id: u8,
-    show_only_tc: bool,
-
-    #[serde(skip)]
-    settings_visible: bool,
-    // TODO handle message responses
-    #[serde(skip)]
-    commands_to_send: Vec<(MavHeader, MavMessage)>,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DirectCommand {
+    pub base: BaseCommand,
 }
 
-impl Default for CommandPane {
-    fn default() -> Self {
-        Self {
-            message: None,
-            text: String::from("Customize"),
-            text_size: 16.0,
-            system_id: 1, // Default system ID
-            show_only_tc: true,
-            settings_visible: false,
-            commands_to_send: Vec::new(),
-        }
-    }
-}
-
-impl PartialEq for CommandPane {
-    fn eq(&self, other: &Self) -> bool {
-        self.message == other.message
-            && self.text == other.text
-            && self.text_size == other.text_size
-            && self.show_only_tc == other.show_only_tc
-    }
-}
-
-impl PaneBehavior for CommandPane {
-    #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
-        let mut response = PaneResponse::default();
-
-        let parent = ui
-            .scope(|ui| {
-                let btn_text = RichText::new(&self.text).size(self.text_size).strong();
-                let btn = Button::new(btn_text).sense(egui::Sense::click());
-
-                // Clever way to add padding to the button
-                ui.allocate_rect(ui.max_rect(), Sense::click());
-                let btn_rect = ui.max_rect().shrink(2.0);
-                let btn_res = ui.put(btn_rect, btn);
-
-                // open the menu on right click on button
-                btn_res.context_menu(|ui| command_menu(ui, self));
-                if btn_res.clicked() {
-                    info!("Command {} clicked", self.text);
-                    // send the message
-                    if let Some(message) = self.message.as_ref() {
-                        info!(
-                            "Sending {} message",
-                            MAVLINK_PROFILE
-                                .get_msg(message.message_id())
-                                .log_unwrap()
-                                .name
-                        );
-                        let mut map = message.clone();
-                        if let Some(tm) = map.get_mut_field("timestamp") {
-                            // set the timestamp to the current time
-                            *tm = Zoned::now()
-                                .round(Unit::Nanosecond)
-                                .log_unwrap()
-                                .timestamp()
-                                .as_nanosecond() as u64;
-                        }
-                        let header = MavHeader {
-                            system_id: self.system_id,
-                            ..Default::default()
-                        };
-                        let msg = MavMessage::from_map(map).log_unwrap();
-                        self.commands_to_send.push((header, msg));
-                    }
-                }
-            })
-            .response;
-
-        if parent.interact(egui::Sense::click_and_drag()).dragged() {
-            response.set_drag_started();
-        };
-
-        let mut window_visible = self.settings_visible;
-        egui::Window::new("Command Settings")
-            .id(ui.auto_id_with("command_settings"))
-            .auto_sized()
-            .collapsible(true)
-            .movable(true)
-            .open(&mut window_visible)
-            .show(ui.ctx(), |ui| command_settings(ui, self));
-        self.settings_visible = window_visible;
-
-        response
-    }
-
-    fn update(&mut self, _messages: &[&TimedMessage]) {}
-
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(None.into_iter())
-    }
-
-    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
-        self.commands_to_send.drain(..).collect()
-    }
-}
-
-fn command_menu(ui: &mut Ui, pane: &mut CommandPane) {
-    if ui.button("Settings…").clicked() {
-        pane.settings_visible = true;
-        ui.close_menu();
-    }
-}
-
-fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
-    ui.set_max_width(200.0);
+// FIXME: this function was duplicated from `src/ui/panes/command.rs`
+pub fn show_command_settings(ui: &mut Ui, command: &mut DirectCommand) {
+    let DirectCommand {
+        base:
+            BaseCommand {
+                name,
+                system_id,
+                message,
+                settings_window_visible: ui_visible,
+                show_only_tc,
+                ..
+            },
+    } = command;
+    // Command text
     ui.horizontal(|ui| {
-        ui.label("Text:");
-        ui.text_edit_singleline(&mut pane.text);
+        ui.label("Name:");
+        ui.text_edit_singleline(name);
     });
-    ui.horizontal(|ui| {
-        ui.label("Text Size:");
-        ui.add(egui::Slider::new(&mut pane.text_size, 11.0..=25.0));
-    });
-
-    ui.separator();
 
     // add a label for the system ID
     ui.horizontal(|ui| {
         let label = ui.label("System ID:");
         // add a drag value for the system ID
-        ui.add(DragValue::new(&mut pane.system_id).range(1..=255))
+        ui.add(DragValue::new(system_id).range(1..=255))
             .labelled_by(label.id);
     });
 
     // add a checkbox for filtering sendable messages
-    ui.checkbox(&mut pane.show_only_tc, "Show only TC messages");
+    ui.checkbox(show_only_tc, "Show only TC messages");
 
     // Create a combo box for selecting the message kind
-    let mut message_id = pane.message.as_ref().map(|m| m.message_id());
+    let mut message_id = message.as_ref().map(|m| m.message_id());
     let selected_text = message_id
         .and_then(|id| MAVLINK_PROFILE.get_msg(id))
         .map(|m| m.name.clone())
@@ -170,7 +59,7 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
         .selected_text(selected_text)
         .show_ui(ui, |ui| {
             let mut msgs = MAVLINK_PROFILE.get_sorted_msgs();
-            if pane.show_only_tc {
+            if *show_only_tc {
                 msgs.retain(|m| m.name.ends_with("_TC"));
             }
             for msg in msgs {
@@ -179,25 +68,24 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
         });
 
     // If the message id is changed, update the message
-    if pane
-        .message
+    if message
         .as_ref()
         .is_none_or(|m| Some(m.message_id()) != message_id)
     {
         if let Some(id) = message_id {
-            pane.message = Some(
+            *message = Some(
                 MavMessage::default_message_from_id(id)
                     .log_unwrap()
                     .as_map(),
             );
         } else {
-            pane.message = None;
+            *message = None;
         }
     }
 
     // For each field in the message, show a text box with the field name and value,
     // and update the MessageMap based on the content of these text fields.
-    if let Some(message_map) = pane.message.as_mut() {
+    if let Some(message_map) = message.as_mut() {
         let mut settable_fields = (0..message_map.field_map().len())
             .map(|f| {
                 f.to_mav_field(message_map.message_id(), &MAVLINK_PROFILE)
@@ -295,12 +183,17 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
                                         // TODO handle invalid char input (USER ERROR)
                                     }
                                 }
-                                MavType::Array(_, _) => warn!("Array types are not supported yet"), // TODO handle array types
+                                MavType::Array(_, _) => warn!("Array types are not supported yet"),
                             }
                         }
                     });
                 }
             });
         }
+    }
+
+    ui.separator();
+    if ui.button("⬅ Back").clicked() {
+        *ui_visible = false;
     }
 }

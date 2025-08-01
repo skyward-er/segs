@@ -76,7 +76,7 @@ impl SymbolBehavior for ValueDisplay {
             .and_then(|f| f.field().unit.as_deref())
             .unwrap_or("");
         let text = match self.last_value {
-            Some(value) => format!("{:.5} {}", value, unit),
+            Some(value) => format!("{value:.5} {unit}"),
             None => "N/A".to_string(),
         };
         let text_rect = painter.text(
@@ -155,7 +155,7 @@ fn subscription_window(ui: &mut Ui, msg_ids: &[u32], field: &mut Option<IndexedF
             }
         });
     // reset field if the message is changed
-    if msg_digest.has_changed(&current_msg_id) {
+    if msg_digest.has_changed(current_msg_id) {
         *field = None;
     }
 

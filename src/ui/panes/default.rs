@@ -7,7 +7,6 @@ use crate::{
     mavlink::TimedMessage,
     ui::{
         app::{PaneAction, PaneResponse},
-        shortcuts::ShortcutHandler,
         utils::{SizingMemo, vertically_centered},
     },
 };
@@ -28,7 +27,7 @@ impl PartialEq for DefaultPane {
 
 impl PaneBehavior for DefaultPane {
     #[profiling::function]
-    fn ui(&mut self, ui: &mut Ui, _shortcut_handler: &mut ShortcutHandler) -> PaneResponse {
+    fn ui(&mut self, ui: &mut Ui) -> PaneResponse {
         let mut response = PaneResponse::default();
 
         let parent = vertically_centered(ui, &mut self.centering_memo, |ui| {
