@@ -203,9 +203,9 @@ impl TryFrom<CommandKind> for ValveParameter {
     fn try_from(value: CommandKind) -> Result<Self, Self::Error> {
         match value {
             CommandKind::Wiggle => Err(()),
-            CommandKind::SetAtomicValveTiming(timing) => Ok(Self::AtomicValveTiming(
-                ParameterValue::Valid((Instant::now(), timing)),
-            )),
+            CommandKind::SetAtomicValveTiming(timing) => {
+                Ok(Self::AtomicValveTiming(ParameterValue::Valid(timing)))
+            }
             CommandKind::SetValveMaximumAperture(aperture) => {
                 Ok(Self::ValveMaximumAperture(ParameterValue::Valid(aperture)))
             }

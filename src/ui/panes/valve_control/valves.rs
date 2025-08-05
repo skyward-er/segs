@@ -2,7 +2,7 @@
 //!
 //! NOTE: We assume that no more than one entity will sent messages to control valves at a time.
 
-use std::{fmt::Display, time::Instant};
+use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -12,7 +12,7 @@ use crate::{error::ErrInstrument, mavlink::Servoslist};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValveStateManager {
-    timing_settings: Vec<(Valve, ParameterValue<(Instant, u32), u16>)>,
+    timing_settings: Vec<(Valve, ParameterValue<u32, u16>)>,
     aperture_settings: Vec<(Valve, ParameterValue<f32, u16>)>,
 }
 
@@ -52,7 +52,7 @@ impl ValveStateManager {
         }
     }
 
-    pub fn get_timing_for(&self, valve: Valve) -> ParameterValue<(Instant, u32), u16> {
+    pub fn get_timing_for(&self, valve: Valve) -> ParameterValue<u32, u16> {
         let (_, par) = self
             .timing_settings
             .iter()
@@ -101,6 +101,25 @@ impl From<Valve> for Servoslist {
     }
 }
 
+impl TryFrom<Servoslist> for Valve {
+    type Error = ();
+
+    fn try_from(value: Servoslist) -> Result<Self, Self::Error> {
+        match value {
+            Servoslist::OX_FILLING_VALVE => Ok(Valve::OxFilling),
+            Servoslist::OX_RELEASE_VALVE => Ok(Valve::OxRelease),
+            Servoslist::OX_VENTING_VALVE => Ok(Valve::OxVenting),
+            Servoslist::N2_FILLING_VALVE => Ok(Valve::N2Filling),
+            Servoslist::N2_RELEASE_VALVE => Ok(Valve::N2Release),
+            Servoslist::N2_QUENCHING_VALVE => Ok(Valve::N2Quenching),
+            Servoslist::N2_3WAY_VALVE => Ok(Valve::N23Way),
+            Servoslist::MAIN_VALVE => Ok(Valve::Main),
+            Servoslist::NITROGEN_VALVE => Ok(Valve::Nitrogen),
+            _ => Err(()),
+        }
+    }
+}
+
 impl From<Valve> for u8 {
     fn from(valve: Valve) -> u8 {
         Servoslist::from(valve) as u8
@@ -125,7 +144,7 @@ impl Display for Valve {
 
 #[derive(Clone, Debug, PartialEq, EnumIter)]
 pub enum ValveParameter {
-    AtomicValveTiming(ParameterValue<(Instant, u32), u16>),
+    AtomicValveTiming(ParameterValue<u32, u16>),
     ValveMaximumAperture(ParameterValue<f32, u16>),
 }
 

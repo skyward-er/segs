@@ -38,10 +38,7 @@ pub struct ValveControlView {
 
 impl ValveControlView {
     pub fn new(valve: Valve, valve_state: &ValveStateManager, id: Id) -> ValveControlView {
-        let timing_ms = valve_state
-            .get_timing_for(valve)
-            .map(|(_, v)| v)
-            .valid_or(100);
+        let timing_ms = valve_state.get_timing_for(valve).valid_or(100);
         let aperture_perc = valve_state.get_aperture_for(valve).valid_or(50.0);
         ValveControlView {
             valve,
@@ -448,7 +445,7 @@ impl ValveControlView {
                                     strip.cell(|ui| {
                                         let parameter = valve_state.get_timing_for(self.valve);
                                         let (label, fill_color) = match parameter {
-                                            ParameterValue::Valid((_, value)) => {
+                                            ParameterValue::Valid(value) => {
                                                 (format!("{value}ms"), valid_fill)
                                             }
                                             ParameterValue::Missing => {
