@@ -149,7 +149,7 @@ impl PaneBehavior for Plot2DPane {
                 zip(&self.settings.y_fields, &self.line_data)
             {
                 let legend_label = format!(
-                    "{} - {:.5}",
+                    "{}: {:.5}",
                     field.name(),
                     points.last().map(|l| l.y).unwrap_or_default()
                 );
