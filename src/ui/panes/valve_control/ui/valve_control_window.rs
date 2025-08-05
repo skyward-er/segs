@@ -381,8 +381,8 @@ impl ValveControlView {
                                                 let res = ui.add_sized(
                                                     Vec2::new(ui.available_width(), 0.0),
                                                     DragValue::new(&mut self.aperture_perc)
-                                                        .speed(0.5)
-                                                        .range(0.0..=100.0)
+                                                        .speed(1)
+                                                        .range(0..=100)
                                                         .fixed_decimals(0)
                                                         .update_while_editing(true)
                                                         .suffix("%"),
