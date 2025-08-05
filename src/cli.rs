@@ -89,7 +89,7 @@ impl clap::builder::TypedValueParser for EthernetValueParser {
         let Ok(send_port) = parts[2].parse::<u16>() else {
             err.insert(
                 ContextKind::SuggestedValue,
-                ContextValue::String("42069".to_string()),
+                ContextValue::String("42070".to_string()),
             );
             err.insert(
                 ContextKind::InvalidValue,
