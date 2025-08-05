@@ -345,18 +345,18 @@ impl ValveControlPane {
             let timing = self.valves_state.get_timing_for(valve);
             let aperture = self.valves_state.get_aperture_for(valve);
 
-            let timing_str: String = match timing {
+            let (timing_str, time_left_str): (String, String) = match timing {
                 valves::ParameterValue::Valid((receival_time, value)) => {
-                    let left_time = Duration::from_millis(value as u64) - receival_time.elapsed();
-                    if left_time.as_millis() > 0 {
-                        format!("{} [ms]", left_time.as_millis())
-                    } else {
-                        format!("{value} [ms]")
-                    }
+                    let left_time =
+                        Duration::from_millis(value as u64).saturating_sub(receival_time.elapsed());
+                    (
+                        format!("LEFT: {:.3} [s]", left_time.as_secs_f32()),
+                        format!("{value} [ms]"),
+                    )
                 }
-                valves::ParameterValue::Missing => "N/A".to_owned(),
+                valves::ParameterValue::Missing => ("N/A".to_owned(), "N/A".to_owned()),
                 valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR({err_id})")
+                    (format!("ERROR({err_id})"), format!("ERROR({err_id})"))
                 }
             };
             let aperture_str = match aperture {
@@ -415,7 +415,21 @@ impl ValveControlPane {
                         );
                         ui.allocate_ui(vec2(20., 10.), |ui| {
                             let layout_job =
-                                LayoutJob::single_section(timing_str.clone(), text_format);
+                                LayoutJob::single_section(timing_str.clone(), text_format.clone());
+                            let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                            Label::new(galley).selectable(false).ui(ui);
+                        });
+                    });
+                    ui.horizontal_top(|ui| {
+                        ui.add(
+                            Icon::Timing
+                                .as_image(ui.ctx().theme())
+                                .fit_to_exact_size(icon_size)
+                                .sense(Sense::hover()),
+                        );
+                        ui.allocate_ui(vec2(20., 10.), |ui| {
+                            let layout_job =
+                                LayoutJob::single_section(time_left_str.clone(), text_format);
                             let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
                             Label::new(galley).selectable(false).ui(ui);
                         });
@@ -452,11 +466,14 @@ impl ValveControlPane {
                         ui.vertical(|ui| {
                             valve_title_ui(ui);
                             ui.horizontal(|ui| {
-                                ShortcutCard::new(map_key_to_shortcut(shortcut_key))
-                                    .text_color(text_color)
-                                    .fill_color(btn_fill_color)
-                                    .text_size(20.)
-                                    .ui(ui);
+                                ui.vertical(|ui| {
+                                    ui.add_space(8.);
+                                    ShortcutCard::new(map_key_to_shortcut(shortcut_key))
+                                        .text_color(text_color)
+                                        .fill_color(btn_fill_color)
+                                        .text_size(23.)
+                                        .ui(ui);
+                                });
                                 labels_ui(ui);
                             });
                         });
