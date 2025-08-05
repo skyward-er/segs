@@ -38,7 +38,10 @@ pub struct ValveControlView {
 
 impl ValveControlView {
     pub fn new(valve: Valve, valve_state: &ValveStateManager, id: Id) -> ValveControlView {
-        let timing_ms = valve_state.get_timing_for(valve).valid_or(100);
+        let timing_ms = valve_state
+            .get_timing_for(valve)
+            .map(|(_, v)| v)
+            .valid_or(100);
         let aperture_perc = valve_state.get_aperture_for(valve).valid_or(50.0);
         ValveControlView {
             valve,
@@ -335,10 +338,10 @@ impl ValveControlView {
                                                 (format!("{}%", value * 100.), valid_fill)
                                             }
                                             ParameterValue::Missing => {
-                                                (parameter.to_string(), missing_fill)
+                                                ("MISSING".to_owned(), missing_fill)
                                             }
                                             ParameterValue::Invalid(_) => {
-                                                (parameter.to_string(), invalid_fill)
+                                                ("INVALID".to_owned(), invalid_fill)
                                             }
                                         };
                                         show_parameter_label(ui, &label, fill_color);
@@ -445,14 +448,14 @@ impl ValveControlView {
                                     strip.cell(|ui| {
                                         let parameter = valve_state.get_timing_for(self.valve);
                                         let (label, fill_color) = match parameter {
-                                            ParameterValue::Valid(value) => {
+                                            ParameterValue::Valid((_, value)) => {
                                                 (format!("{value}ms"), valid_fill)
                                             }
                                             ParameterValue::Missing => {
-                                                (parameter.to_string(), missing_fill)
+                                                ("MISSING".to_owned(), missing_fill)
                                             }
                                             ParameterValue::Invalid(_) => {
-                                                (parameter.to_string(), invalid_fill)
+                                                ("INVALID".to_owned(), invalid_fill)
                                             }
                                         };
                                         show_parameter_label(ui, &label, fill_color);

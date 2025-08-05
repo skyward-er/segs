@@ -346,8 +346,13 @@ impl ValveControlPane {
             let aperture = self.valves_state.get_aperture_for(valve);
 
             let timing_str: String = match timing {
-                valves::ParameterValue::Valid(value) => {
-                    format!("{value} [ms]")
+                valves::ParameterValue::Valid((receival_time, value)) => {
+                    let left_time = Duration::from_millis(value as u64) - receival_time.elapsed();
+                    if left_time.as_millis() > 0 {
+                        format!("{} [ms]", left_time.as_millis())
+                    } else {
+                        format!("{value} [ms]")
+                    }
                 }
                 valves::ParameterValue::Missing => "N/A".to_owned(),
                 valves::ParameterValue::Invalid(err_id) => {
@@ -366,7 +371,7 @@ impl ValveControlPane {
             let text_color = ui.visuals().text_color();
 
             let valve_title_ui = |ui: &mut Ui| {
-                ui.set_max_width(100.);
+                ui.set_max_width(120.);
                 Label::new(
                     RichText::new(valve_str.to_ascii_uppercase())
                         .color(text_color)

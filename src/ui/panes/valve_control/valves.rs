@@ -2,7 +2,7 @@
 //!
 //! NOTE: We assume that no more than one entity will sent messages to control valves at a time.
 
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -12,7 +12,7 @@ use crate::{error::ErrInstrument, mavlink::Servoslist};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValveStateManager {
-    timing_settings: Vec<(Valve, ParameterValue<u32, u16>)>,
+    timing_settings: Vec<(Valve, ParameterValue<(Instant, u32), u16>)>,
     aperture_settings: Vec<(Valve, ParameterValue<f32, u16>)>,
 }
 
@@ -52,7 +52,7 @@ impl ValveStateManager {
         }
     }
 
-    pub fn get_timing_for(&self, valve: Valve) -> ParameterValue<u32, u16> {
+    pub fn get_timing_for(&self, valve: Valve) -> ParameterValue<(Instant, u32), u16> {
         let (_, par) = self
             .timing_settings
             .iter()
@@ -125,7 +125,7 @@ impl Display for Valve {
 
 #[derive(Clone, Debug, PartialEq, EnumIter)]
 pub enum ValveParameter {
-    AtomicValveTiming(ParameterValue<u32, u16>),
+    AtomicValveTiming(ParameterValue<(Instant, u32), u16>),
     ValveMaximumAperture(ParameterValue<f32, u16>),
 }
 
@@ -138,21 +138,22 @@ pub enum ParameterValue<T, E> {
 }
 
 impl<T, E> ParameterValue<T, E> {
+    pub fn map<U, F>(self, f: F) -> ParameterValue<U, E>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::Valid(value) => ParameterValue::Valid(f(value)),
+            Self::Missing => ParameterValue::Missing,
+            Self::Invalid(error) => ParameterValue::Invalid(error),
+        }
+    }
+
     pub fn valid_or(self, default: T) -> T {
         match self {
             Self::Valid(value) => value,
             Self::Missing => default,
             Self::Invalid(_) => default,
-        }
-    }
-}
-
-impl<T: Display, E: Display> Display for ParameterValue<T, E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Valid(value) => write!(f, "{value}"),
-            Self::Missing => write!(f, "MISSING"),
-            Self::Invalid(error) => write!(f, "INVALID: {error}"),
         }
     }
 }
