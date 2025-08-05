@@ -20,6 +20,7 @@ use super::{
 };
 
 const WIGGLE_KEY: Key = Key::Minus;
+const REFRESH_KEY: Key = Key::Num3;
 /// Key used to focus on the aperture field
 const FOCUS_APERTURE_KEY: Key = Key::Num1;
 /// Key used to focus on the timing field
@@ -38,8 +39,8 @@ pub struct ValveControlView {
 
 impl ValveControlView {
     pub fn new(valve: Valve, valve_state: &ValveStateManager, id: Id) -> ValveControlView {
-        let timing_ms = valve_state.get_timing_for(valve).valid_or(100);
-        let aperture_perc = valve_state.get_aperture_for(valve).valid_or(50.0);
+        let timing_ms = valve_state.get_timing_for(valve).valid_or(1000);
+        let aperture_perc = valve_state.get_aperture_for(valve).valid_or(1.0) * 100.;
         ValveControlView {
             valve,
             state: ValveViewState::Open,
@@ -247,6 +248,57 @@ impl ValveControlView {
                 }
             }
 
+            // wiggle button with shortcut
+            fn refresh_btn(ui: &mut Ui, action: &mut Option<WindowAction>) {
+                let res = ui
+                    .scope_builder(
+                        UiBuilder::new().id_salt(REFRESH_KEY).sense(Sense::click()),
+                        |ui| {
+                            let mut visuals = *ui.style().interact(&ui.response());
+
+                            // override the visuals if the button is pressed
+                            if let Some(WindowAction::Refresh) = action.as_ref() {
+                                visuals = ui.visuals().widgets.active;
+                            }
+
+                            let shortcut_card = shortcut_ui(ui, &REFRESH_KEY, &ui.response());
+
+                            Frame::canvas(ui.style())
+                                .inner_margin(Margin::symmetric(4, 2))
+                                .outer_margin(0)
+                                .corner_radius(ui.visuals().noninteractive().corner_radius)
+                                .fill(visuals.bg_fill)
+                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .show(ui, |ui| {
+                                    ui.set_height(ui.available_height());
+                                    ui.horizontal_centered(|ui| {
+                                        ui.set_height(21.);
+                                        ui.add_space(1.);
+                                        Label::new(
+                                            RichText::new("REFRESH")
+                                                .size(16.)
+                                                .color(visuals.text_color()),
+                                        )
+                                        .selectable(false)
+                                        .ui(ui);
+                                        ui.add(
+                                            Icon::Wiggle
+                                                .as_image(ui.ctx().theme())
+                                                .fit_to_exact_size(Vec2::splat(22.)),
+                                        );
+                                        shortcut_card.ui(ui);
+                                    });
+                                });
+                        },
+                    )
+                    .response;
+
+                if res.clicked() {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::Refresh);
+                }
+            }
+
             fn show_parameter_label(ui: &mut Ui, label: &str, fill_color: Color32) {
                 Frame::canvas(ui.style())
                     .outer_margin(0)
@@ -268,9 +320,6 @@ impl ValveControlView {
                             .size(16.),
                     )
                     .ui(ui);
-                    Label::new(RichText::new("VALVE: ").size(16.))
-                        .selectable(false)
-                        .ui(ui);
                 });
             };
 
@@ -284,7 +333,7 @@ impl ValveControlView {
                         strip.empty();
                         strip.strip(|builder| {
                             builder
-                                .size(Size::exact(252.))
+                                .size(Size::exact(110.))
                                 .size(Size::initial(50.))
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
@@ -299,6 +348,7 @@ impl ValveControlView {
                                             });
                                     });
                                     strip.cell(|ui| wiggle_btn(ui, action));
+                                    strip.cell(|ui| refresh_btn(ui, action));
                                 });
                         });
                         strip.strip(|builder| {
@@ -335,10 +385,10 @@ impl ValveControlView {
                                                 (format!("{}%", value * 100.), valid_fill)
                                             }
                                             ParameterValue::Missing => {
-                                                (parameter.to_string(), missing_fill)
+                                                ("MISSING".to_owned(), missing_fill)
                                             }
                                             ParameterValue::Invalid(_) => {
-                                                (parameter.to_string(), invalid_fill)
+                                                ("INVALID".to_owned(), invalid_fill)
                                             }
                                         };
                                         show_parameter_label(ui, &label, fill_color);
@@ -449,10 +499,10 @@ impl ValveControlView {
                                                 (format!("{value}ms"), valid_fill)
                                             }
                                             ParameterValue::Missing => {
-                                                (parameter.to_string(), missing_fill)
+                                                ("MISSING".to_owned(), missing_fill)
                                             }
                                             ParameterValue::Invalid(_) => {
-                                                (parameter.to_string(), invalid_fill)
+                                                ("INVALID".to_owned(), invalid_fill)
                                             }
                                         };
                                         show_parameter_label(ui, &label, fill_color);
@@ -555,6 +605,10 @@ impl ValveControlView {
                 info!("Issued command to Wiggle valve: {:?}", self.valve);
                 Some(Command::wiggle(self.valve))
             }
+            Some(WindowAction::Refresh) => {
+                info!("Issued command to Refresh valve: {:?}", self.valve);
+                Some(Command::refresh(self.valve))
+            }
             Some(WindowAction::SetTiming) => {
                 info!(
                     "Issued command to set timing for valve {:?} to {} ms",
@@ -609,6 +663,7 @@ impl ValveControlView {
                     ValveViewState::Open => {
                         // A window is open, so we can map the keys to control the valve
                         actions.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
+                        actions.push((Modifiers::NONE, REFRESH_KEY, WindowAction::Refresh));
                         actions.push((
                             #[cfg(not(feature = "conrig"))]
                             Modifiers::ALT,
@@ -661,6 +716,7 @@ enum WindowAction {
     LooseFocus,
     // commands
     Wiggle,
+    Refresh,
     SetTiming,
     SetAperture,
     // UI focus

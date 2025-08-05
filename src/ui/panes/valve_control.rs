@@ -17,7 +17,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
     mavlink::{MavHeader, MessageData},
-    orion::{ACK_TM_DATA, NACK_TM_DATA, WACK_TM_DATA},
+    orion::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -26,6 +26,7 @@ use crate::{
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
+        panes::valve_control::valves::ParameterValue,
         shortcuts::{ShortcutHandler, ShortcutHandlerExt},
         widgets::ShortcutCard,
     },
@@ -84,6 +85,9 @@ pub struct ValveControlPane {
 
     // UI SETTINGS
     valve_key_map: HashMap<Valve, Key>,
+    /// Map storing the instant the valve will close based on the last ACK received
+    #[serde(skip)]
+    valve_times_to_close: HashMap<Valve, Instant>,
     #[serde(skip)]
     is_settings_window_open: bool,
     #[serde(skip)]
@@ -103,6 +107,7 @@ impl Default for ValveControlPane {
             auto_refresh: None,
             manual_refresh: false,
             last_refresh: None,
+            valve_times_to_close: HashMap::new(),
             is_settings_window_open: false,
             valve_key_map,
             valve_view: None,
@@ -180,7 +185,7 @@ impl PaneBehavior for ValveControlPane {
 
     #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        let mut subscriptions = vec![];
+        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID];
         if self.needs_refresh() {
             // TODO
             // subscriptions.push();
@@ -188,9 +193,10 @@ impl PaneBehavior for ValveControlPane {
 
         // Subscribe to ACK, NACK, WACK messages if any command is waiting for a response
         if self.commands.iter().any(CommandSM::is_waiting_for_response) {
-            subscriptions.push(ACK_TM_DATA::ID);
-            subscriptions.push(NACK_TM_DATA::ID);
-            subscriptions.push(WACK_TM_DATA::ID);
+            let ids = [ACK_TM_DATA::ID, NACK_TM_DATA::ID, WACK_TM_DATA::ID];
+            for &id in &ids {
+                subscriptions.push(id);
+            }
         }
 
         Box::new(subscriptions.into_iter())
@@ -204,9 +210,47 @@ impl PaneBehavior for ValveControlPane {
 
         // Capture any ACK/NACK/WACK messages and update the valve state
         for message in messages {
-            for cmd in self.commands.iter_mut() {
-                // intercept all ACK/NACK/WACK messages
-                cmd.capture_response(&message.message);
+            match &message.message {
+                MavMessage::VALVE_INFO_TM(valve_info) => {
+                    if let Ok(valve) = Valve::try_from(valve_info.servo_id) {
+                        self.valves_state.set_timing_for(valve, valve_info.timing);
+                        self.valves_state
+                            .set_aperture_for(valve, valve_info.aperture as f32 / 100.);
+                        if valve_info.state == 1 {
+                            let closing_instant = Instant::now()
+                                + Duration::from_millis(valve_info.time_to_close as u64);
+                            self.valve_times_to_close.insert(valve, closing_instant);
+                        } else {
+                            self.valve_times_to_close.remove(&valve);
+                        }
+                    }
+                }
+                MavMessage::GSE_TM(gse_data) => {
+                    macro_rules! remove_valve_if_closed {
+                        ($field:ident, $valve:expr) => {
+                            if gse_data.$field == 0 {
+                                self.valve_times_to_close.remove(&$valve);
+                            }
+                        };
+                    }
+
+                    remove_valve_if_closed!(main_valve_state, Valve::Main);
+                    remove_valve_if_closed!(nitrogen_valve_state, Valve::Nitrogen);
+                    remove_valve_if_closed!(n2_3way_valve_state, Valve::N23Way);
+                    remove_valve_if_closed!(n2_filling_valve_state, Valve::N2Filling);
+                    remove_valve_if_closed!(n2_quenching_valve_state, Valve::N2Quenching);
+                    remove_valve_if_closed!(n2_quenching_valve_state, Valve::N2Release);
+                    remove_valve_if_closed!(ox_filling_valve_state, Valve::OxFilling);
+                    remove_valve_if_closed!(ox_release_valve_state, Valve::OxRelease);
+                    remove_valve_if_closed!(ox_venting_valve_state, Valve::OxVenting);
+                }
+                MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
+                    for cmd in self.commands.iter_mut() {
+                        // intercept all ACK/NACK/WACK messages
+                        cmd.capture_response(&message.message);
+                    }
+                }
+                _ => (),
             }
         }
 
@@ -345,28 +389,33 @@ impl ValveControlPane {
             let timing = self.valves_state.get_timing_for(valve);
             let aperture = self.valves_state.get_aperture_for(valve);
 
+            let closing_time_left = self
+                .valve_times_to_close
+                .get(&valve)
+                .map(|i| i.duration_since(Instant::now()));
+            let time_left_str = if let Some(closing_time_left) = closing_time_left {
+                format!("{:.3} [s]", closing_time_left.as_secs_f32())
+            } else {
+                "N/A".to_owned()
+            };
             let timing_str: String = match timing {
-                valves::ParameterValue::Valid(value) => {
-                    format!("{value} [ms]")
-                }
-                valves::ParameterValue::Missing => "N/A".to_owned(),
-                valves::ParameterValue::Invalid(err_id) => {
-                    format!("ERROR({err_id})")
-                }
+                ParameterValue::Valid(value) => format!("{value} [ms]"),
+                ParameterValue::Missing => "N/A".to_owned(),
+                ParameterValue::Invalid(err_id) => format!("ERROR({err_id})"),
             };
             let aperture_str = match aperture {
-                valves::ParameterValue::Valid(value) => {
-                    format!("{:.2}%", value * 100.)
+                ParameterValue::Valid(value) => {
+                    format!("{:.0}%", value * 100.)
                 }
-                valves::ParameterValue::Missing => "N/A".to_owned(),
-                valves::ParameterValue::Invalid(err_id) => {
+                ParameterValue::Missing => "N/A".to_owned(),
+                ParameterValue::Invalid(err_id) => {
                     format!("ERROR({err_id})")
                 }
             };
             let text_color = ui.visuals().text_color();
 
             let valve_title_ui = |ui: &mut Ui| {
-                ui.set_max_width(100.);
+                ui.set_max_width(120.);
                 Label::new(
                     RichText::new(valve_str.to_ascii_uppercase())
                         .color(text_color)
@@ -391,15 +440,19 @@ impl ValveControlPane {
                     ui.set_min_width(80.);
                     ui.horizontal_top(|ui| {
                         ui.add(
-                            Icon::Aperture
+                            Icon::Timing
                                 .as_image(ui.ctx().theme())
                                 .fit_to_exact_size(icon_size)
                                 .sense(Sense::hover()),
                         );
-                        let layout_job =
-                            LayoutJob::single_section(aperture_str.clone(), text_format.clone());
-                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
-                        Label::new(galley).selectable(false).ui(ui);
+                        ui.allocate_ui(vec2(20., 10.), |ui| {
+                            let layout_job = LayoutJob::single_section(
+                                time_left_str.clone(),
+                                text_format.clone(),
+                            );
+                            let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                            Label::new(galley).selectable(false).ui(ui);
+                        });
                     });
                     ui.horizontal_top(|ui| {
                         ui.add(
@@ -410,10 +463,22 @@ impl ValveControlPane {
                         );
                         ui.allocate_ui(vec2(20., 10.), |ui| {
                             let layout_job =
-                                LayoutJob::single_section(timing_str.clone(), text_format);
+                                LayoutJob::single_section(timing_str.clone(), text_format.clone());
                             let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
                             Label::new(galley).selectable(false).ui(ui);
                         });
+                    });
+                    ui.horizontal_top(|ui| {
+                        ui.add(
+                            Icon::Aperture
+                                .as_image(ui.ctx().theme())
+                                .fit_to_exact_size(icon_size)
+                                .sense(Sense::hover()),
+                        );
+                        let layout_job =
+                            LayoutJob::single_section(aperture_str.clone(), text_format);
+                        let galley = ui.fonts(|fonts| fonts.layout_job(layout_job));
+                        Label::new(galley).selectable(false).ui(ui);
                     });
                 });
             };
@@ -447,11 +512,14 @@ impl ValveControlPane {
                         ui.vertical(|ui| {
                             valve_title_ui(ui);
                             ui.horizontal(|ui| {
-                                ShortcutCard::new(map_key_to_shortcut(shortcut_key))
-                                    .text_color(text_color)
-                                    .fill_color(btn_fill_color)
-                                    .text_size(20.)
-                                    .ui(ui);
+                                ui.vertical(|ui| {
+                                    ui.add_space(8.);
+                                    ShortcutCard::new(map_key_to_shortcut(shortcut_key))
+                                        .text_color(text_color)
+                                        .fill_color(btn_fill_color)
+                                        .text_size(23.)
+                                        .ui(ui);
+                                });
                                 labels_ui(ui);
                             });
                         });

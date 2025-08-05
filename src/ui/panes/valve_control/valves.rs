@@ -69,6 +69,20 @@ impl ValveStateManager {
             .log_unwrap();
         par.clone()
     }
+
+    pub fn set_timing_for(&mut self, valve: Valve, value: u32) {
+        self.set_parameter_of(
+            valve,
+            ValveParameter::AtomicValveTiming(ParameterValue::Valid(value)),
+        );
+    }
+
+    pub fn set_aperture_for(&mut self, valve: Valve, value: f32) {
+        self.set_parameter_of(
+            valve,
+            ValveParameter::ValveMaximumAperture(ParameterValue::Valid(value)),
+        );
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -97,6 +111,25 @@ impl From<Valve> for Servoslist {
             Valve::N23Way => Servoslist::N2_3WAY_VALVE,
             Valve::Main => Servoslist::MAIN_VALVE,
             Valve::Nitrogen => Servoslist::NITROGEN_VALVE,
+        }
+    }
+}
+
+impl TryFrom<Servoslist> for Valve {
+    type Error = ();
+
+    fn try_from(value: Servoslist) -> Result<Self, Self::Error> {
+        match value {
+            Servoslist::OX_FILLING_VALVE => Ok(Valve::OxFilling),
+            Servoslist::OX_RELEASE_VALVE => Ok(Valve::OxRelease),
+            Servoslist::OX_VENTING_VALVE => Ok(Valve::OxVenting),
+            Servoslist::N2_FILLING_VALVE => Ok(Valve::N2Filling),
+            Servoslist::N2_RELEASE_VALVE => Ok(Valve::N2Release),
+            Servoslist::N2_QUENCHING_VALVE => Ok(Valve::N2Quenching),
+            Servoslist::N2_3WAY_VALVE => Ok(Valve::N23Way),
+            Servoslist::MAIN_VALVE => Ok(Valve::Main),
+            Servoslist::NITROGEN_VALVE => Ok(Valve::Nitrogen),
+            _ => Err(()),
         }
     }
 }
@@ -138,21 +171,22 @@ pub enum ParameterValue<T, E> {
 }
 
 impl<T, E> ParameterValue<T, E> {
+    pub fn map<U, F>(self, f: F) -> ParameterValue<U, E>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::Valid(value) => ParameterValue::Valid(f(value)),
+            Self::Missing => ParameterValue::Missing,
+            Self::Invalid(error) => ParameterValue::Invalid(error),
+        }
+    }
+
     pub fn valid_or(self, default: T) -> T {
         match self {
             Self::Valid(value) => value,
             Self::Missing => default,
             Self::Invalid(_) => default,
-        }
-    }
-}
-
-impl<T: Display, E: Display> Display for ParameterValue<T, E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Valid(value) => write!(f, "{value}"),
-            Self::Missing => write!(f, "MISSING"),
-            Self::Invalid(error) => write!(f, "INVALID: {error}"),
         }
     }
 }
