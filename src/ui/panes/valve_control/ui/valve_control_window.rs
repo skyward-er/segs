@@ -663,6 +663,7 @@ impl ValveControlView {
                     ValveViewState::Open => {
                         // A window is open, so we can map the keys to control the valve
                         actions.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
+                        actions.push((Modifiers::NONE, REFRESH_KEY, WindowAction::Refresh));
                         actions.push((
                             #[cfg(not(feature = "conrig"))]
                             Modifiers::ALT,
