@@ -1,10 +1,17 @@
-use crate::mavlink::{TimedMessage, reflection::MAVLINK_PROFILE};
-use crate::ui::panes::{PaneBehavior, PaneResponse};
-use egui::{Response, ScrollArea, Sense, UiBuilder, Window};
-use serde::{Deserialize, Serialize};
-use skyward_mavlink::mavlink::MessageData;
-use skyward_mavlink::orion::ROCKET_FLIGHT_TM_DATA;
 use std::collections::{HashMap, HashSet};
+
+use egui::{Response, ScrollArea, Sense, UiBuilder, Window};
+use mavlink_bindgen::parser::MavType;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    error::ErrInstrument,
+    mavlink::{
+        MavMessage, MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage,
+        reflection::{IndexedField, MAVLINK_PROFILE},
+    },
+    ui::panes::{PaneBehavior, PaneResponse},
+};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct MessagesViewerPane {
@@ -54,7 +61,7 @@ impl PaneBehavior for MessagesViewerPane {
                         ScrollArea::both()
                             .auto_shrink([false, true])
                             .max_width(300.0)
-                            .max_height(100.0)
+                            .max_height(300.0)
                             .show(ui, |ui| {
                                 let mut select_all = false;
                                 let mut deselect_all = false;
@@ -101,34 +108,50 @@ impl PaneBehavior for MessagesViewerPane {
                 });
         }
 
-        let res = ui
-            .scope_builder(UiBuilder::new().sense(Sense::click_and_drag()), |ui| {
-                egui::Grid::new("message_viewer").show(ui, |ui| {
-                    if let Some(selected_msg) = &self.selected_message {
-                        if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
-                            for field in fields {
-                                // Usa field come &str per il controllo
-                                if self.selected_fields.contains(&field.id()) {
-                                    let value = self
-                                        .field_map
-                                        .get(&field.id())
-                                        .and_then(|v| v.as_deref())
-                                        .unwrap_or("N/A");
+        let max_rect = ui.max_rect().shrink(8.);
+        let res = ui.scope_builder(
+            UiBuilder::new()
+                .max_rect(max_rect)
+                .sense(Sense::click_and_drag()),
+            |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        ui.scope_builder(UiBuilder::new().sense(Sense::click()), |ui| {
+                            egui::Grid::new("message_viewer").show(ui, |ui| {
+                                if let Some(selected_msg) = &self.selected_message {
+                                    if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg)
+                                    {
+                                        for field in fields {
+                                            // Usa field come &str per il controllo
+                                            if self.selected_fields.contains(&field.id()) {
+                                                let value = self
+                                                    .field_map
+                                                    .get(&field.id())
+                                                    .and_then(|v| v.as_deref())
+                                                    .unwrap_or("N/A");
 
-                                    ui.label(field.field().name.clone());
-                                    ui.label(value);
-                                    ui.end_row();
+                                                ui.label(field.field().name.clone());
+                                                ui.label(value);
+                                                ui.end_row();
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    ui.label("No message selected");
                                 }
-                            }
-                        }
-                    } else {
-                        ui.label("No message selected");
-                    }
-                });
-                // FIll the remaining space
-                ui.allocate_space(ui.available_size());
-            })
-            .response;
+                            });
+
+                            // FIll the remaining space
+                            ui.allocate_space(ui.available_size());
+                        })
+                        .response
+                    })
+                    .inner
+            },
+        );
+
+        let res = res.inner.union(res.response);
 
         // Show the menu when the user right-clicks the pane
         res.context_menu(|ui| {
@@ -152,9 +175,8 @@ impl PaneBehavior for MessagesViewerPane {
                 if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg) {
                     for field in fields {
                         if self.selected_fields.contains(&field.id()) {
-                            if let Ok(value) = field.extract_as_f64(&msg.message) {
-                                self.field_map.insert(field.id(), Some(value.to_string()));
-                            }
+                            let value = field.format(&msg.message);
+                            self.field_map.insert(field.id(), Some(value));
                         }
                     }
                 }
@@ -168,5 +190,30 @@ impl PaneBehavior for MessagesViewerPane {
 
     fn should_send_message_history(&self) -> bool {
         false
+    }
+}
+
+trait MessageViewerFormatter {
+    fn format(&self, msg: &MavMessage) -> String;
+}
+
+impl MessageViewerFormatter for IndexedField {
+    fn format(&self, msg: &MavMessage) -> String {
+        match &self.field().mavtype {
+            MavType::UInt8MavlinkVersion | MavType::UInt8 => {
+                self.extract_as_u8(msg).log_unwrap().to_string()
+            }
+            MavType::UInt16 => self.extract_as_u16(msg).log_unwrap().to_string(),
+            MavType::UInt32 => self.extract_as_u32(msg).log_unwrap().to_string(),
+            MavType::UInt64 => self.extract_as_u64(msg).log_unwrap().to_string(),
+            MavType::Int8 => self.extract_as_i8(msg).log_unwrap().to_string(),
+            MavType::Int16 => self.extract_as_i16(msg).log_unwrap().to_string(),
+            MavType::Int32 => self.extract_as_i32(msg).log_unwrap().to_string(),
+            MavType::Int64 => self.extract_as_i64(msg).log_unwrap().to_string(),
+            MavType::Char => self.extract_as_char(msg).log_unwrap().to_string(),
+            MavType::Float => format!("{:.5}", self.extract_as_f32(msg).log_unwrap()),
+            MavType::Double => format!("{:.5}", self.extract_as_f64(msg).log_unwrap()),
+            MavType::Array(_, _) => self.extract_as_string(msg).log_unwrap(),
+        }
     }
 }
