@@ -67,7 +67,7 @@ impl clap::builder::TypedValueParser for EthernetValueParser {
         let Ok(ip_address) = parts[0].parse::<std::net::IpAddr>() else {
             err.insert(
                 ContextKind::SuggestedValue,
-                ContextValue::String("255.255.255.255".to_string()),
+                ContextValue::String("0.0.0.0".to_string()),
             );
             err.insert(
                 ContextKind::InvalidValue,

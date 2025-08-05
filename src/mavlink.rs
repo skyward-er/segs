@@ -15,7 +15,8 @@ pub use skyward_mavlink::{
 };
 
 /// Default port for the Ethernet connection
-pub const DEFAULT_ETHERNET_PORT: u16 = 42069;
+pub const DEFAULT_RCV_ETHERNET_PORT: u16 = 42069;
+pub const DEFAULT_SEND_ETHERNET_PORT: u16 = 42070;
 
 /// A wrapper around the `MavMessage` struct, adding a received time field.
 #[derive(Debug, Clone)]

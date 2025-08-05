@@ -21,7 +21,7 @@ use super::{
     sealed::{Connectable, MessageTransceiver},
 };
 
-pub const DEFAULT_ETHERNET_BROADCAST_IP: IpAddr = IpAddr::V4(Ipv4Addr::from_bits(0xFFFFFFFF));
+pub const DEFAULT_ETHERNET_BROADCAST_IP: IpAddr = IpAddr::V4(Ipv4Addr::from_bits(0x00000000));
 
 /// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]

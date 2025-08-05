@@ -12,7 +12,7 @@ use crate::{
         },
     },
     error::ErrInstrument,
-    mavlink::DEFAULT_ETHERNET_PORT,
+    mavlink::{DEFAULT_RCV_ETHERNET_PORT, DEFAULT_SEND_ETHERNET_PORT},
     message_broker::{ConnectionConfig, MessageBroker},
 };
 
@@ -95,7 +95,7 @@ impl ConnectionsWindow {
 
                     // Create a TextEdit for the IP address input
                     let mut textedit = egui::TextEdit::singleline(&mut ip_str)
-                        .hint_text("e.g. 255.255.255.255")
+                        .hint_text("e.g. 0.0.0.0")
                         .desired_width(100.0);
                     if !valid_parse {
                         textedit = textedit.text_color(ui.style().visuals.error_fg_color);
@@ -223,8 +223,8 @@ pub enum ConnectionSetting {
 fn default_ethernet() -> EthernetConfiguration {
     EthernetConfiguration {
         ip_address: DEFAULT_ETHERNET_BROADCAST_IP,
-        send_port: DEFAULT_ETHERNET_PORT,
-        receive_port: DEFAULT_ETHERNET_PORT,
+        send_port: DEFAULT_SEND_ETHERNET_PORT,
+        receive_port: DEFAULT_RCV_ETHERNET_PORT,
     }
 }
 
