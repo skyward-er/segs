@@ -38,8 +38,8 @@ pub struct ValveControlView {
 
 impl ValveControlView {
     pub fn new(valve: Valve, valve_state: &ValveStateManager, id: Id) -> ValveControlView {
-        let timing_ms = valve_state.get_timing_for(valve).valid_or(100);
-        let aperture_perc = valve_state.get_aperture_for(valve).valid_or(50.0);
+        let timing_ms = valve_state.get_timing_for(valve).valid_or(1000);
+        let aperture_perc = valve_state.get_aperture_for(valve).valid_or(1.0) * 100.;
         ValveControlView {
             valve,
             state: ValveViewState::Open,

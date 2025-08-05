@@ -69,6 +69,20 @@ impl ValveStateManager {
             .log_unwrap();
         par.clone()
     }
+
+    pub fn set_timing_for(&mut self, valve: Valve, value: u32) {
+        self.set_parameter_of(
+            valve,
+            ValveParameter::AtomicValveTiming(ParameterValue::Valid(value)),
+        );
+    }
+
+    pub fn set_aperture_for(&mut self, valve: Valve, value: f32) {
+        self.set_parameter_of(
+            valve,
+            ValveParameter::ValveMaximumAperture(ParameterValue::Valid(value)),
+        );
+    }
 }
 
 #[allow(non_camel_case_types)]

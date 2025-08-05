@@ -26,6 +26,7 @@ use crate::{
     mavlink::{MavMessage, TimedMessage},
     ui::{
         app::PaneResponse,
+        panes::valve_control::valves::ParameterValue,
         shortcuts::{ShortcutHandler, ShortcutHandlerExt},
         widgets::ShortcutCard,
     },
@@ -184,7 +185,7 @@ impl PaneBehavior for ValveControlPane {
 
     #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        let mut subscriptions = vec![];
+        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID];
         if self.needs_refresh() {
             // TODO
             // subscriptions.push();
@@ -192,13 +193,7 @@ impl PaneBehavior for ValveControlPane {
 
         // Subscribe to ACK, NACK, WACK messages if any command is waiting for a response
         if self.commands.iter().any(CommandSM::is_waiting_for_response) {
-            let ids = [
-                ACK_TM_DATA::ID,
-                NACK_TM_DATA::ID,
-                WACK_TM_DATA::ID,
-                VALVE_INFO_TM_DATA::ID,
-                GSE_TM_DATA::ID,
-            ];
+            let ids = [ACK_TM_DATA::ID, NACK_TM_DATA::ID, WACK_TM_DATA::ID];
             for &id in &ids {
                 subscriptions.push(id);
             }
@@ -218,6 +213,9 @@ impl PaneBehavior for ValveControlPane {
             match &message.message {
                 MavMessage::VALVE_INFO_TM(valve_info) => {
                     if let Ok(valve) = Valve::try_from(valve_info.servo_id) {
+                        self.valves_state.set_timing_for(valve, valve_info.timing);
+                        self.valves_state
+                            .set_aperture_for(valve, valve_info.aperture as f32 / 100.);
                         if valve_info.state == 1 {
                             let closing_instant = Instant::now()
                                 + Duration::from_millis(valve_info.time_to_close as u64);
@@ -401,16 +399,16 @@ impl ValveControlPane {
                 "N/A".to_owned()
             };
             let timing_str: String = match timing {
-                valves::ParameterValue::Valid(value) => format!("{value} [ms]"),
-                valves::ParameterValue::Missing => "N/A".to_owned(),
-                valves::ParameterValue::Invalid(err_id) => format!("ERROR({err_id})"),
+                ParameterValue::Valid(value) => format!("{value} [ms]"),
+                ParameterValue::Missing => "N/A".to_owned(),
+                ParameterValue::Invalid(err_id) => format!("ERROR({err_id})"),
             };
             let aperture_str = match aperture {
-                valves::ParameterValue::Valid(value) => {
-                    format!("{:.2}%", value * 100.)
+                ParameterValue::Valid(value) => {
+                    format!("{:.0}%", value * 100.)
                 }
-                valves::ParameterValue::Missing => "N/A".to_owned(),
-                valves::ParameterValue::Invalid(err_id) => {
+                ParameterValue::Missing => "N/A".to_owned(),
+                ParameterValue::Invalid(err_id) => {
                     format!("ERROR({err_id})")
                 }
             };
