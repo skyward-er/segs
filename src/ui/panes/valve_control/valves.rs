@@ -110,13 +110,13 @@ impl From<Valve> for u8 {
 impl Display for Valve {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Valve::OxFilling => write!(f, "Oxidizer Filling"),
-            Valve::OxRelease => write!(f, "Oxidizer Release"),
-            Valve::OxVenting => write!(f, "Oxidizer Venting"),
-            Valve::N2Filling => write!(f, "Nitrogen Filling"),
-            Valve::N2Release => write!(f, "Nitrogen Release"),
-            Valve::N2Quenching => write!(f, "Nitrogen Quenching"),
-            Valve::N23Way => write!(f, "Nitrogen 3-Way"),
+            Valve::OxFilling => write!(f, "OX Filling"),
+            Valve::OxRelease => write!(f, "OX Release"),
+            Valve::OxVenting => write!(f, "OX Venting"),
+            Valve::N2Filling => write!(f, "N2 Filling"),
+            Valve::N2Release => write!(f, "N2 Release"),
+            Valve::N2Quenching => write!(f, "N2 Quenching"),
+            Valve::N23Way => write!(f, "N2 3-Way"),
             Valve::Main => write!(f, "Main"),
             Valve::Nitrogen => write!(f, "Nitrogen"),
         }
