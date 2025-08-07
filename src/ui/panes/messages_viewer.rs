@@ -117,7 +117,7 @@ impl PaneBehavior for MessagesViewerPane {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        ui.scope_builder(UiBuilder::new().sense(Sense::click()), |ui| {
+                        ui.scope_builder(UiBuilder::new().sense(Sense::click_and_drag()), |ui| {
                             egui::Grid::new("message_viewer").show(ui, |ui| {
                                 if let Some(selected_msg) = &self.selected_message {
                                     if let Some(fields) = MAVLINK_PROFILE.get_fields(*selected_msg)
