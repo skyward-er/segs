@@ -48,6 +48,9 @@ impl LayoutManagerWindow {
             text_input,
             selection,
         } = self;
+        if !*window_visible {
+            text_input.clear();
+        }
         egui::Window::new("Layouts Manager")
             .collapsible(false)
             .open(window_visible)
@@ -69,7 +72,14 @@ impl LayoutManagerWindow {
                     .size(Size::exact(40.0))
                     .vertical(|mut strip| {
                         strip.cell(|ui| {
-                            show_layouts_table(ui, layout_manager, state, selection, changed)
+                            show_layouts_table(
+                                ui,
+                                layout_manager,
+                                state,
+                                selection,
+                                text_input,
+                                changed,
+                            )
                         });
                         strip.cell(|ui| {
                             ui.add(Separator::default().spacing(7.0));
@@ -95,6 +105,7 @@ fn show_layouts_table(
     layout_manager: &mut LayoutManager,
     state: &mut AppState,
     selection: &mut Option<PathBuf>,
+    text_input: &mut String,
     changed: bool,
 ) {
     let available_height = ui.available_height();
@@ -111,9 +122,7 @@ fn show_layouts_table(
 
             for key in layout_manager.layouts().keys() {
                 let name = key.to_str().log_expect("Unable to convert path to string");
-                let is_selected = selection
-                    .as_ref()
-                    .map_or_else(|| false, |selected_key| selected_key == key);
+                let is_selected = selection.as_ref().is_some_and(|s| s == key);
 
                 let name_button = if is_selected && changed {
                     Button::new(RichText::new(name).color(Color32::BLACK))
@@ -153,6 +162,10 @@ fn show_layouts_table(
             }
 
             if let Some(to_select) = to_select {
+                *text_input = to_select
+                    .to_str()
+                    .log_expect("Unable to convert path to string")
+                    .to_string();
                 selection.replace(to_select);
             }
             if let Some(to_open) = to_open {
