@@ -127,9 +127,12 @@ impl PaneBehavior for ValveControlPane {
         Icon::init_cache(ui.ctx(), (100, 100));
 
         if let Some(valve_view) = &mut self.valve_view {
-            if let Some(command) = valve_view.ui(ui, &self.valves_state) {
-                self.commands.push(command.into());
-            }
+            // A unique ID must be assigned to avoid breaking unique ID management in egui of text edit
+            ui.scope_builder(UiBuilder::new().id_salt(valve_view.id()), |ui| {
+                if let Some(command) = valve_view.ui(ui, &self.valves_state) {
+                    self.commands.push(command.into());
+                }
+            });
 
             if valve_view.is_closed() {
                 self.valve_view = None;

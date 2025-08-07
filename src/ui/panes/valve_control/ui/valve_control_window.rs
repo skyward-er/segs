@@ -54,6 +54,10 @@ impl ValveControlView {
         matches!(self.state, ValveViewState::Closed)
     }
 
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
     #[profiling::function]
     pub fn ui(&mut self, ui: &mut Ui, valve_state: &ValveStateManager) -> Option<Command> {
         // Show only if the window is open

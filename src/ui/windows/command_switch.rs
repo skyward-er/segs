@@ -144,7 +144,12 @@ fn show_command_switch_window(ui: &mut Ui, window: &mut CommandSwitchWindow) {
 
             // show the appropriate ui based
             if let Some(Command::Configurable(cmd)) = cmd {
-                cmd.show_operative_parameters(state, messages_to_send, ui);
+                // Here we need to use the `UiBuilder` to create a new UI with a unique ID for different commands,
+                // otherwise we end up inserting weird behavior in text edit of fields due to same id memory management
+                // done by egui
+                ui.scope_builder(UiBuilder::new().id_salt(cmd.base.id), |ui| {
+                    cmd.show_operative_parameters(state, messages_to_send, ui);
+                });
             } else {
                 show_switch_list(state, commands, messages_to_send, ui);
             }
