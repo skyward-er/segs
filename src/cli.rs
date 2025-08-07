@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{
     Error, Parser,
     builder::TypedValueParser,
@@ -26,6 +28,10 @@ pub struct Cli {
     /// e.g. `--serial /dev/ttyUSB0:115200`
     #[arg(long, value_parser = SerialValueParser)]
     serial: Option<SerialConfiguration>,
+
+    /// Path to the layout directory. If not specified, the default layout directory will be used.
+    #[arg(long, value_name = "LAYOUT_DIR")]
+    layout_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +173,10 @@ impl From<Cli> for AppConfig {
         } else {
             value.serial.map(ConnectionConfig::Serial)
         };
-        AppConfig { connection_config }
+        let layout_directory = value.layout_dir;
+        AppConfig {
+            connection_config,
+            layout_directory,
+        }
     }
 }

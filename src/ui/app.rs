@@ -12,9 +12,10 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
 
 use crate::{
+    APP_NAME,
     error::ErrInstrument,
     mavlink::{MavHeader, MavMessage},
     message_broker::{ConnectionConfig, MessageBroker, MessageBundle},
@@ -32,6 +33,8 @@ use super::{
     widgets::ReceptionLed,
     windows::{ConnectionsWindow, LayoutManagerWindow},
 };
+
+static LAYOUTS_DIR: &str = "layouts";
 
 pub struct App {
     /// Persistent state of the app
@@ -351,10 +354,22 @@ impl App {
         // Install the fonts
         super::font::add_font(&ctx.egui_ctx);
 
-        let mut layout_manager = if let Some(storage) = ctx.storage {
-            LayoutManager::new(storage)
+        let default_layout_dir = eframe::storage_dir(APP_NAME).map(|s| s.join(LAYOUTS_DIR));
+        let layout_dir = if let Some(dir) = config.layout_directory {
+            if dir.exists() {
+                Some(dir)
+            } else {
+                warn!("Layout directory {:?} does not exist, using default", dir);
+                default_layout_dir
+            }
         } else {
-            LayoutManager::default()
+            default_layout_dir
+        }
+        .log_expect("Unable to get layout directory");
+
+        let mut layout_manager = LayoutManager::new(layout_dir);
+        if let Some(storage) = ctx.storage {
+            layout_manager.set_current_layout_with_storage(storage);
         };
 
         let mut state = AppState::default();
@@ -466,6 +481,7 @@ impl App {
 #[derive(Debug, Clone, Default)]
 pub struct AppConfig {
     pub connection_config: Option<ConnectionConfig>,
+    pub layout_directory: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]

@@ -7,11 +7,10 @@ use std::{
 
 use tracing::{info, trace, warn};
 
-use crate::{APP_NAME, error::ErrInstrument};
+use crate::error::ErrInstrument;
 
 use super::super::app::AppState;
 
-static LAYOUTS_DIR: &str = "layouts";
 static SELECTED_LAYOUT_KEY: &str = "selected_layout";
 
 #[derive(Default)]
@@ -22,19 +21,18 @@ pub struct LayoutManager {
 }
 
 impl LayoutManager {
-    /// Chooses the layouts path and gets the previously selected layout from storage
-    pub fn new(storage: &dyn eframe::Storage) -> Self {
-        let mut layout_manager = Self {
-            layouts_path: eframe::storage_dir(APP_NAME)
-                .log_expect("Unable to get storage dir")
-                .join(LAYOUTS_DIR),
-            current_layout: storage
-                .get_string(SELECTED_LAYOUT_KEY)
-                .map(|path| PathBuf::from_str(&path).log_expect("Path is not valid")),
+    pub fn new(layouts_path: PathBuf) -> Self {
+        Self {
+            layouts_path,
             ..Self::default()
-        };
-        layout_manager.reload_layouts();
-        layout_manager
+        }
+    }
+    /// Chooses the layouts path and gets the previously selected layout from storage
+    pub fn set_current_layout_with_storage(&mut self, storage: &dyn eframe::Storage) {
+        self.current_layout = storage
+            .get_string(SELECTED_LAYOUT_KEY)
+            .map(|path| PathBuf::from_str(&path).log_expect("Path is not valid"));
+        self.reload_layouts();
     }
 
     pub fn current_layout(&self) -> Option<&PathBuf> {

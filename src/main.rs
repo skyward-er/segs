@@ -34,8 +34,7 @@ static APP_NAME: &str = "segs";
 fn main() -> Result<(), eframe::Error> {
     // Create the logs directory if it doesn't exist and add to the registry
     let mut _guard = None;
-    let file_layer = if let Some(base_dirs) = directories::BaseDirs::new() {
-        let proj_dir = base_dirs.data_local_dir().join(APP_NAME);
+    let file_layer = if let Some(proj_dir) = eframe::storage_dir(APP_NAME) {
         let logs_dir = proj_dir.join("logs");
         create_dir_all(&logs_dir).log_expect("Failed to create logs directory");
 
