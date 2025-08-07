@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use egui::{
-    Align2, Color32, CornerRadius, FontId, RichText, Stroke, StrokeKind, Theme, Ui, Window,
+    Align2, Color32, CornerRadius, FontId, RichText, Stroke, StrokeKind, Theme, Ui, Visuals, Window,
 };
 use glam::Vec2;
 
@@ -23,6 +23,7 @@ const FONT_SIZE: f32 = 2.0;
 pub struct ValueDisplay {
     subscribed_field: Option<IndexedField>,
     size: Vec2,
+    color: DisplayColor,
 
     #[serde(skip)]
     last_value: Option<f32>,
@@ -36,6 +37,7 @@ impl Default for ValueDisplay {
             subscribed_field: None,
             last_value: Some(0.0),
             size: Vec2::new(FONT_SIZE * 0.6 * 4.0, FONT_SIZE),
+            color: DisplayColor::Default,
             is_subs_window_visible: false,
         }
     }
@@ -65,9 +67,11 @@ impl SymbolBehavior for ValueDisplay {
 
     fn paint(&mut self, ui: &mut Ui, theme: Theme, pos: Vec2, size: f32, _: f32) {
         let painter = ui.painter();
-        let color = match theme {
-            Theme::Light => Color32::BLACK,
-            Theme::Dark => Color32::WHITE,
+        let color = match self.color {
+            DisplayColor::Default => {
+                field_to_color(self.subscribed_field.as_ref(), &theme.default_visuals())
+            }
+            DisplayColor::Custom(color32) => color32,
         };
 
         let unit = self
@@ -108,7 +112,7 @@ impl SymbolBehavior for ValueDisplay {
             .movable(true)
             .open(&mut self.is_subs_window_visible)
             .show(ui.ctx(), |ui| {
-                subscription_window(ui, mavlink_ids, &mut self.subscribed_field)
+                subscription_window(ui, mavlink_ids, &mut self.color, &mut self.subscribed_field)
             });
         // reset last_value if the subscribed field has changed
         if change_tracker.has_changed(&self.subscribed_field) {
@@ -132,7 +136,35 @@ impl SymbolBehavior for ValueDisplay {
     }
 }
 
-fn subscription_window(ui: &mut Ui, msg_ids: &[u32], field: &mut Option<IndexedField>) {
+fn subscription_window(
+    ui: &mut Ui,
+    msg_ids: &[u32],
+    color_mode: &mut DisplayColor,
+    field: &mut Option<IndexedField>,
+) {
+    // Color settings
+    let mut checked = matches!(color_mode, DisplayColor::Custom(_));
+    ui.checkbox(&mut checked, "Use custom color")
+        .on_hover_text("If unchecked, the default color will be used based on the field unit");
+    if checked {
+        match color_mode {
+            DisplayColor::Default => {
+                *color_mode = DisplayColor::Custom(field_to_color(field.as_ref(), ui.visuals()))
+            }
+            DisplayColor::Custom(rgb) => {
+                ui.horizontal(|ui| {
+                    ui.label("Custom color: ");
+                    ui.color_edit_button_srgba(rgb);
+                });
+            }
+        }
+    } else {
+        *color_mode = DisplayColor::Default;
+    }
+
+    ui.add_sized([250., 10.], egui::Separator::default());
+
+    // Subscription settings
     let mut current_msg_id = field.as_ref().map(|f| f.msg_id()).unwrap_or(msg_ids[0]);
 
     // extract the msg name from the id to show it in the combo box
@@ -183,4 +215,28 @@ fn subscription_window(ui: &mut Ui, msg_ids: &[u32], field: &mut Option<IndexedF
                 ui.selectable_value(field, msg.to_owned(), &msg.field().name);
             }
         });
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+enum DisplayColor {
+    #[default]
+    Default,
+    Custom(Color32),
+}
+
+fn field_to_color(field: Option<&IndexedField>, visuals: &Visuals) -> Color32 {
+    let unit_str = field.and_then(|f| f.field().unit.as_deref());
+    unit_to_color(unit_str, visuals)
+}
+
+fn unit_to_color(unit_str: Option<&str>, visuals: &Visuals) -> Color32 {
+    match unit_str {
+        Some(string) => match string {
+            "kg" => Color32::GREEN,
+            "Pa" | "Bar" => Color32::BLUE,
+            "deg" | "degC" => Color32::YELLOW,
+            _ => visuals.text_color(),
+        },
+        None => visuals.text_color(),
+    }
 }
