@@ -239,7 +239,7 @@ impl PaneBehavior for ValveControlPane {
                     remove_valve_if_closed!(n2_3way_valve_state, Valve::N23Way);
                     remove_valve_if_closed!(n2_filling_valve_state, Valve::N2Filling);
                     remove_valve_if_closed!(n2_quenching_valve_state, Valve::N2Quenching);
-                    remove_valve_if_closed!(n2_quenching_valve_state, Valve::N2Release);
+                    remove_valve_if_closed!(n2_release_valve_state, Valve::N2Release);
                     remove_valve_if_closed!(ox_filling_valve_state, Valve::OxFilling);
                     remove_valve_if_closed!(ox_release_valve_state, Valve::OxRelease);
                     remove_valve_if_closed!(ox_venting_valve_state, Valve::OxVenting);
