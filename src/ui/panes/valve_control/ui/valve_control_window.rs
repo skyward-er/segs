@@ -335,6 +335,7 @@ impl ValveControlView {
                             builder
                                 .size(Size::exact(110.))
                                 .size(Size::initial(50.))
+                                .size(Size::initial(50.))
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
                                         builder
