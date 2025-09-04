@@ -203,6 +203,31 @@ impl IndexedField {
     );
 }
 
+impl IndexedField {
+    pub fn extract_as_enum_str(&self, msg: &impl Message) -> Result<String, String> {
+        let enum_type = self
+            .field
+            .enumtype
+            .as_ref()
+            .ok_or("Field is not an enum".to_string())?;
+        let enum_info = MAVLINK_PROFILE
+            .get_enum(enum_type)
+            .ok_or("Enum type not found".to_string())?;
+        let raw_value = *msg
+            .get_field(self.id)
+            .ok_or("Field not found".to_string())?
+            .downcast_ref::<u32>()
+            .ok_or("Enum field is not u32".to_string())?;
+        let enum_value = enum_info
+            .entries
+            .iter()
+            .find(|ev| ev.value.is_some_and(|v| v == raw_value))
+            .or(enum_info.entries.get(raw_value as usize))
+            .ok_or("Enum value not found".to_string())?;
+        Ok(enum_value.name.clone())
+    }
+}
+
 impl std::hash::Hash for IndexedField {
     /// Hashes the field index and message ID for use in hash maps and sets.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

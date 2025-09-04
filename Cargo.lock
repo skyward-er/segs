@@ -2156,7 +2156,7 @@ dependencies = [
 [[package]]
 name = "mavlink-bindgen"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=9a06b5bbfe555673f4df968e8756d9b46f5a4a73#9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=eedd2b0d1b83af613298b72c9de3c741a2d51a82#eedd2b0d1b83af613298b72c9de3c741a2d51a82"
 dependencies = [
  "crc-any",
  "lazy_static",
@@ -2170,7 +2170,7 @@ dependencies = [
 [[package]]
 name = "mavlink-core"
 version = "0.15.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=9a06b5bbfe555673f4df968e8756d9b46f5a4a73#9a06b5bbfe555673f4df968e8756d9b46f5a4a73"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git?rev=eedd2b0d1b83af613298b72c9de3c741a2d51a82#eedd2b0d1b83af613298b72c9de3c741a2d51a82"
 dependencies = [
  "byteorder",
  "crc-any",
@@ -3482,7 +3482,7 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 [[package]]
 name = "skyward_mavlink"
 version = "0.2.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?rev=56b4c351470f0d6f41733d4f3beef6dadda7611a#56b4c351470f0d6f41733d4f3beef6dadda7611a"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?rev=6998208d317e13e59400e45f24d8e2dac208e5ef#6998208d317e13e59400e45f24d8e2dac208e5ef"
 dependencies = [
  "bitflags 2.9.1",
  "mavlink-bindgen",

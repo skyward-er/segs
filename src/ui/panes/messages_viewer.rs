@@ -199,21 +199,25 @@ trait MessageViewerFormatter {
 
 impl MessageViewerFormatter for IndexedField {
     fn format(&self, msg: &MavMessage) -> String {
-        match &self.field().mavtype {
-            MavType::UInt8MavlinkVersion | MavType::UInt8 => {
-                self.extract_as_u8(msg).log_unwrap().to_string()
+        if self.field().enumtype.is_some() {
+            self.extract_as_enum_str(msg).log_unwrap()
+        } else {
+            match &self.field().mavtype {
+                MavType::UInt8MavlinkVersion | MavType::UInt8 => {
+                    self.extract_as_u8(msg).log_unwrap().to_string()
+                }
+                MavType::UInt16 => self.extract_as_u16(msg).log_unwrap().to_string(),
+                MavType::UInt32 => self.extract_as_u32(msg).log_unwrap().to_string(),
+                MavType::UInt64 => self.extract_as_u64(msg).log_unwrap().to_string(),
+                MavType::Int8 => self.extract_as_i8(msg).log_unwrap().to_string(),
+                MavType::Int16 => self.extract_as_i16(msg).log_unwrap().to_string(),
+                MavType::Int32 => self.extract_as_i32(msg).log_unwrap().to_string(),
+                MavType::Int64 => self.extract_as_i64(msg).log_unwrap().to_string(),
+                MavType::Char => self.extract_as_char(msg).log_unwrap().to_string(),
+                MavType::Float => format!("{:.5}", self.extract_as_f32(msg).log_unwrap()),
+                MavType::Double => format!("{:.5}", self.extract_as_f64(msg).log_unwrap()),
+                MavType::Array(_, _) => self.extract_as_string(msg).log_unwrap(),
             }
-            MavType::UInt16 => self.extract_as_u16(msg).log_unwrap().to_string(),
-            MavType::UInt32 => self.extract_as_u32(msg).log_unwrap().to_string(),
-            MavType::UInt64 => self.extract_as_u64(msg).log_unwrap().to_string(),
-            MavType::Int8 => self.extract_as_i8(msg).log_unwrap().to_string(),
-            MavType::Int16 => self.extract_as_i16(msg).log_unwrap().to_string(),
-            MavType::Int32 => self.extract_as_i32(msg).log_unwrap().to_string(),
-            MavType::Int64 => self.extract_as_i64(msg).log_unwrap().to_string(),
-            MavType::Char => self.extract_as_char(msg).log_unwrap().to_string(),
-            MavType::Float => format!("{:.5}", self.extract_as_f32(msg).log_unwrap()),
-            MavType::Double => format!("{:.5}", self.extract_as_f64(msg).log_unwrap()),
-            MavType::Array(_, _) => self.extract_as_string(msg).log_unwrap(),
         }
     }
 }
