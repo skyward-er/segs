@@ -94,7 +94,6 @@ pub enum Valve {
     N2Filling,
     N2Release,
     N2Quenching,
-    N23Way,
     Main,
     Nitrogen,
 }
@@ -108,7 +107,6 @@ impl From<Valve> for Servoslist {
             Valve::N2Filling => Servoslist::N2_FILLING_VALVE,
             Valve::N2Release => Servoslist::N2_RELEASE_VALVE,
             Valve::N2Quenching => Servoslist::N2_QUENCHING_VALVE,
-            Valve::N23Way => Servoslist::N2_3WAY_VALVE,
             Valve::Main => Servoslist::MAIN_VALVE,
             Valve::Nitrogen => Servoslist::NITROGEN_VALVE,
         }
@@ -126,7 +124,6 @@ impl TryFrom<Servoslist> for Valve {
             Servoslist::N2_FILLING_VALVE => Ok(Valve::N2Filling),
             Servoslist::N2_RELEASE_VALVE => Ok(Valve::N2Release),
             Servoslist::N2_QUENCHING_VALVE => Ok(Valve::N2Quenching),
-            Servoslist::N2_3WAY_VALVE => Ok(Valve::N23Way),
             Servoslist::MAIN_VALVE => Ok(Valve::Main),
             Servoslist::NITROGEN_VALVE => Ok(Valve::Nitrogen),
             _ => Err(()),
@@ -149,7 +146,6 @@ impl Display for Valve {
             Valve::N2Filling => write!(f, "N2 Filling"),
             Valve::N2Release => write!(f, "N2 Release"),
             Valve::N2Quenching => write!(f, "N2 Quenching"),
-            Valve::N23Way => write!(f, "N2 3-Way"),
             Valve::Main => write!(f, "Main"),
             Valve::Nitrogen => write!(f, "Nitrogen"),
         }
