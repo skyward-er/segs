@@ -85,6 +85,7 @@ pub struct ValveControlPane {
 
     // UI SETTINGS
     valve_key_map: HashMap<Valve, Key>,
+    safety_venting: SafetyVentingWatcher,
     /// Map storing the instant the valve will close based on the last ACK received
     #[serde(skip)]
     valve_times_to_close: HashMap<Valve, Instant>,
@@ -107,9 +108,10 @@ impl Default for ValveControlPane {
             auto_refresh: None,
             manual_refresh: false,
             last_refresh: None,
+            valve_key_map,
+            safety_venting: SafetyVentingWatcher::default(),
             valve_times_to_close: HashMap::new(),
             is_settings_window_open: false,
-            valve_key_map,
             valve_view: None,
         }
     }
@@ -179,7 +181,11 @@ impl PaneBehavior for ValveControlPane {
                 .open(&mut self.is_settings_window_open)
                 .show(
                     ui.ctx(),
-                    Self::settings_window_ui(&mut self.system_id, &mut self.auto_refresh),
+                    Self::settings_window_ui(
+                        &mut self.system_id,
+                        &mut self.auto_refresh,
+                        &mut self.safety_venting,
+                    ),
                 );
         }
 
@@ -229,22 +235,24 @@ impl PaneBehavior for ValveControlPane {
                     }
                 }
                 MavMessage::GSE_TM(gse_data) => {
-                    macro_rules! remove_valve_if_closed {
+                    macro_rules! update_valve_state {
                         ($field:ident, $valve:expr) => {
                             if gse_data.$field == 0 {
                                 self.valve_times_to_close.remove(&$valve);
                             }
+                            self.safety_venting
+                                .update_valve_state($valve, gse_data.$field);
                         };
                     }
 
-                    remove_valve_if_closed!(main_valve_state, Valve::Main);
-                    remove_valve_if_closed!(nitrogen_valve_state, Valve::Nitrogen);
-                    remove_valve_if_closed!(n2_filling_valve_state, Valve::N2Filling);
-                    remove_valve_if_closed!(n2_quenching_valve_state, Valve::N2Quenching);
-                    remove_valve_if_closed!(n2_release_valve_state, Valve::N2Release);
-                    remove_valve_if_closed!(ox_filling_valve_state, Valve::OxFilling);
-                    remove_valve_if_closed!(ox_release_valve_state, Valve::OxRelease);
-                    remove_valve_if_closed!(ox_venting_valve_state, Valve::OxVenting);
+                    update_valve_state!(main_valve_state, Valve::Main);
+                    update_valve_state!(nitrogen_valve_state, Valve::Nitrogen);
+                    update_valve_state!(n2_filling_valve_state, Valve::N2Filling);
+                    update_valve_state!(n2_quenching_valve_state, Valve::N2Quenching);
+                    update_valve_state!(n2_release_valve_state, Valve::N2Release);
+                    update_valve_state!(ox_filling_valve_state, Valve::OxFilling);
+                    update_valve_state!(ox_release_valve_state, Valve::OxRelease);
+                    update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
                 }
                 MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
                     for cmd in self.commands.iter_mut() {
@@ -332,6 +340,32 @@ impl ValveControlPane {
                         ui.end_row();
                     }
                 });
+            let time_left = self.safety_venting.time_left();
+            let time_left_fmt = time_left
+                .map(|d| {
+                    let minutes = d.as_secs() / 60;
+                    let seconds = d.as_secs() % 60;
+                    format!("{:02}:{:02}", minutes, seconds)
+                })
+                .unwrap_or_else(|| "N/A".to_owned());
+            ui.add_space(3.0);
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                let mut rich_text =
+                    RichText::new(format!("SAFETY VENTING IN {time_left_fmt}")).size(15.0);
+                // make the text bold and red if less than 60 seconds left
+                if let Some(t) = time_left
+                    && t.as_secs() < 60
+                {
+                    let color = if t.as_secs() % 2 == 0 {
+                        Color32::RED
+                    } else {
+                        Color32::DARK_RED
+                    };
+                    rich_text = rich_text.strong().color(color);
+                }
+                ui.add(Label::new(rich_text));
+            });
         }
     }
 
@@ -352,9 +386,11 @@ impl ValveControlPane {
     fn settings_window_ui(
         system_id: &mut u8,
         auto_refresh_setting: &mut Option<Duration>,
+        safety_venting: &mut SafetyVentingWatcher,
     ) -> impl FnOnce(&mut Ui) {
         |ui| {
             profiling::function_scope!("settings_window_ui");
+            ui.set_max_width(300.0);
             // Display auto refresh setting
             let mut auto_refresh = auto_refresh_setting.is_some();
             ui.horizontal(|ui| {
@@ -381,6 +417,26 @@ impl ValveControlPane {
                     *auto_refresh_setting = None;
                 }
             });
+            ui.separator();
+            let mut emergency_venting_secs = safety_venting.timeout.as_secs();
+            ui.horizontal(|ui| {
+                ui.label("Safety Venting timeout:");
+                DragValue::new(&mut emergency_venting_secs)
+                    .speed(1)
+                    .range(10..=10800)
+                    .update_while_editing(false)
+                    .suffix(" s")
+                    .ui(ui);
+            });
+            safety_venting.update_timeout(emergency_venting_secs);
+            ui.label("Reset the timeout on actuation of the following:");
+            for (valve, active) in safety_venting
+                .reset_valves
+                .iter_mut()
+                .sorted_by(|(a, _), (b, _)| a.to_string().cmp(&b.to_string()))
+            {
+                ui.checkbox(active, valve.to_string());
+            }
         }
     }
 
@@ -589,4 +645,61 @@ impl ValveControlPane {
 #[derive(Debug, Clone, Copy)]
 enum PaneAction {
     OpenValveControl(Valve),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct SafetyVentingWatcher {
+    /// Last known state of the valves
+    last_valve_state: HashMap<Valve, u8>,
+    /// Valves that refresh the safety ventime timer
+    reset_valves: HashMap<Valve, bool>,
+    /// Timeout for safety venting
+    timeout: Duration,
+    /// Instant of the last valve actuation that reset the timer
+    #[serde(skip)]
+    last_reset: Option<Instant>,
+}
+
+impl Default for SafetyVentingWatcher {
+    fn default() -> Self {
+        let last_valve_state = Valve::iter().map(|v| (v, 0)).collect::<HashMap<_, _>>();
+        let reset_valves = Valve::iter().map(|v| (v, false)).collect::<HashMap<_, _>>();
+        let timeout = Duration::from_secs(300); // Default 5 minutes
+        Self {
+            last_valve_state,
+            reset_valves,
+            timeout,
+            last_reset: None,
+        }
+    }
+}
+
+impl SafetyVentingWatcher {
+    fn update_timeout(&mut self, seconds: u64) {
+        self.timeout = Duration::from_secs(seconds);
+    }
+
+    fn update_valve_state(&mut self, valve: Valve, state: u8) {
+        if let Some(last_state) = self.last_valve_state.get_mut(&valve)
+            && *last_state != state
+        {
+            *last_state = state;
+            if self.reset_valves[&valve] {
+                self.last_reset = Some(Instant::now());
+            }
+        }
+    }
+
+    fn time_left(&self) -> Option<Duration> {
+        if let Some(last_reset) = self.last_reset {
+            let elapsed = last_reset.elapsed();
+            if elapsed >= self.timeout {
+                Some(Duration::ZERO)
+            } else {
+                Some(self.timeout - elapsed)
+            }
+        } else {
+            None
+        }
+    }
 }
