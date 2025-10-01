@@ -168,11 +168,11 @@ impl ValveControlView {
                     )),
                     ValveViewState::TimingFocused | ValveViewState::Closed => None,
                 };
-                if let Some(res) = &res {
-                    if res.clicked() {
-                        // set the focus on the aperture field
-                        action.replace(WindowAction::SetAperture);
-                    }
+                if let Some(res) = &res
+                    && res.clicked()
+                {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::SetAperture);
                 }
                 res.unwrap_or_else(|| ui.response())
             }
@@ -192,13 +192,55 @@ impl ValveControlView {
                     )),
                     ValveViewState::ApertureFocused | ValveViewState::Closed => None,
                 };
-                if let Some(res) = &res {
-                    if res.clicked() {
-                        // set the focus on the aperture field
-                        action.replace(WindowAction::SetTiming);
-                    }
+                if let Some(res) = &res
+                    && res.clicked()
+                {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::SetTiming);
                 }
                 res.unwrap_or_else(|| ui.response())
+            }
+
+            // back button with shortcut
+            fn back_btn(ui: &mut Ui, action: &mut Option<WindowAction>) {
+                let res = ui
+                    .scope_builder(
+                        UiBuilder::new()
+                            .id_salt(Key::Backspace)
+                            .sense(Sense::click()),
+                        |ui| {
+                            let visuals = *ui.style().interact(&ui.response());
+                            let shortcut_card = shortcut_ui(ui, &Key::Backspace, &ui.response());
+
+                            Frame::canvas(ui.style())
+                                .inner_margin(Margin::symmetric(4, 2))
+                                .outer_margin(0)
+                                .corner_radius(ui.visuals().noninteractive().corner_radius)
+                                .fill(visuals.bg_fill)
+                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .show(ui, |ui| {
+                                    ui.set_height(ui.available_height());
+                                    ui.horizontal_centered(|ui| {
+                                        ui.set_height(21.);
+                                        ui.add_space(1.);
+                                        Label::new(
+                                            RichText::new("BACK")
+                                                .size(16.)
+                                                .color(visuals.text_color()),
+                                        )
+                                        .selectable(false)
+                                        .ui(ui);
+                                        shortcut_card.ui(ui);
+                                    });
+                                });
+                        },
+                    )
+                    .response;
+
+                if res.clicked() {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::CloseWindow);
+                }
             }
 
             // wiggle button with shortcut
@@ -340,6 +382,7 @@ impl ValveControlView {
                                 .size(Size::exact(110.))
                                 .size(Size::initial(50.))
                                 .size(Size::initial(50.))
+                                .size(Size::initial(50.))
                                 .horizontal(|mut strip| {
                                     strip.strip(|builder| {
                                         builder
@@ -354,6 +397,7 @@ impl ValveControlView {
                                     });
                                     strip.cell(|ui| wiggle_btn(ui, action));
                                     strip.cell(|ui| refresh_btn(ui, action));
+                                    strip.cell(|ui| back_btn(ui, action));
                                 });
                         });
                         strip.strip(|builder| {
