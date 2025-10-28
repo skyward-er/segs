@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "conrig")]
 use skyward_mavlink::{
     mavlink::MessageData,
-    orion::{ACK_TM_DATA, NACK_TM_DATA},
+    hydra::{ACK_TM_DATA, NACK_TM_DATA},
 };
 use std::{
     fs,

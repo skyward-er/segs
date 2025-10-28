@@ -17,7 +17,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
     mavlink::{MavHeader, MessageData},
-    orion::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
+    hydra::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -245,14 +245,16 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
-                    update_valve_state!(main_valve_state, Valve::Main);
-                    update_valve_state!(nitrogen_valve_state, Valve::Nitrogen);
-                    update_valve_state!(n2_filling_valve_state, Valve::N2Filling);
-                    update_valve_state!(n2_quenching_valve_state, Valve::N2Quenching);
-                    update_valve_state!(n2_release_valve_state, Valve::N2Release);
+                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
+                    update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
+                    update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
+                    update_valve_state!(prz_filling_valve_state, Valve::PrzFilling);
+                    update_valve_state!(prz_release_valve_state, Valve::PrzRelease);
                     update_valve_state!(ox_filling_valve_state, Valve::OxFilling);
                     update_valve_state!(ox_release_valve_state, Valve::OxRelease);
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
+                    update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
                 }
                 MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
                     for cmd in self.commands.iter_mut() {

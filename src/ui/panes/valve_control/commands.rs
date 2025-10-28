@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use skyward_mavlink::orion::{GET_VALVE_INFO_TC_DATA, WIGGLE_SERVO_TC_DATA};
+use skyward_mavlink::hydra::{GET_VALVE_INFO_TC_DATA, WIGGLE_SERVO_TC_DATA};
 
 use crate::mavlink::{
     ACK_TM_DATA, MavMessage, MessageData, NACK_TM_DATA, SET_ATOMIC_VALVE_TIMING_TC_DATA,
