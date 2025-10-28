@@ -91,11 +91,13 @@ pub enum Valve {
     OxFilling,
     OxRelease,
     OxVenting,
-    N2Filling,
-    N2Release,
-    N2Quenching,
-    Main,
-    Nitrogen,
+    FuelVenting,
+    PrzFilling,
+    PrzRelease,
+    MainFuel,
+    MainOx,
+    PrzFuel,
+    PrzOx,
 }
 
 impl From<Valve> for Servoslist {
@@ -104,11 +106,13 @@ impl From<Valve> for Servoslist {
             Valve::OxFilling => Servoslist::OX_FILLING_VALVE,
             Valve::OxRelease => Servoslist::OX_RELEASE_VALVE,
             Valve::OxVenting => Servoslist::OX_VENTING_VALVE,
-            Valve::N2Filling => Servoslist::N2_FILLING_VALVE,
-            Valve::N2Release => Servoslist::N2_RELEASE_VALVE,
-            Valve::N2Quenching => Servoslist::N2_QUENCHING_VALVE,
-            Valve::Main => Servoslist::MAIN_VALVE,
-            Valve::Nitrogen => Servoslist::NITROGEN_VALVE,
+            Valve::FuelVenting => Servoslist::FUEL_VENTING_VALVE,
+            Valve::PrzFilling => Servoslist::PRZ_FILLING_VALVE,
+            Valve::PrzRelease => Servoslist::PRZ_RELEASE_VALVE,
+            Valve::MainFuel => Servoslist::MAIN_FUEL_VALVE,
+            Valve::MainOx => Servoslist::MAIN_OX_VALVE,
+            Valve::PrzFuel => Servoslist::PRZ_FUEL_VALVE,
+            Valve::PrzOx => Servoslist::PRZ_OX_VALVE,
         }
     }
 }
@@ -121,11 +125,13 @@ impl TryFrom<Servoslist> for Valve {
             Servoslist::OX_FILLING_VALVE => Ok(Valve::OxFilling),
             Servoslist::OX_RELEASE_VALVE => Ok(Valve::OxRelease),
             Servoslist::OX_VENTING_VALVE => Ok(Valve::OxVenting),
-            Servoslist::N2_FILLING_VALVE => Ok(Valve::N2Filling),
-            Servoslist::N2_RELEASE_VALVE => Ok(Valve::N2Release),
-            Servoslist::N2_QUENCHING_VALVE => Ok(Valve::N2Quenching),
-            Servoslist::MAIN_VALVE => Ok(Valve::Main),
-            Servoslist::NITROGEN_VALVE => Ok(Valve::Nitrogen),
+            Servoslist::FUEL_VENTING_VALVE => Ok(Valve::FuelVenting),
+            Servoslist::PRZ_FILLING_VALVE => Ok(Valve::PrzFilling),
+            Servoslist::PRZ_RELEASE_VALVE => Ok(Valve::PrzRelease),
+            Servoslist::MAIN_FUEL_VALVE => Ok(Valve::MainFuel),
+            Servoslist::MAIN_OX_VALVE => Ok(Valve::MainOx),
+            Servoslist::PRZ_FUEL_VALVE => Ok(Valve::PrzFuel),
+            Servoslist::PRZ_OX_VALVE => Ok(Valve::PrzOx),
             _ => Err(()),
         }
     }
@@ -143,11 +149,13 @@ impl Display for Valve {
             Valve::OxFilling => write!(f, "OX Filling"),
             Valve::OxRelease => write!(f, "OX Release"),
             Valve::OxVenting => write!(f, "OX Venting"),
-            Valve::N2Filling => write!(f, "N2 Filling"),
-            Valve::N2Release => write!(f, "N2 Release"),
-            Valve::N2Quenching => write!(f, "N2 Quenching"),
-            Valve::Main => write!(f, "Main"),
-            Valve::Nitrogen => write!(f, "Nitrogen"),
+            Valve::FuelVenting => write!(f, "Fuel Venting"),
+            Valve::PrzFilling => write!(f, "PRZ Filling"),
+            Valve::PrzRelease => write!(f, "PRZ Release"),
+            Valve::MainFuel => write!(f, "Main Fuel"),
+            Valve::MainOx => write!(f, "Main OX"),
+            Valve::PrzFuel => write!(f, "PRZ Fuel"),
+            Valve::PrzOx => write!(f, "PRZ OX"),
         }
     }
 }
