@@ -246,6 +246,10 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
+                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
+                    update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
+                    update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(prz_filling_valve_state, Valve::PrzFilling);
                     update_valve_state!(prz_release_valve_state, Valve::PrzRelease);
                     update_valve_state!(ox_filling_valve_state, Valve::OxFilling);
