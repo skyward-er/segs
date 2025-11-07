@@ -40,10 +40,11 @@ use ui::{ValveControlView, map_key_to_shortcut};
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
-const SYMBOL_LIST: &str = "123456789-/.";
+const SYMBOL_LIST: &str = "0123456789-/.";
 
 fn map_symbol_to_key(symbol: char) -> Key {
     match symbol {
+        '0' => Key::Num0,
         '1' => Key::Num1,
         '2' => Key::Num2,
         '3' => Key::Num3,
