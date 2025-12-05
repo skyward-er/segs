@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, fs::remove_file, path::PathBuf};
 pub type LayoutStoreKey = String;
 
 pub trait LayoutStore {
-    // These functions only accesses the local copy
+    // These functions only access the local copy
     fn layouts(&self) -> Vec<&LayoutStoreKey>;
     fn contains(&self, id: &LayoutStoreKey) -> bool;
     fn get(&self, id: &LayoutStoreKey) -> Result<&AppState>;
@@ -42,7 +42,7 @@ pub trait LayoutStore {
     /// **WARNING**: This function is expensive to run because it accesses the source
     fn delete(&mut self, id: &LayoutStoreKey) -> Result<()>;
 
-    /// Push the given layout to the store, regardless of wether the layout is present or not in the store
+    /// Push the given layout to the store, regardless of whether the layout is present or not in the store
     ///
     /// **WARNING**: This function is expensive to run because it accesses the source
     fn push(&mut self, id: &LayoutStoreKey, layout: &AppState) -> Result<()>;
@@ -147,5 +147,25 @@ impl LayoutStore for LayoutLocalStore {
         let layout = AppState::from_file(&path)?;
         self.layouts.insert(id.clone(), layout.clone());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_layout_local_store_layouts() {
+        let mut layouts: BTreeMap<LayoutStoreKey, AppState> = BTreeMap::new();
+        layouts.insert(LayoutStoreKey::from("a"), AppState::default());
+        layouts.insert(LayoutStoreKey::from("b"), AppState::default());
+        layouts.insert(LayoutStoreKey::from("c"), AppState::default());
+        let store = LayoutLocalStore {
+            path: PathBuf::from("test"),
+            layouts,
+        };
+
+        let layouts = store.layouts();
+        assert_eq!(layouts.len(), 3);
     }
 }

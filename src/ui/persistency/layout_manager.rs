@@ -58,6 +58,7 @@ impl LayoutManager {
 
     /// TODO: This should check if the current is not saved
     pub fn load_default(&mut self) {
+        self.selected = None;
         self.current = AppState::default()
     }
 
@@ -98,7 +99,7 @@ impl LayoutManager {
         Ok(())
     }
 
-    /// Saves the current layout to the given ref and makes it the selected on, regardless if the store has the ref or not
+    /// Saves the current layout to the given ref and makes it the selected one, regardless if the store has the ref or not
     pub fn save_new(&mut self, key: &LayoutRef) -> Result<()> {
         let current = self.current.clone();
         let store = self.get_store_mut(&key.0)?;
