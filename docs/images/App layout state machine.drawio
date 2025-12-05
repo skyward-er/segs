@@ -1,0 +1,96 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.2.15 Chrome/134.0.6998.205 Electron/35.2.1 Safari/537.36" version="26.2.15">
+  <diagram name="Page-1" id="6-6DJXCJ7eRXExqbmgMN">
+    <mxGraphModel dx="490" dy="501" grid="1" gridSize="5" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-7" value="User saves the layout&lt;div&gt;(on selected or&amp;nbsp;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;on new)&lt;/span&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;curved=1;fontFamily=Fira Code;fontSize=8;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-1" target="WUGtP1uMNt8Q-4MS2xaz-2">
+          <mxGeometry x="0.125" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;curved=1;fillColor=#e51400;strokeColor=#B20000;exitX=0;exitY=0.75;exitDx=0;exitDy=0;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-1" target="WUGtP1uMNt8Q-4MS2xaz-2">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="210" y="240" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="110" y="245" />
+              <mxPoint x="110" y="115" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-14" value="User discards changes&lt;div&gt;and loads a different layout&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-13">
+          <mxGeometry x="0.075" y="-2" relative="1" as="geometry">
+            <mxPoint y="37" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;curved=1;fillColor=#e51400;strokeColor=#B20000;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-1" target="WUGtP1uMNt8Q-4MS2xaz-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-19" value="App closes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-17">
+          <mxGeometry x="-0.1794" y="8" relative="1" as="geometry">
+            <mxPoint x="8" y="3" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-1" value="SELECTED&amp;nbsp;!=&amp;nbsp;DISPLAYED" style="rounded=1;fontFamily=Fira Code;verticalAlign=top;align=center;spacing=0;html=1;fontColor=default;" vertex="1" parent="1">
+          <mxGeometry x="210" y="230" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;curved=1;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-2" target="WUGtP1uMNt8Q-4MS2xaz-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-10" value="User modifies&lt;div&gt;the layout&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-9">
+          <mxGeometry x="-0.0042" y="1" relative="1" as="geometry">
+            <mxPoint x="-1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;curved=1;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-2" target="WUGtP1uMNt8Q-4MS2xaz-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-18" value="App closes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-16">
+          <mxGeometry x="0.1176" y="-12" relative="1" as="geometry">
+            <mxPoint x="-15" y="-2" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-2" value="SELECTED ==&amp;nbsp;DISPLAYED" style="rounded=1;fontFamily=Fira Code;verticalAlign=top;align=center;spacing=0;html=1;fontColor=default;spacingLeft=0;" vertex="1" parent="1">
+          <mxGeometry x="210" y="110" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-3" target="WUGtP1uMNt8Q-4MS2xaz-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-20" value="App opens,&amp;nbsp;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;previous or&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;default layout is loaded&lt;/span&gt;&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-4">
+          <mxGeometry x="-0.1333" y="-1" relative="1" as="geometry">
+            <mxPoint x="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-3" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillStyle=solid;fillColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="240" y="40" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;curved=1;" edge="1" parent="1" source="WUGtP1uMNt8Q-4MS2xaz-2" target="WUGtP1uMNt8Q-4MS2xaz-2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="390" y="115" />
+              <mxPoint x="390" y="80" />
+              <mxPoint x="330" y="80" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-12" value="User loads a&lt;div&gt;different layout&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Fira Code;fontSize=8;" vertex="1" connectable="0" parent="WUGtP1uMNt8Q-4MS2xaz-11">
+          <mxGeometry x="-0.0507" y="-2" relative="1" as="geometry">
+            <mxPoint x="11" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-15" value="" style="group" vertex="1" connectable="0" parent="1">
+          <mxGeometry x="480" y="170" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-5" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillStyle=solid;fillColor=#000000;" vertex="1" parent="WUGtP1uMNt8Q-4MS2xaz-15">
+          <mxGeometry x="5" y="5" width="10" height="10" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-6" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillStyle=solid;fillColor=none;" vertex="1" parent="WUGtP1uMNt8Q-4MS2xaz-15">
+          <mxGeometry width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="WUGtP1uMNt8Q-4MS2xaz-41" value="&lt;font&gt;Nomenclature:&lt;/font&gt;&lt;div&gt;&lt;font&gt;- &lt;b&gt;Selected&lt;/b&gt;: The layout that the user last selected&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;- Displayed: The layout that is currently displayed&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;&lt;br&gt;&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;The user can modify the displayed layout at any time.&lt;br&gt;&lt;br&gt;Actions to support:&lt;/font&gt;&lt;div&gt;&lt;font&gt;- Load one layout from a list&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;- Save the displayed layout on top of the selected one or another from the list&lt;/font&gt;&lt;/div&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;- Warn the user before a layout is lost&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;&lt;br&gt;&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;A layout can be lost in two cases:&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;- If another layout overwrites it&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font&gt;- If the application is closed while the display layout is different than the selected one&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontFamily=Fira Code;fontSize=8;" vertex="1" parent="1">
+          <mxGeometry x="565" y="65" width="470" height="340" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
