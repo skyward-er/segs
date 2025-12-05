@@ -38,7 +38,6 @@ static LAYOUTS_DIR: &str = "layouts";
 
 pub struct App {
     /// Persistent state of the app
-    state: AppState,
     layout_manager: LayoutManager,
     behavior: AppBehavior,
     maximized_pane: Option<TileId>,
@@ -107,7 +106,7 @@ impl eframe::App for App {
                     if let Some(hovered_tile) = hovered_pane {
                         profiling::scope!("split_h");
                         if self.maximized_pane.is_none() {
-                            let panes_tree = &mut self.state.panes_tree;
+                            let panes_tree = &mut self.layout_manager.current_mut().panes_tree;
                             debug!("Called SplitH on tile {:?}", hovered_tile);
                             let hovered_tile_pane = panes_tree
                                 .tiles
@@ -131,7 +130,7 @@ impl eframe::App for App {
                     if self.maximized_pane.is_none() {
                         if let Some(hovered_tile) = hovered_pane {
                             debug!("Called SplitV on tile {:?}", hovered_tile);
-                            let panes_tree = &mut self.state.panes_tree;
+                            let panes_tree = &mut self.layout_manager.current_mut().panes_tree;
                             let hovered_tile_pane = panes_tree
                                 .tiles
                                 .remove(hovered_tile)
@@ -152,7 +151,7 @@ impl eframe::App for App {
                 PaneAction::Close => {
                     if let Some(hovered_tile) = hovered_pane {
                         debug!("Called Close on tile {:?}", hovered_tile);
-                        let panes_tree = &mut self.state.panes_tree;
+                        let panes_tree = &mut self.layout_manager.current_mut().panes_tree;
                         // Ignore if the root pane is the only one
                         if panes_tree.tiles.len() != 1 && self.maximized_pane.is_none() {
                             panes_tree.remove_recursively(hovered_tile);
@@ -164,8 +163,9 @@ impl eframe::App for App {
                         "Called Replace on tile {:?} with pane {:?}",
                         tile_id, new_pane
                     );
-                    new_pane.init(self.state.next_pane_id());
-                    self.state
+                    new_pane.init(self.layout_manager.current_mut().next_pane_id());
+                    self.layout_manager
+                        .current_mut()
                         .panes_tree
                         .tiles
                         .insert(tile_id, Tile::Pane(*new_pane));
@@ -179,7 +179,7 @@ impl eframe::App for App {
                     if self.maximized_pane.is_some() {
                         self.maximized_pane = None;
                     } else if let Some(hovered_tile) = hovered_pane {
-                        let panes_tree = &mut self.state.panes_tree;
+                        let panes_tree = &mut self.layout_manager.current_mut().panes_tree;
                         let hovered_pane_is_default = panes_tree
                             .tiles
                             .get(hovered_tile)
@@ -255,7 +255,7 @@ impl eframe::App for App {
                         #[cfg(feature = "conrig")]
                         {
                             // Command Shortcuts button
-                            self.state.command_switch_window.show(ui);
+                            self.layout_manager.current().command_switch_window.show(ui);
                             if ui
                                 .add(
                                     Button::new("Commands 🔁")
@@ -267,7 +267,7 @@ impl eframe::App for App {
                                 )
                                 .clicked()
                             {
-                                self.state.command_switch_window.toggle_open_state();
+                                self.layout_manager.current().command_switch_window.toggle_open_state();
                             }
                         }
 
@@ -310,7 +310,7 @@ impl eframe::App for App {
 
         // A central panel covers the remainder of the screen, i.e. whatever area is left after adding other panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            let panes_tree = &mut self.state.panes_tree;
+            let panes_tree = &mut self.layout_manager.current_mut().panes_tree;
             if let Some(maximized_pane) = self.maximized_pane {
                 if let Some(Tile::Pane(pane)) = panes_tree.tiles.get_mut(maximized_pane) {
                     maximized_pane_ui(ui, pane);
@@ -323,7 +323,7 @@ impl eframe::App for App {
         });
 
         self.layout_manager_window
-            .show(ctx, &mut self.layout_manager, &mut self.state);
+            .show(ctx, &mut self.layout_manager);
         if let Some(action) = self.widget_gallery.show(ctx) {
             debug!("Widget gallery returned action {action:?}");
             self.behavior.action = Some(action);
@@ -344,7 +344,7 @@ impl eframe::App for App {
         // If the app is closing and the layout is not saved, abort and show a confirmation dialog
         if !self.closing_dialog
             && ctx.input(|i| i.viewport().close_requested())
-            && self.layout_manager.is_current_layout_saved(&self.state)
+            && !self.layout_manager.is_saved()
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.closing_dialog = true;
@@ -368,12 +368,21 @@ impl eframe::App for App {
                     egui::Vec2::new(400.0, 60.0),
                     egui::Label::new("The current layout is not saved.\nAre you sure to close the app without saving?").halign(egui::Align::Center)
                 );
-                if ui.add_sized(
-                    egui::Vec2::new(400.0, 60.0),
-                    egui::Button::new("Discard and exit").fill(egui::Color32::DARK_RED)
-                ).clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                ui.horizontal(|ui| {
+                    if ui.add_sized(
+                        egui::Vec2::new(200.0, 60.0),
+                        egui::Button::new("Save").fill(egui::Color32::DARK_GREEN)
+                    ).clicked() {
+                        let _ = self.layout_manager.save_current();
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    if ui.add_sized(
+                        egui::Vec2::new(200.0, 60.0),
+                        egui::Button::new("Discard").fill(egui::Color32::DARK_RED)
+                    ).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
             });
     }
 }
@@ -404,17 +413,6 @@ impl App {
             layout_manager.set_current_layout_with_storage(storage);
         };
 
-        let mut state = AppState::default();
-
-        // Load the selected layout if valid and existing
-        if let Some(layout) = layout_manager.current_layout().cloned() {
-            layout_manager
-                .load_layout(layout, &mut state)
-                .unwrap_or_else(|e| {
-                    error!("Error loading layout: {}", e);
-                });
-        }
-
         let mut message_broker = MessageBroker::new(ctx.egui_ctx.clone());
 
         // Start connection if configured
@@ -423,7 +421,6 @@ impl App {
         }
 
         Self {
-            state,
             layout_manager,
             message_broker,
             widget_gallery: WidgetGallery::default(),
@@ -456,7 +453,13 @@ impl App {
         );
 
         let start = Instant::now();
-        for (_, tile) in self.state.panes_tree.tiles.iter_mut() {
+        for (_, tile) in self
+            .layout_manager
+            .current_mut()
+            .panes_tree
+            .tiles
+            .iter_mut()
+        {
             // Skip non-pane tiles
             let Tile::Pane(pane) = tile else { continue };
             // Skip panes that do not have a subscription
@@ -491,8 +494,9 @@ impl App {
     /// Sends outgoing messages from the panes to the message broker.
     #[profiling::function]
     fn process_outgoing_messages(&mut self) {
-        let mut outgoing: Vec<(MavHeader, MavMessage)> = self
-            .state
+        let outgoing: Vec<(MavHeader, MavMessage)> = self
+            .layout_manager
+            .current_mut()
             .panes_tree
             .tiles
             .iter_mut()
@@ -506,7 +510,12 @@ impl App {
             .flatten()
             .collect();
         #[cfg(feature = "conrig")]
-        outgoing.extend(self.state.command_switch_window.consume_messages_to_send());
+        outgoing.extend(
+            self.layout_manager
+                .current()
+                .command_switch_window
+                .consume_messages_to_send(),
+        );
         self.message_broker.process_outgoing_messages(outgoing);
     }
 }
