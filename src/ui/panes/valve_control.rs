@@ -246,14 +246,26 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
-                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
-                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
-                    update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
-                    update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(prz_filling_valve_state, Valve::PrzFilling);
                     update_valve_state!(prz_release_valve_state, Valve::PrzRelease);
                     update_valve_state!(ox_filling_valve_state, Valve::OxFilling);
                     update_valve_state!(ox_release_valve_state, Valve::OxRelease);
+                }
+                MavMessage::MOTOR_TM(motor_data) => {
+                    macro_rules! update_valve_state {
+                        ($field:ident, $valve:expr) => {
+                            if motor_data.$field == 0 {
+                                self.valve_times_to_close.remove(&$valve);
+                            }
+                            self.safety_venting
+                                .update_valve_state($valve, motor_data.$field);
+                        };
+                    }
+
+                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
+                    update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
+                    update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
                     update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
                 }
