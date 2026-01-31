@@ -2,8 +2,8 @@ mod ui;
 
 use eframe::egui;
 use egui::{
-    Align, Align2, Area, Color32, CursorIcon, Frame, Layout, Pos2, Rect, Response, RichText, ScrollArea, Sense, Shape,
-    Stroke, StrokeKind, ThemePreference, Ui, Vec2, ViewportBuilder, emath::easing, lerp, pos2, vec2,
+    Align, Align2, Area, CursorIcon, Frame, Layout, Pos2, Rect, Response, RichText, ScrollArea, Sense, Stroke, Ui,
+    Vec2, ViewportBuilder, emath::easing, lerp,
 };
 use mimalloc::MiMalloc;
 use segs_assets::{
@@ -11,7 +11,7 @@ use segs_assets::{
     icons::{self, Icon},
     install_fonts, install_icons, load_app_icon,
 };
-use segs_ui::{StyleExt, setup_style, widgets::buttons::Checkbox};
+use segs_ui::{StyleExt, setup_style};
 
 use crate::ui::panels::{BottomBarControls, TopBarControls};
 
@@ -110,21 +110,7 @@ impl eframe::App for MyApp {
                 )
                 .show(ui, |plot_ui| plot_ui.line(line));
 
-            add_toggle(ui);
-            add_toggle(ui);
             vertical_toggle(ui);
-            ui.vertical(|ui| {
-                for i in 0..3 {
-                    ui.horizontal(|ui| {
-                        for j in 0..3 {
-                            let id = ui.id().with(format!("checkbox_{}_{}", i, j));
-                            let mut flag = ui.data_mut(|data| *data.get_temp_mut_or_insert_with(id, Default::default));
-                            ui.add(Checkbox::new(&mut flag));
-                            ui.data_mut(|data| data.insert_temp(id, flag));
-                        }
-                    });
-                }
-            });
 
             // Overlay at bottom-right
             if self.bottom_bar_controls.notifications_active {
@@ -136,70 +122,6 @@ impl eframe::App for MyApp {
                     });
             }
         });
-    }
-}
-
-fn add_toggle(ui: &mut Ui) {
-    let height = 17.5;
-    let width = 30.0;
-
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
-
-    if ui.is_rect_visible(rect) {
-        let painter = ui.painter();
-        let id = ui.next_auto_id().with("toggle_asd");
-
-        if response.clicked() {
-            ui.data_mut(|data| {
-                let flag: &mut bool = data.get_temp_mut_or_default(id);
-                *flag = !*flag;
-            });
-        }
-
-        if ui.rect_contains_pointer(rect) {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-
-        // Animation factor
-        let active = ui.data(|data| data.get_temp::<bool>(id).unwrap_or(false));
-        let click_t = ui
-            .ctx()
-            .animate_bool_with_time_and_easing(id.with("anim"), active, 0.1, easing::cubic_in);
-
-        let style = ui.style().interact(&response);
-
-        // Paint background
-        let enabled_color = ui.app_visuals().enabled_color;
-        let bg_color = style.bg_fill.lerp_to_gamma(enabled_color, click_t);
-        let corner_radius = height / 2.0;
-        painter.rect_filled(rect, corner_radius, bg_color);
-
-        // Paint border on hover
-        if response.hovered() {
-            painter.rect_stroke(rect, corner_radius, style.bg_stroke, StrokeKind::Outside);
-        }
-
-        // Paint circle
-        let off_x = rect.min.x + corner_radius;
-        let on_x = rect.max.x - corner_radius;
-        let x = lerp(off_x..=on_x, click_t);
-        let y = rect.min.y + corner_radius;
-        let center = Pos2::new(x, y);
-        let radius = corner_radius - 2.0;
-
-        let circle_color = ui.visuals().panel_fill;
-        painter.circle_filled(center, radius, circle_color);
-
-        // Paint text
-        // let text = if click_t < 0.5 { "OFF" } else { "ON" };
-        // let text_color = Color32::WHITE;
-        // painter.text(
-        //     rect.center(),
-        //     Align2::CENTER_CENTER,
-        //     text,
-        //     ui.app_style().base_font_of(12.0),
-        //     text_color,
-        // );
     }
 }
 

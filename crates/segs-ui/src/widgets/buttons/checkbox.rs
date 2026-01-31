@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui, UiBuilder, Widget, pos2, vec2};
+use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
 
 use crate::StyleExt;
 
@@ -60,11 +60,6 @@ fn add_checkbox(ui: &mut Ui, active: &mut bool) -> Response {
         let accent = ui.app_visuals().accent_color;
         let bg_color = style.bg_fill.lerp_to_gamma(accent, click_t);
         painter.rect_filled(rect, 2.0, bg_color);
-
-        // Paint border on hover
-        if response.hovered() {
-            painter.rect_stroke(rect, 2.0, style.bg_stroke, StrokeKind::Outside);
-        }
 
         // Paint cross
         let t = (click_t + pressed_t * 0.5).clamp(0.0, 1.0);
