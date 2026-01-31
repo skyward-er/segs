@@ -1,10 +1,22 @@
-[package]
-name = "segs"
-version = "0.1.0"
-# if you're a contributor, you should add your name here
+[workspace.package]
 authors = ["Federico Lolli <federico.lolli@skywarder.eu>"]
-edition = "2021"
-description = "Skyward Enhanced Ground Station"
+description = "Skyward Enhanced Ground Software"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
 license = "MIT"
 
-[dependencies]
+[workspace]
+resolver = "3"
+members = [
+    "crates/segs-assets",
+    "crates/segs",
+    "crates/segs-ui",
+    "crates/segs-plot",
+]
+
+[workspace.dependencies]
+eframe = "0.33.3"
+egui = { version = "0.33.3", default-features = false }
+emath = { version = "0.33.3", default-features = false }
+serde = { version = "1.0.228", features = ["derive"] }

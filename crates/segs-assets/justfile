@@ -1,0 +1,18 @@
+# https://just.systems
+
+alias us := update-sources
+
+[private]
+default:
+    @just --list
+
+export SOURCES_PATH := join(source_directory(),"src", "sources.rs")
+export ASSETS_DIR := join(source_directory(), "assets")
+
+update-sources: minimize-svgs generate-sources
+
+generate-sources:
+    uv run --script scripts/generate_sources.py
+
+minimize-svgs:
+    bunx svgo {{ASSETS_DIR}}/svgs/*

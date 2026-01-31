@@ -1,0 +1,12 @@
+[package]
+name = "segs-assets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+eframe.workspace = true
+egui = { workspace = true, default-features = false }
+egui_extras = { version = "0.33.3", features = ["svg"] }

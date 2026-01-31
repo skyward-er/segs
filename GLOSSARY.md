@@ -1,0 +1,5 @@
+- **GS**: Ground Station, refers to the entire ground station system as a whole.
+- **GSS**: Ground Station Software, refers to the ground station application software that runs on a personal computer.
+- **GSB**: Ground Station Board.
+- **Widget**: the smallest indivisible element that makes up the user interface. It is often identified with the term component in other contexts/languages. It features its own configuration independent of other widgets and operates independently. E.g., 2D/3D graphs, state machine visualizers, component health visualizers, raw message visualizers.
+- **WRA**: without recompiling the application
