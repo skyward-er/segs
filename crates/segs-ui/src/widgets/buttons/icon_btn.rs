@@ -1,12 +1,9 @@
-use std::hash::Hash;
-
-use egui::{Id, Pos2, Rect, Response, Sense, Ui, Vec2, Widget};
+use egui::{Response, Sense, Ui, Vec2, Widget};
 use segs_assets::icons::Icon;
 
 use crate::StyleExt;
 
-pub struct IconToggle<'a> {
-    id_source: Option<Id>,
+pub struct IconBtn<'a> {
     variant: Variant<'a>,
 }
 
@@ -22,17 +19,15 @@ enum Variant<'a> {
 }
 
 // Base constructor - works for any Icon
-impl<'a> IconToggle<'a> {
+impl<'a> IconBtn<'a> {
     pub fn new(icon: impl Icon + 'static) -> Self {
         Self {
-            id_source: None,
             variant: Variant::Inactive { icon: Box::new(icon) },
         }
     }
 
     pub fn active(inactive_icon: impl Icon + 'static, active_icon: impl Icon + 'static, flag: &'a mut bool) -> Self {
         Self {
-            id_source: None,
             variant: Variant::Active {
                 inactive_icon: Box::new(inactive_icon),
                 active_icon: Box::new(active_icon),
@@ -40,25 +35,19 @@ impl<'a> IconToggle<'a> {
             },
         }
     }
-
-    pub fn with_id(mut self, id_source: impl Hash) -> Self {
-        self.id_source = Some(Id::new(id_source));
-        self
-    }
 }
 
-impl<'a> Widget for IconToggle<'a> {
+impl<'a> Widget for IconBtn<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let id = self.id_source.unwrap_or_else(|| ui.next_auto_id());
         match self.variant {
-            Variant::Inactive { icon } => icon_toggle(ui, id, icon),
+            Variant::Inactive { icon } => icon_toggle(ui, icon),
             Variant::Active {
                 inactive_icon,
                 active_icon,
                 active,
             } => {
                 let icon = if *active { active_icon } else { inactive_icon };
-                let response = icon_toggle(ui, id, icon);
+                let response = icon_toggle(ui, icon);
                 if response.clicked() {
                     *active = !*active;
                 }
@@ -68,10 +57,10 @@ impl<'a> Widget for IconToggle<'a> {
     }
 }
 
-fn icon_toggle(ui: &mut Ui, id_source: impl Hash, icon: Box<dyn Icon>) -> Response {
+fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
     let toggle_size = Vec2::new(26.0, 26.0);
     let (rect, response) = ui.allocate_exact_size(toggle_size, Sense::click());
-    let id = Id::new(id_source);
+    let id = response.id;
 
     // Animation factors
     let hover_t = ui.ctx().animate_bool(id.with("anim_hover"), response.hovered());
@@ -92,27 +81,12 @@ fn icon_toggle(ui: &mut Ui, id_source: impl Hash, icon: Box<dyn Icon>) -> Respon
         }
 
         let icon_rect = animated_rect.shrink(6.0);
-        let snapped_rect = snap_rect_to_pixels(icon_rect, ui.ctx().pixels_per_point());
-
         let icon_color = ui.app_visuals().icon_color;
         icon.to_image()
             .tint(icon_color)
-            .fit_to_exact_size(snapped_rect.size())
-            .paint_at(ui, snapped_rect);
+            .fit_to_exact_size(icon_rect.size())
+            .paint_at(ui, icon_rect);
     }
 
     response
-}
-
-fn snap_rect_to_pixels(rect: Rect, pixels_per_point: f32) -> Rect {
-    let min_px = Pos2::new(rect.min.x * pixels_per_point, rect.min.y * pixels_per_point);
-    let max_px = Pos2::new(rect.max.x * pixels_per_point, rect.max.y * pixels_per_point);
-
-    let min_px = Pos2::new(min_px.x.round(), min_px.y.round());
-    let max_px = Pos2::new(max_px.x.round(), max_px.y.round());
-
-    Rect::from_min_max(
-        Pos2::new(min_px.x / pixels_per_point, min_px.y / pixels_per_point),
-        Pos2::new(max_px.x / pixels_per_point, max_px.y / pixels_per_point),
-    )
 }
