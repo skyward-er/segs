@@ -81,7 +81,7 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
         }
 
         let icon_rect = animated_rect.shrink(6.0);
-        let icon_color = ui.app_visuals().icon_color;
+        let icon_color = ui.visuals().text_color();
         icon.to_image()
             .tint(icon_color)
             .fit_to_exact_size(icon_rect.size())

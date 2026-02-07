@@ -9,6 +9,7 @@ mod charts;
 mod cog;
 mod documents;
 mod error;
+mod ethernet;
 mod eye;
 mod fold_all;
 mod globe;
@@ -26,6 +27,7 @@ mod reticle;
 mod star;
 mod tag;
 mod themes;
+mod usb;
 mod warning;
 
 pub use add_file::AddFile;
@@ -40,6 +42,7 @@ pub use cog::Cog;
 pub use documents::Documents;
 use egui::{Image, ImageSource, Vec2};
 pub use error::Error;
+pub use ethernet::Ethernet;
 pub use eye::Eye;
 pub use fold_all::FoldAll;
 pub use globe::Globe;
@@ -57,6 +60,7 @@ pub use reticle::Reticle;
 pub use star::Star;
 pub use tag::Tag;
 pub use themes::{Moon, Sun};
+pub use usb::Usb;
 pub use warning::Warning;
 
 /// Icon representation. An icon can be converted to an egui Image and has a
@@ -72,7 +76,8 @@ pub trait Icon {
         Image::new(self.as_image_source().clone())
     }
 
-    /// Returns a size that fits within the given size while preserving the icon's aspect ratio.
+    /// Returns a size that fits within the given size while preserving the
+    /// icon's aspect ratio.
     fn fit_size(&self, size: Vec2) -> Vec2 {
         let aspect_ratio = self.aspect_ratio();
         if size.x / size.y > aspect_ratio {

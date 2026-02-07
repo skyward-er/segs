@@ -129,7 +129,7 @@ fn bottom_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
                 let galley = ui.painter().layout_no_wrap(
                     text.clone(),
                     ui.app_style().base_font_of(13.0),
-                    ui.app_visuals().text_color,
+                    ui.visuals().text_color(),
                 );
                 sizes.push(galley.size());
                 galleys.push(galley);
@@ -154,7 +154,8 @@ fn bottom_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
 
         // Paint shadow on hover
         if response.hovered() {
-            painter.rect_filled(btn_rect, 0., ui.app_visuals().shadow_color);
+            let shadow_color = ui.app_visuals().shadow_color;
+            painter.rect_filled(btn_rect, 0., shadow_color);
         }
 
         // Paint contents
@@ -178,7 +179,7 @@ fn bottom_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
                 }
                 ContentAtoms::Text(_) => {
                     let text_pos = Pos2::new(x_offset, v_center - size.y / 2.0);
-                    painter.galley(text_pos, galley_iter.next().unwrap(), ui.app_visuals().text_color);
+                    painter.galley(text_pos, galley_iter.next().unwrap(), ui.visuals().text_color());
                 }
                 ContentAtoms::Space(_) => (), // No painting for space
             }

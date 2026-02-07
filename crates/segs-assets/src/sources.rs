@@ -73,6 +73,7 @@ pub mod svgs {
     pub static CIRCLED_CROSS: egui::ImageSource = include_svg!("svgs", "circled_cross.svg");
     pub static COG: egui::ImageSource = include_svg!("svgs", "cog.svg");
     pub static DOCUMENTS: egui::ImageSource = include_svg!("svgs", "documents.svg");
+    pub static ETHERNET_PORT: egui::ImageSource = include_svg!("svgs", "ethernet-port.svg");
     pub static EYE_CLOSED: egui::ImageSource = include_svg!("svgs", "eye_closed.svg");
     pub static EYE_CROSSED: egui::ImageSource = include_svg!("svgs", "eye_crossed.svg");
     pub static EYE_OPEN: egui::ImageSource = include_svg!("svgs", "eye_open.svg");
@@ -102,5 +103,6 @@ pub mod svgs {
     pub static SUN_OUTLINE: egui::ImageSource = include_svg!("svgs", "sun_outline.svg");
     pub static SUN_SOLID: egui::ImageSource = include_svg!("svgs", "sun_solid.svg");
     pub static TAG: egui::ImageSource = include_svg!("svgs", "tag.svg");
+    pub static USB: egui::ImageSource = include_svg!("svgs", "usb.svg");
 }
 // ~~~ END AUTOMATICALLY GENERATED CODE ~~~

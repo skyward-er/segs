@@ -12,9 +12,11 @@ pub fn focus_mode_toggle(ui: &mut Ui, active: &mut bool) -> Response {
 }
 
 pub fn theme_toggle(ui: &mut Ui) {
-    if ui.visuals().dark_mode && ui.icon_btn(icons::Sun::outline()).clicked() {
-        ui.ctx().set_theme(Theme::Light);
-        ui.ctx().request_discard("theme change");
+    if ui.visuals().dark_mode {
+        if ui.icon_btn(icons::Sun::outline()).clicked() {
+            ui.ctx().set_theme(Theme::Light);
+            ui.ctx().request_discard("theme change");
+        }
     } else if ui.icon_btn(icons::Moon::outline()).clicked() {
         ui.ctx().set_theme(Theme::Dark);
         ui.ctx().request_discard("theme change");

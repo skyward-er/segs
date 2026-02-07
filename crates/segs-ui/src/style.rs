@@ -1,29 +1,55 @@
-use std::sync::{Arc, LazyLock};
+use std::{
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 
-use egui::{Color32, ThemePreference};
+use arc_swap::{ArcSwap, Guard};
+use egui::{Color32, Style, Theme, ThemePreference, Visuals, style::WidgetVisuals};
 use segs_assets::{Font, fonts::Figtree};
 
-pub static DARK: LazyLock<Arc<Style>> = LazyLock::new(|| Arc::new(Style::dark()));
-pub static LIGHT: LazyLock<Arc<Style>> = LazyLock::new(|| Arc::new(Style::light()));
+pub static DARK: OnceLock<Arc<AppStyle>> = OnceLock::new();
+pub static LIGHT: OnceLock<Arc<AppStyle>> = OnceLock::new();
 
-const DARK_SHADOW_ALPHA: u8 = 40;
-const LIGHT_SHADOW_ALPHA: u8 = 20;
+#[derive(Debug)]
+pub struct AppStyle {
+    /// Egui orginal style struct
+    egui: EguiStyleRef,
 
-#[derive(Clone)]
-pub struct Style {
-    pub visuals: Arc<Visuals>,
+    /// Custom visual definitions
+    pub visuals: AppVisuals,
 }
 
-impl Style {
-    pub fn dark() -> Self {
-        Style {
-            visuals: Arc::new(Visuals::dark()),
+impl AppStyle {
+    pub fn dark(egui: Arc<Style>) -> Self {
+        let egui = EguiStyleRef::new(egui);
+        Self {
+            visuals: AppVisuals::dark(egui.clone()),
+            egui,
         }
     }
 
-    pub fn light() -> Self {
-        Style {
-            visuals: Arc::new(Visuals::light()),
+    pub fn light(egui: Arc<Style>) -> Self {
+        let egui = EguiStyleRef::new(egui);
+        Self {
+            visuals: AppVisuals::light(egui.clone()),
+            egui,
+        }
+    }
+
+    pub(crate) fn set_egui_style(&self, style: Arc<Style>) {
+        self.egui.set(style);
+    }
+
+    /// Get egui style reference.
+    pub fn egui(&self) -> Arc<Style> {
+        self.egui.get().clone()
+    }
+
+    pub fn interact_active(&self, active_flag: bool) -> &AppWidgetVisuals {
+        if active_flag {
+            &self.visuals.widget_style.active
+        } else {
+            &self.visuals.widget_style.inactive
         }
     }
 
@@ -36,59 +62,134 @@ impl Style {
     }
 }
 
-pub struct Visuals {
-    pub dark_mode: bool,
-    pub text_color: Color32,
+#[derive(Debug)]
+pub struct AppVisuals {
+    /// Egui orginal style struct
+    egui: EguiStyleRef,
+
+    /// Widget style definitions
+    pub widget_style: WidgetStyle,
+
+    /// Shadow color (e.g. for hover effects)
     pub shadow_color: Color32,
-    pub icon_color: Color32,
+
+    /// Color used for accents/highlights
     pub accent_color: Color32,
+
+    /// A good color for enabled states
     pub enabled_color: Color32,
 }
 
-impl Visuals {
-    pub fn dark() -> Self {
+impl AppVisuals {
+    fn dark(egui: EguiStyleRef) -> Self {
         Self {
-            dark_mode: true,
-            text_color: Color32::WHITE.lerp_to_gamma(Color32::BLACK, 0.2),
-            shadow_color: Color32::from_white_alpha(DARK_SHADOW_ALPHA),
-            icon_color: Color32::WHITE,
-            accent_color: Color32::from_hex("#0084ff").unwrap(),
-            enabled_color: Color32::from_hex("#179657").unwrap(),
+            widget_style: WidgetStyle::dark(egui.clone()),
+            shadow_color: Color32::from_white_alpha(40),
+            accent_color: Color32::from_rgb(0, 132, 255),
+            enabled_color: Color32::from_rgb(23, 150, 87),
+            egui,
         }
     }
 
-    pub fn light() -> Self {
+    fn light(egui: EguiStyleRef) -> Self {
         Self {
-            dark_mode: false,
-            text_color: Color32::BLACK.lerp_to_gamma(Color32::WHITE, 0.1),
-            shadow_color: Color32::from_black_alpha(LIGHT_SHADOW_ALPHA),
-            icon_color: Color32::BLACK,
-            accent_color: Color32::from_hex("#e89d56").unwrap(),
-            enabled_color: Color32::from_hex("#58e8a0").unwrap(),
+            widget_style: WidgetStyle::light(egui.clone()),
+            shadow_color: Color32::from_black_alpha(20),
+            accent_color: Color32::from_rgb(232, 157, 86),
+            enabled_color: Color32::from_rgb(88, 232, 160),
+            egui,
         }
+    }
+
+    /// Get egui visuals reference.
+    pub fn egui(&self) -> VisualsRef {
+        VisualsRef(self.egui.guard())
     }
 
     /// Get shadow color based on current visual mode.
     /// `a` is a multiplier for the alpha channel.
     pub fn shadow_color_lerp(&self, a: f32) -> Color32 {
-        if self.dark_mode {
-            // White shadow for dark mode
-            Color32::from_white_alpha((a * DARK_SHADOW_ALPHA as f32) as u8)
-        } else {
-            // Dark shadow for light mode
-            Color32::from_black_alpha((a * LIGHT_SHADOW_ALPHA as f32) as u8)
+        Color32::TRANSPARENT.lerp_to_gamma(self.shadow_color, a)
+    }
+}
+
+#[derive(Debug)]
+pub struct WidgetStyle {
+    pub active: AppWidgetVisuals,
+    pub hover: AppWidgetVisuals,
+    pub inactive: AppWidgetVisuals,
+}
+
+impl WidgetStyle {
+    fn dark(egui: EguiStyleRef) -> Self {
+        Self {
+            active: AppWidgetVisuals {
+                egui: egui.clone(),
+                kind: WidgetVisualsKind::Active,
+            },
+            hover: AppWidgetVisuals {
+                egui: egui.clone(),
+                kind: WidgetVisualsKind::Hover,
+            },
+            inactive: AppWidgetVisuals {
+                egui,
+                kind: WidgetVisualsKind::Inactive,
+            },
+        }
+    }
+
+    fn light(egui: EguiStyleRef) -> Self {
+        Self {
+            active: AppWidgetVisuals {
+                egui: egui.clone(),
+                kind: WidgetVisualsKind::Active,
+            },
+            hover: AppWidgetVisuals {
+                egui: egui.clone(),
+                kind: WidgetVisualsKind::Hover,
+            },
+            inactive: AppWidgetVisuals {
+                egui,
+                kind: WidgetVisualsKind::Inactive,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AppWidgetVisuals {
+    /// Egui original style struct
+    egui: EguiStyleRef,
+
+    /// Internal ref for retrieving egui widget visuals
+    kind: WidgetVisualsKind,
+}
+
+impl AppWidgetVisuals {
+    /// Get egui widget visuals reference.
+    pub fn egui(&self) -> WidgetVisualsRef {
+        WidgetVisualsRef {
+            guard: self.egui.guard(),
+            kind: self.kind,
         }
     }
 }
 
 /// Setup egui styles to match SEGS UI design.
 pub fn setup_style(ctx: &egui::Context) {
+    // Override egui styles
     ctx.all_styles_mut(override_egui_styles);
+    ctx.style_mut_of(Theme::Dark, override_dark_style);
+    ctx.style_mut_of(Theme::Light, override_light_style);
     ctx.set_theme(ThemePreference::System);
+
+    // Initialize global styles
+    DARK.set(Arc::new(AppStyle::dark(ctx.style()))).unwrap();
+    LIGHT.set(Arc::new(AppStyle::light(ctx.style()))).unwrap();
 }
 
 /// Override default egui styles to match SEGS UI design.
-fn override_egui_styles(style: &mut egui::Style) {
+fn override_egui_styles(style: &mut Style) {
     // Animations
     style.animation_time = 0.05;
 
@@ -96,6 +197,83 @@ fn override_egui_styles(style: &mut egui::Style) {
     let inactive = &mut style.visuals.widgets.inactive;
     let active = &mut style.visuals.widgets.active;
 
-    inactive.fg_stroke.width = 1.5;
     inactive.fg_stroke.color = active.fg_stroke.color;
+    inactive.fg_stroke.width = 1.5;
+}
+
+/// Override dark theme styles.
+fn override_dark_style(_style: &mut Style) {}
+
+/// Override light theme styles.
+fn override_light_style(style: &mut Style) {
+    // General visuals
+    style.visuals.panel_fill = Color32::from_rgb(252, 252, 252);
+
+    // Widget styles
+    let active = &mut style.visuals.widgets.active;
+    let inactive = &mut style.visuals.widgets.inactive;
+    let hover = &mut style.visuals.widgets.hovered;
+
+    active.fg_stroke.color = Color32::from_rgb(27, 27, 27);
+    active.bg_fill = Color32::from_rgb(237, 237, 237);
+
+    inactive.bg_stroke.color = Color32::from_rgb(216, 216, 216);
+    inactive.bg_stroke.width = 0.5;
+
+    inactive.fg_stroke.color = Color32::from_rgb(92, 92, 92);
+
+    hover.bg_fill = active.bg_fill;
+}
+
+#[derive(Debug, Clone)]
+struct EguiStyleRef(Arc<ArcSwap<Style>>);
+
+impl EguiStyleRef {
+    fn new(style: Arc<Style>) -> Self {
+        Self(Arc::new(ArcSwap::from(style)))
+    }
+
+    fn get(&self) -> Arc<Style> {
+        self.0.load_full()
+    }
+
+    fn guard(&self) -> Guard<Arc<Style>> {
+        self.0.load()
+    }
+
+    fn set(&self, style: Arc<Style>) {
+        self.0.store(style);
+    }
+}
+
+pub struct VisualsRef(Guard<Arc<Style>>);
+
+impl Deref for VisualsRef {
+    type Target = Visuals;
+    fn deref(&self) -> &Visuals {
+        &self.0.visuals
+    }
+}
+
+pub struct WidgetVisualsRef {
+    guard: Guard<Arc<Style>>,
+    kind: WidgetVisualsKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum WidgetVisualsKind {
+    Active,
+    Hover,
+    Inactive,
+}
+
+impl Deref for WidgetVisualsRef {
+    type Target = WidgetVisuals;
+    fn deref(&self) -> &WidgetVisuals {
+        match self.kind {
+            WidgetVisualsKind::Active => &self.guard.visuals.widgets.active,
+            WidgetVisualsKind::Hover => &self.guard.visuals.widgets.hovered,
+            WidgetVisualsKind::Inactive => &self.guard.visuals.widgets.inactive,
+        }
+    }
 }

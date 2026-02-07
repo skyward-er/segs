@@ -2,16 +2,20 @@ mod ui;
 
 use eframe::egui;
 use egui::{
-    Align, Align2, Area, CursorIcon, Frame, Layout, Pos2, Rect, Response, RichText, ScrollArea, Sense, Stroke, Ui,
-    Vec2, ViewportBuilder, emath::easing, lerp,
+    Align, Align2, Area, Color32, CursorIcon, Frame, Layout, Margin, Pos2, Rect, Response, RichText, ScrollArea, Sense,
+    Stroke, StrokeKind, Ui, Vec2, ViewportBuilder, emath::easing, lerp, pos2, vec2,
 };
 use mimalloc::MiMalloc;
 use segs_assets::{
     Font,
+    fonts::Figtree,
     icons::{self, Icon},
     install_fonts, install_icons, load_app_icon,
 };
-use segs_ui::{StyleExt, setup_style};
+use segs_ui::{
+    StyleExt, setup_style,
+    widgets::{UiWidgetExt, labels::SelectableLabel},
+};
 
 use crate::ui::panels::{BottomBarControls, TopBarControls};
 
@@ -36,6 +40,7 @@ struct MyApp {
     top_bar_controls: TopBarControls,
     bottom_bar_controls: BottomBarControls,
     side_panel_selection: Selection,
+    test_flag: bool,
 }
 
 impl MyApp {
@@ -49,6 +54,7 @@ impl MyApp {
             top_bar_controls: TopBarControls::default(),
             bottom_bar_controls: BottomBarControls::default(),
             side_panel_selection: Selection::None,
+            test_flag: false,
         }
     }
 }
@@ -94,6 +100,13 @@ impl eframe::App for MyApp {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            SelectableLabel::new(&mut self.side_panel_selection)
+                .option(icons::Ethernet, "Ethernet", Selection::Charts)
+                .option(icons::Usb, "Usb", Selection::Layout)
+                .show(ui);
+            ui.add_space(10.);
+            ui.check(&mut self.test_flag);
+
             let sin: segs_plot::PlotPoints = (0..1000)
                 .map(|i| {
                     let x = i as f64 * 0.01;
@@ -124,6 +137,106 @@ impl eframe::App for MyApp {
         });
     }
 }
+
+/* fn radio_button<I, S>(ui: &mut Ui, icon: I, text: S)
+where
+    I: Icon,
+    S: Into<String>,
+{
+    let icon_size = vec2(17., 17.);
+    let corner_radius = 4.0;
+    let in_pad = 5.;
+    let out_pad = vec2(7., 2.);
+    let id = ui.next_auto_id().with("radio_asd");
+
+    let inactive_text_color = Color32::from_rgb(92, 92, 92);
+    let active_text_color = Color32::from_rgb(27, 27, 27);
+    let active = ui.data(|data| data.get_temp(id)).unwrap_or_default();
+
+    let font_id;
+    let text_color;
+    let icon_color;
+    if active {
+        font_id = Figtree::semi_bold().sized(15.);
+        text_color = active_text_color;
+        icon_color = active_text_color;
+    } else {
+        font_id = Figtree::medium().sized(15.);
+        text_color = inactive_text_color;
+        icon_color = inactive_text_color;
+    }
+
+    let galley = ui.painter().layout_no_wrap(text.into(), font_id, text_color);
+    let text_size = galley.size();
+
+    let tot_y = out_pad.y * 2.0 + icon_size.y.max(text_size.y);
+    let tot_x = out_pad.x * 2.0 + in_pad + icon_size.x + text_size.x;
+    let (rect, response) = ui.allocate_exact_size(vec2(tot_x, tot_y), Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let stroke = Stroke {
+            color: Color32::from_rgb(216, 216, 216),
+            width: 0.5,
+        };
+        let bg_fill = Color32::from_rgb(237, 237, 237);
+        let painter = ui.painter();
+
+        if response.clicked() {
+            ui.data_mut(|data| {
+                let flag: &mut bool = data.get_temp_mut_or_default(id);
+                *flag = !*flag;
+            });
+        }
+
+        // Change cursor on hover
+        if ui.rect_contains_pointer(rect) {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+
+        // Paint background
+        painter.rect_stroke(rect, corner_radius, stroke, StrokeKind::Outside);
+        if response.hovered() || active {
+            painter.rect_filled(rect, corner_radius, bg_fill);
+        }
+
+        let mut cursor_pos = pos2(rect.min.x + out_pad.x, rect.center().y);
+
+        // Paint Icon
+        let icon_rect = Align2::LEFT_CENTER.anchor_size(cursor_pos, icon_size);
+        cursor_pos.x += icon_size.x + in_pad;
+        icon.to_image()
+            .tint(icon_color)
+            .fit_to_exact_size(icon_rect.size())
+            .paint_at(ui, icon_rect);
+
+        // Paint text
+        let icon_rect = Align2::LEFT_CENTER.anchor_size(cursor_pos, text_size);
+        painter.galley(icon_rect.min, galley, text_color);
+
+        // // Paint text
+        // let center_a = Pos2::new(rect.max.x + 5.0, off_y);
+        // let center_b = Pos2::new(rect.max.x + 5.0, on_y);
+        // let active_text_color = ui.app_visuals().text_color;
+        // let unactive_text_color = active_text_color.gamma_multiply(0.5);
+        // let base_font = ui.app_style().base_font_of(12.0);
+        // let bold_font = ui.app_style().bold_font_of(12.0);
+
+        // let text = "ETHERNET";
+        // let (font, text_color) = if click_t > 0.5 {
+        //     (base_font.clone(), unactive_text_color)
+        // } else {
+        //     (bold_font.clone(), active_text_color)
+        // };
+        // painter.text(center_a, Align2::LEFT_CENTER, text, font, text_color);
+        // let text = "SERIAL";
+        // let (font, text_color) = if click_t > 0.5 {
+        //     (bold_font, active_text_color)
+        // } else {
+        //     (base_font, unactive_text_color)
+        // };
+        // painter.text(center_b, Align2::LEFT_CENTER, text, font, text_color);
+    }
+} */
 
 fn vertical_toggle(ui: &mut Ui) {
     let width = 17.5;
@@ -179,7 +292,7 @@ fn vertical_toggle(ui: &mut Ui) {
         // Paint text
         let center_a = Pos2::new(rect.max.x + 5.0, off_y);
         let center_b = Pos2::new(rect.max.x + 5.0, on_y);
-        let active_text_color = ui.app_visuals().text_color;
+        let active_text_color = ui.visuals().text_color();
         let unactive_text_color = active_text_color.gamma_multiply(0.5);
         let base_font = ui.app_style().base_font_of(12.0);
         let bold_font = ui.app_style().bold_font_of(12.0);
@@ -334,7 +447,7 @@ fn side_button<I: Icon>(ui: &mut Ui, icon: I, active: &mut bool) -> Response {
                 Pos2::new(rect.min.x, rect.min.y),
                 Pos2::new(rect.min.x + 3.0, rect.max.y),
             );
-            painter.rect_filled(border_rect, 0.0, ui.app_visuals().text_color);
+            painter.rect_filled(border_rect, 0.0, ui.visuals().text_color());
         }
 
         // Toggle active state on click
@@ -347,7 +460,7 @@ fn side_button<I: Icon>(ui: &mut Ui, icon: I, active: &mut bool) -> Response {
         let snapped_rect = snap_rect_to_pixels(icon_rect, ui.ctx().pixels_per_point());
 
         let image = icon.to_image();
-        let mut icon_color = ui.app_visuals().icon_color;
+        let mut icon_color = ui.visuals().text_color();
         if !response.hovered() && !*active {
             icon_color = icon_color.gamma_multiply(0.5);
         }

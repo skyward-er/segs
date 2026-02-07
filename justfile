@@ -2,6 +2,7 @@
 mod assets 'crates/segs-assets'
 
 alias r := run
+alias f := format
 
 [private]
 default:
@@ -9,3 +10,6 @@ default:
 
 run:
     cargo run --bin segs
+
+format:
+    cargo +nightly fmt

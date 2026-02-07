@@ -3,13 +3,11 @@ mod checkbox;
 mod icon_btn;
 mod toggle;
 
-use egui::{Response, Ui};
-
-use segs_assets::icons::Icon;
-
 pub use bottom_bar::{BottomBarButton, PaddedBottomBarButton, UnpaddedBottomBarButton};
 pub use checkbox::Checkbox;
+use egui::{Response, Ui};
 pub use icon_btn::IconBtn;
+use segs_assets::icons::Icon;
 pub use toggle::Toggle;
 
 pub fn checkbox(ui: &mut Ui, active: &mut bool) -> Response {
