@@ -7,9 +7,8 @@ use std::{
 };
 
 use egui::{Context, Id};
-use serde::{Serialize, de::DeserializeOwned};
 
-use crate::memory::Memory;
+use crate::memory::{Memory, Persistent, Temporary};
 
 static MEMORY: OnceLock<MemoryControl> = OnceLock::new();
 
@@ -56,17 +55,14 @@ impl MemoryControl {
 
 /// Temporary in-memory management.
 impl MemoryControl {
-    pub fn insert_temp<V>(&self, id: Id, value: V)
-    where
-        V: 'static + Send + Sync,
-    {
+    pub fn insert_temp<V: Temporary>(&self, id: Id, value: V) {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).insert(value);
     }
 
     pub fn get_temp<V>(&self, id: Id) -> Option<V>
     where
-        V: 'static + Send + Sync + Clone,
+        V: Temporary + Clone,
     {
         let memory = self.0.read().unwrap();
         memory.temp(id).get().map(|v| v.read(|v: &V| v.clone()))
@@ -74,66 +70,54 @@ impl MemoryControl {
 
     pub fn get_temp_or_default<V>(&self, id: Id) -> V
     where
-        V: 'static + Send + Sync + Default + Clone,
+        V: Temporary + Default + Clone,
     {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_default().read(|v: &V| v.clone())
     }
 
-    pub fn read_temp_or_insert<V, O>(&self, id: Id, default: V, reader: impl FnOnce(&V) -> O) -> O
-    where
-        V: 'static + Send + Sync,
-    {
+    pub fn read_temp_or_insert<V: Temporary, O>(&self, id: Id, default: V, reader: impl FnOnce(&V) -> O) -> O {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_insert(default).read(reader)
     }
 
     pub fn read_temp_or_default<V, O>(&self, id: Id, writer: impl FnOnce(&mut V) -> O) -> O
     where
-        V: 'static + Send + Sync + Default,
+        V: Temporary + Default,
     {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_default().write(writer)
     }
 
-    pub fn read_temp_or_insert_with<V, O>(
+    pub fn read_temp_or_insert_with<V: Temporary, O>(
         &self,
         id: Id,
         default: impl FnOnce() -> V,
         writer: impl FnOnce(&mut V) -> O,
-    ) -> O
-    where
-        V: 'static + Send + Sync,
-    {
+    ) -> O {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_insert_with(default).write(writer)
     }
 
-    pub fn write_temp_mut_or_insert<V, O>(&self, id: Id, default: V, writer: impl FnOnce(&mut V) -> O) -> O
-    where
-        V: 'static + Send + Sync,
-    {
+    pub fn write_temp_mut_or_insert<V: Temporary, O>(&self, id: Id, default: V, writer: impl FnOnce(&mut V) -> O) -> O {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_insert(default).write(writer)
     }
 
     pub fn write_temp_mut_or_default<V, O>(&self, id: Id, writer: impl FnOnce(&mut V) -> O) -> O
     where
-        V: 'static + Send + Sync + Default,
+        V: Temporary + Default,
     {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_default().write(writer)
     }
 
-    pub fn write_temp_mut_or_insert_with<V, O>(
+    pub fn write_temp_mut_or_insert_with<V: Temporary, O>(
         &self,
         id: Id,
         default: impl FnOnce() -> V,
         writer: impl FnOnce(&mut V) -> O,
-    ) -> O
-    where
-        V: 'static + Send + Sync,
-    {
+    ) -> O {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_insert_with(default).write(writer)
     }
@@ -141,84 +125,71 @@ impl MemoryControl {
 
 /// Persistent in-memory management.
 impl MemoryControl {
-    pub fn insert_perm<V>(&self, id: Id, value: V)
-    where
-        V: 'static + Send + Sync + Serialize + DeserializeOwned,
-    {
+    pub fn insert_perm<V: Persistent>(&self, id: Id, value: V) {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).insert(value);
     }
 
-    pub fn get_perm<V>(&self, id: Id) -> Option<V>
-    where
-        V: 'static + Send + Sync + Clone + Serialize + DeserializeOwned,
-    {
+    pub fn get_perm<V: Persistent>(&self, id: Id) -> Option<V> {
         let mut memory = self.0.write().unwrap();
         memory.perm(id).get().map(|v| v.read(|v: &V| v.clone()))
     }
 
     pub fn get_perm_or_default<V>(&self, id: Id) -> V
     where
-        V: 'static + Send + Sync + Default + Clone + Serialize + DeserializeOwned,
+        V: Persistent + Default,
     {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_default().read(|v: &V| v.clone())
     }
 
-    pub fn read_perm_or_insert<V, O>(&self, id: Id, default: V, reader: impl FnOnce(&V) -> O) -> O
-    where
-        V: 'static + Send + Sync + Serialize + DeserializeOwned,
-    {
+    pub fn read_perm_or_insert<V: Persistent, O>(&self, id: Id, default: V, reader: impl FnOnce(&V) -> O) -> O {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_insert(default).read(reader)
     }
 
     pub fn read_perm_or_default<V, O>(&self, id: Id, writer: impl FnOnce(&mut V) -> O) -> O
     where
-        V: 'static + Send + Sync + Default + Serialize + DeserializeOwned,
+        V: Persistent + Default,
     {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_default().write(writer)
     }
 
-    pub fn read_perm_or_insert_with<V, O>(
+    pub fn read_perm_or_insert_with<V: Persistent, O>(
         &self,
         id: Id,
         default: impl FnOnce() -> V,
         writer: impl FnOnce(&mut V) -> O,
-    ) -> O
-    where
-        V: 'static + Send + Sync + Serialize + DeserializeOwned,
-    {
+    ) -> O {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_insert_with(default).write(writer)
     }
 
-    pub fn write_perm_mut_or_insert<V, O>(&self, id: Id, default: V, writer: impl FnOnce(&mut V) -> O) -> O
-    where
-        V: 'static + Send + Sync + Serialize + DeserializeOwned,
-    {
+    pub fn write_perm_mut_or_insert<V: Persistent, O>(
+        &self,
+        id: Id,
+        default: V,
+        writer: impl FnOnce(&mut V) -> O,
+    ) -> O {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_insert(default).write(writer)
     }
 
     pub fn write_perm_mut_or_default<V, O>(&self, id: Id, writer: impl FnOnce(&mut V) -> O) -> O
     where
-        V: 'static + Send + Sync + Default + Serialize + DeserializeOwned,
+        V: Persistent + Default,
     {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_default().write(writer)
     }
 
-    pub fn write_perm_mut_or_insert_with<V, O>(
+    pub fn write_perm_mut_or_insert_with<V: Persistent, O>(
         &self,
         id: Id,
         default: impl FnOnce() -> V,
         writer: impl FnOnce(&mut V) -> O,
-    ) -> O
-    where
-        V: 'static + Send + Sync + Serialize + DeserializeOwned,
-    {
+    ) -> O {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_insert_with(default).write(writer)
     }

@@ -3,8 +3,12 @@ use std::{any::Any, marker::PhantomData};
 use nohash::IntMap;
 use serde::Serialize;
 
-pub type PermMap = IntMap<u64, PermValue>;
-type Serializer = fn(&Box<dyn Any + 'static + Send + Sync>) -> Vec<u8>;
+use crate::memory::Dirty;
+
+pub type PermMap = IntMap<u64, Dirty<PermValue>>;
+type CloneAnyType = Box<dyn CloneAny>;
+type Serializer = fn(&CloneAnyType) -> Vec<u8>;
+type Comparator = fn(&CloneAnyType, &CloneAnyType) -> bool;
 pub trait SerializableAny: Serialize + Any + 'static + Send + Sync {}
 impl<T: Serialize + Any + 'static + Send + Sync> SerializableAny for T {}
 
@@ -27,7 +31,13 @@ where
     }
 
     pub fn get(&self) -> Option<PermCell<'_, V>> {
-        self.map.get(&self.key)?.value.downcast_ref::<V>().map(PermCell)
+        self.map
+            .get(&self.key)?
+            .as_ref()
+            .value
+            .as_any()
+            .downcast_ref::<V>()
+            .map(PermCell)
     }
 }
 
@@ -40,10 +50,10 @@ pub struct PermMutEntry<'a, V> {
 
 impl<'a, V> PermMutEntry<'a, V>
 where
-    V: SerializableAny,
+    V: SerializableAny + Eq + Clone,
 {
     pub fn new(map: &'a mut PermMap, key: u64) -> Self {
-        let occupied = map.get(&key).is_some_and(|v| v.is::<V>());
+        let occupied = map.get(&key).is_some_and(|v| v.as_ref().is::<V>());
         Self {
             map,
             key,
@@ -54,14 +64,10 @@ where
 
     pub fn or_insert_with(&mut self, default: impl FnOnce() -> V) -> PermMutCell<'_, V> {
         if !self.occupied {
-            self.map.insert(self.key, PermValue::dirty(default()));
+            self.map.insert(self.key, Dirty::new_dirty(PermValue::new(default())));
             self.occupied = true;
         }
-        let PermValue { value, dirty, .. } = self.map.get_mut(&self.key).unwrap();
-        PermMutCell {
-            borrow: value.downcast_mut::<V>().unwrap(),
-            dirty,
-        }
+        PermMutCell::new(self.map.get_mut(&self.key).unwrap())
     }
 
     pub fn or_insert(&mut self, default: V) -> PermMutCell<'_, V> {
@@ -75,41 +81,51 @@ where
         self.or_insert_with(V::default)
     }
 
+    /// Inserts the value if it doesn't exist, or replaces it if it's different
+    /// from the existing value. Marks the entry as dirty if the value
+    /// replaced was different or if the entry was newly inserted.
     pub fn insert(&mut self, value: V) {
-        self.map.insert(self.key, PermValue::dirty(value));
+        use std::collections::hash_map::Entry;
+        match self.map.entry(self.key) {
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().replace(PermValue::new(value));
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(Dirty::new_dirty(PermValue::new(value)));
+            }
+        }
         self.occupied = true;
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct PermValue {
-    pub value: Box<dyn Any + 'static + Send + Sync>,
-    /// Whether the value has been modified since it was loaded from storage.
-    /// This is used to determine whether the value needs to be written back to
-    /// storage.
-    pub dirty: bool,
+    pub value: Box<dyn CloneAny>,
     pub serializer: Serializer,
+    pub comparator: Comparator,
 }
 
+impl PartialEq for PermValue {
+    fn eq(&self, other: &Self) -> bool {
+        (self.comparator)(&self.value, &other.value)
+    }
+}
+
+impl Eq for PermValue {}
+
 impl PermValue {
-    fn new<V: SerializableAny>(value: V, dirty: bool) -> Self {
+    pub fn new<V: SerializableAny + Eq + Clone>(value: V) -> Self {
         Self {
             value: Box::new(value),
-            dirty,
-            serializer: |v| postcard::to_allocvec(v.downcast_ref::<V>().unwrap()).unwrap(),
+            serializer: |v| postcard::to_allocvec((**v).as_any().downcast_ref::<V>().unwrap()).unwrap(),
+            comparator: |a, b| {
+                (**a).as_any().downcast_ref::<V>().unwrap() == (**b).as_any().downcast_ref::<V>().unwrap()
+            },
         }
     }
 
-    pub fn dirty<V: SerializableAny>(value: V) -> Self {
-        Self::new(value, true)
-    }
-
-    pub fn not_dirty<V: SerializableAny>(value: V) -> Self {
-        Self::new(value, false)
-    }
-
     fn is<V: 'static>(&self) -> bool {
-        self.value.is::<V>()
+        (*self.value).as_any().is::<V>()
     }
 }
 
@@ -121,18 +137,68 @@ impl<'a, V> PermCell<'a, V> {
     }
 }
 
-pub struct PermMutCell<'a, V> {
-    borrow: &'a mut V,
-    dirty: &'a mut bool,
+pub struct PermMutCell<'a, V: Eq> {
+    value: &'a mut Dirty<PermValue>,
+    _marker: PhantomData<V>,
 }
 
-impl<'a, V> PermMutCell<'a, V> {
+impl<'a, V: Eq + 'static> PermMutCell<'a, V> {
+    fn new(value: &'a mut Dirty<PermValue>) -> Self {
+        Self {
+            value,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn read<O>(&self, reader: impl FnOnce(&V) -> O) -> O {
-        reader(self.borrow)
+        // SAFETY: This cannot unwrap to None because Self::new can only be called with
+        // a PermValue that contains a V, and the value is never replaced with a
+        // different type.
+        reader((*self.value.as_ref().value).as_any().downcast_ref::<V>().unwrap())
     }
 
     pub fn write<O>(&mut self, writer: impl FnOnce(&mut V) -> O) -> O {
-        *self.dirty = true;
-        writer(self.borrow)
+        self.value.update_and_check(|v| {
+            // SAFETY: This cannot unwrap to None because Self::new can only be called with
+            // a PermValue that contains a V, and the value is never replaced with a
+            // different type.
+            let v = (*v.value).as_any_mut().downcast_mut::<V>().unwrap();
+            writer(v)
+        })
+    }
+}
+
+pub trait CloneAny: Any + Send + Sync {
+    fn clone_box(&self) -> Box<dyn CloneAny>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T> CloneAny for T
+where
+    T: Any + Clone + Send + Sync + 'static,
+{
+    fn clone_box(&self) -> Box<dyn CloneAny> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Clone for Box<dyn CloneAny> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
+impl std::fmt::Debug for PermValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PermValue").finish_non_exhaustive()
     }
 }
