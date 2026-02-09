@@ -135,6 +135,11 @@ impl MemoryControl {
         memory.perm(id).get().map(|v| v.read(|v: &V| v.clone()))
     }
 
+    pub fn get_perm_or_insert<V: Persistent>(&self, id: Id, default: V) -> V {
+        let mut memory = self.0.write().unwrap();
+        memory.perm_mut(id).or_insert(default).read(|v: &V| v.clone())
+    }
+
     pub fn get_perm_or_default<V>(&self, id: Id) -> V
     where
         V: Persistent + Default,

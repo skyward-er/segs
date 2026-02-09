@@ -16,8 +16,8 @@ use crate::{
 
 pub trait Temporary: Any + 'static + Send + Sync {}
 impl<T: Any + 'static + Send + Sync> Temporary for T {}
-pub trait Persistent: Any + 'static + Send + Sync + Eq + Serialize + DeserializeOwned + Clone {}
-impl<T: Any + 'static + Send + Sync + Eq + Serialize + DeserializeOwned + Clone> Persistent for T {}
+pub trait Persistent: Any + 'static + Send + Sync + PartialEq + Serialize + DeserializeOwned + Clone {}
+impl<T: Any + 'static + Send + Sync + PartialEq + Serialize + DeserializeOwned + Clone> Persistent for T {}
 
 #[derive(Debug)]
 pub struct Memory {
@@ -157,12 +157,12 @@ impl Memory {
 }
 
 #[derive(Debug)]
-pub struct Dirty<T: Eq> {
+pub struct Dirty<T: PartialEq> {
     inner: T,
     dirty: bool,
 }
 
-impl<T: Eq> Dirty<T> {
+impl<T: PartialEq> Dirty<T> {
     fn new_clean(inner: T) -> Self {
         Self { inner, dirty: false }
     }
@@ -204,7 +204,7 @@ impl<T: Eq> Dirty<T> {
     }
 }
 
-impl<T: Eq + Clone> Dirty<T> {
+impl<T: PartialEq + Clone> Dirty<T> {
     fn update_and_check<O>(&mut self, f: impl FnOnce(&mut T) -> O) -> O {
         let old_inner = self.inner.clone();
         let result = f(&mut self.inner);
@@ -215,13 +215,13 @@ impl<T: Eq + Clone> Dirty<T> {
     }
 }
 
-impl<T: Eq> AsRef<T> for Dirty<T> {
+impl<T: PartialEq> AsRef<T> for Dirty<T> {
     fn as_ref(&self) -> &T {
         &self.inner
     }
 }
 
-impl<T: Eq> AsMut<T> for Dirty<T> {
+impl<T: PartialEq> AsMut<T> for Dirty<T> {
     fn as_mut(&mut self) -> &mut T {
         self.dirty = true;
         &mut self.inner

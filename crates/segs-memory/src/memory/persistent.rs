@@ -31,10 +31,7 @@ where
     }
 
     pub fn get(&self) -> Option<PermCell<'_, V>> {
-        self.map
-            .get(&self.key)?
-            .as_ref()
-            .value
+        (*self.map.get(&self.key)?.as_ref().value)
             .as_any()
             .downcast_ref::<V>()
             .map(PermCell)
@@ -50,7 +47,7 @@ pub struct PermMutEntry<'a, V> {
 
 impl<'a, V> PermMutEntry<'a, V>
 where
-    V: SerializableAny + Eq + Clone,
+    V: SerializableAny + PartialEq + Clone,
 {
     pub fn new(map: &'a mut PermMap, key: u64) -> Self {
         let occupied = map.get(&key).is_some_and(|v| v.as_ref().is::<V>());
@@ -111,10 +108,8 @@ impl PartialEq for PermValue {
     }
 }
 
-impl Eq for PermValue {}
-
 impl PermValue {
-    pub fn new<V: SerializableAny + Eq + Clone>(value: V) -> Self {
+    pub fn new<V: SerializableAny + PartialEq + Clone>(value: V) -> Self {
         Self {
             value: Box::new(value),
             serializer: |v| postcard::to_allocvec((**v).as_any().downcast_ref::<V>().unwrap()).unwrap(),
@@ -137,12 +132,12 @@ impl<'a, V> PermCell<'a, V> {
     }
 }
 
-pub struct PermMutCell<'a, V: Eq> {
+pub struct PermMutCell<'a, V: PartialEq> {
     value: &'a mut Dirty<PermValue>,
     _marker: PhantomData<V>,
 }
 
-impl<'a, V: Eq + 'static> PermMutCell<'a, V> {
+impl<'a, V: PartialEq + 'static> PermMutCell<'a, V> {
     fn new(value: &'a mut Dirty<PermValue>) -> Self {
         Self {
             value,
@@ -193,7 +188,7 @@ where
 
 impl Clone for Box<dyn CloneAny> {
     fn clone(&self) -> Self {
-        self.clone_box()
+        (**self).clone_box()
     }
 }
 
