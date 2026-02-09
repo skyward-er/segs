@@ -1,9 +1,10 @@
 mod ui;
+mod utils;
 
 use eframe::egui;
 use egui::{
-    Align, Align2, Area, Color32, CursorIcon, Frame, Layout, Margin, Pos2, Rect, Response, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2, ViewportBuilder, emath::easing, lerp, pos2, vec2,
+    Align, Align2, Area, Color32, CursorIcon, Frame, Id, Layout, Margin, Pos2, Rect, Response, RichText, ScrollArea,
+    Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2, ViewportBuilder, emath::easing, lerp, pos2, vec2,
 };
 use mimalloc::MiMalloc;
 use segs_assets::{
@@ -12,8 +13,11 @@ use segs_assets::{
     icons::{self, Icon},
     install_fonts, install_icons, load_app_icon,
 };
+use segs_memory::{MemoryExt, init_memory};
 use segs_ui::{
-    StyleExt, setup_style,
+    StyleExt,
+    containers::ResizablePanel,
+    setup_style,
     widgets::{UiWidgetExt, labels::SelectableLabel},
 };
 
@@ -24,6 +28,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 // Standard eframe setup to run the app
 fn main() -> eframe::Result<()> {
+    init_memory(utils::get_memory_dirpath()).expect("Failed to initialize memory system");
     let app_icon = load_app_icon();
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
@@ -75,168 +80,117 @@ impl eframe::App for MyApp {
         ui::panels::top_controls_bar(ctx, &mut self.top_bar_controls);
         ui::panels::bottom_controls_bar(ctx, &mut self.bottom_bar_controls);
 
-        if self.top_bar_controls.left_panel_visible {
-            egui::SidePanel::left("left_panel")
-                .max_width(50.)
-                .show_separator_line(true)
-                .resizable(false)
-                .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
-                .show(ctx, |ui| {
-                    ui.vertical(|ui| {
-                        // Top section (empty, but you can add content here)
-                        ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::ZERO;
-                            side_selector(ui, &mut self.side_panel_selection, Selection::Charts, icons::Charts);
-                            side_selector(ui, &mut self.side_panel_selection, Selection::Layout, icons::Layout);
-                        });
+        // if self.top_bar_controls.left_panel_visible {
+        //     egui::SidePanel::left("left_panel")
+        //         .max_width(50.)
+        //         .show_separator_line(true)
+        //         .resizable(false)
+        //         .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
+        //         .show(ctx, |ui| {
+        //             ui.vertical(|ui| {
+        //                 // Top section (empty, but you can add content here)
+        //                 ui.with_layout(Layout::top_down(Align::Center), |ui| {
+        //                     ui.spacing_mut().item_spacing = Vec2::ZERO;
+        //                     side_selector(ui, &mut self.side_panel_selection,
+        // Selection::Charts, icons::Charts);
+        // side_selector(ui, &mut self.side_panel_selection, Selection::Layout,
+        // icons::Layout);                 });
 
-                        // Bottom section (your buttons)
-                        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::ZERO;
-                            side_selector(ui, &mut self.side_panel_selection, Selection::Settings, icons::Cog);
+        //                 // Bottom section (your buttons)
+        //                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
+        //                     ui.spacing_mut().item_spacing = Vec2::ZERO;
+        //                     side_selector(ui, &mut self.side_panel_selection,
+        // Selection::Settings, icons::Cog);                 });
+        //             });
+        //         });
+        // }
+
+        // egui::CentralPanel::default().show(ctx, |ui| {
+        //     SelectableLabel::new(&mut self.side_panel_selection)
+        //         .option(icons::Ethernet, "Ethernet", Selection::Charts)
+        //         .option(icons::Usb, "Usb", Selection::Layout)
+        //         .show(ui);
+        //     ui.add_space(10.);
+        //     ui.check(&mut self.test_flag);
+
+        //     let sin: segs_plot::PlotPoints = (0..1000)
+        //         .map(|i| {
+        //             let x = i as f64 * 0.01;
+        //             [x, x.sin()]
+        //         })
+        //         .collect();
+        //     let line = segs_plot::Line::new("sin", sin);
+        //     segs_plot::Plot::new("my_plot")
+        //         .view_aspect(2.0)
+        //         .legend(segs_plot::Legend::default())
+        //         .coordinates_formatter(
+        //             segs_plot::Corner::RightBottom,
+        //             segs_plot::CoordinatesFormatter::new(|pos, _| format!("x: {:.2},
+        // y: {:.2}", pos.x, pos.y)),         )
+        //         .show(ui, |plot_ui| plot_ui.line(line));
+
+        //     vertical_toggle(ui);
+
+        //     // Overlay at bottom-right
+        //     if self.bottom_bar_controls.notifications_active {
+        //         Area::new("bottom_right_overlay".into())
+        //             .pivot(Align2::RIGHT_BOTTOM)
+        //             .fixed_pos(ui.max_rect().right_bottom())
+        //             .show(ctx, |ui| {
+        //                 notification_panel(ui);
+        //             });
+        //     }
+        // });
+
+        let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
+            let mut collapsed_left = !self.top_bar_controls.left_panel_visible;
+            let mut collapsed_right = !self.top_bar_controls.right_panel_visible;
+            let panel_frame = Frame::NONE.fill(Color32::from_rgb(246, 246, 246));
+            let main_frame = panel_frame
+                .corner_radius(5.0)
+                .stroke(Stroke::new(1., Color32::from_rgb(242, 242, 242)))
+                .fill(Color32::from_rgb(252, 252, 252));
+            let right = ResizablePanel::horizontal_right()
+                .collapsed(&mut collapsed_right)
+                .inactive_separator_width(0.)
+                .right_frame(panel_frame);
+            ResizablePanel::horizontal_left()
+                .collapsed(&mut collapsed_left)
+                .inactive_separator_width(0.)
+                .left_frame(panel_frame)
+                .right_frame(main_frame)
+                .show(ui, |panel| {
+                    panel
+                        .show_left(|ui| {
+                            ui.with_layout(Layout::top_down(Align::Min).with_main_wrap(true), |ui| {
+                                ui.label("Left Panel");
+                            });
+                        })
+                        // .show_right(|ui| {
+                        //     ui.label("asdasd");
+                        // });
+                        .show_right(|ui| {
+                            right.show(ui, |panel| {
+                                panel
+                                    .show_left(|ui| {
+                                        ui.with_layout(Layout::top_down(Align::Min).with_main_wrap(true), |ui| {
+                                            ui.label("Main Panel");
+                                        });
+                                    })
+                                    .show_right(|ui| {
+                                        ui.label("Right panel");
+                                    });
+                            });
                         });
-                    });
                 });
-        }
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            SelectableLabel::new(&mut self.side_panel_selection)
-                .option(icons::Ethernet, "Ethernet", Selection::Charts)
-                .option(icons::Usb, "Usb", Selection::Layout)
-                .show(ui);
-            ui.add_space(10.);
-            ui.check(&mut self.test_flag);
-
-            let sin: segs_plot::PlotPoints = (0..1000)
-                .map(|i| {
-                    let x = i as f64 * 0.01;
-                    [x, x.sin()]
-                })
-                .collect();
-            let line = segs_plot::Line::new("sin", sin);
-            segs_plot::Plot::new("my_plot")
-                .view_aspect(2.0)
-                .legend(segs_plot::Legend::default())
-                .coordinates_formatter(
-                    segs_plot::Corner::RightBottom,
-                    segs_plot::CoordinatesFormatter::new(|pos, _| format!("x: {:.2}, y: {:.2}", pos.x, pos.y)),
-                )
-                .show(ui, |plot_ui| plot_ui.line(line));
-
-            vertical_toggle(ui);
-
-            // Overlay at bottom-right
-            if self.bottom_bar_controls.notifications_active {
-                Area::new("bottom_right_overlay".into())
-                    .pivot(Align2::RIGHT_BOTTOM)
-                    .fixed_pos(ui.max_rect().right_bottom())
-                    .show(ctx, |ui| {
-                        notification_panel(ui);
-                    });
-            }
+            self.top_bar_controls.left_panel_visible = !collapsed_left;
+            self.top_bar_controls.right_panel_visible = !collapsed_right;
         });
+
+        ctx.mem().sync_persistence().expect("Failed to sync persistent memory");
     }
 }
-
-/* fn radio_button<I, S>(ui: &mut Ui, icon: I, text: S)
-where
-    I: Icon,
-    S: Into<String>,
-{
-    let icon_size = vec2(17., 17.);
-    let corner_radius = 4.0;
-    let in_pad = 5.;
-    let out_pad = vec2(7., 2.);
-    let id = ui.next_auto_id().with("radio_asd");
-
-    let inactive_text_color = Color32::from_rgb(92, 92, 92);
-    let active_text_color = Color32::from_rgb(27, 27, 27);
-    let active = ui.data(|data| data.get_temp(id)).unwrap_or_default();
-
-    let font_id;
-    let text_color;
-    let icon_color;
-    if active {
-        font_id = Figtree::semi_bold().sized(15.);
-        text_color = active_text_color;
-        icon_color = active_text_color;
-    } else {
-        font_id = Figtree::medium().sized(15.);
-        text_color = inactive_text_color;
-        icon_color = inactive_text_color;
-    }
-
-    let galley = ui.painter().layout_no_wrap(text.into(), font_id, text_color);
-    let text_size = galley.size();
-
-    let tot_y = out_pad.y * 2.0 + icon_size.y.max(text_size.y);
-    let tot_x = out_pad.x * 2.0 + in_pad + icon_size.x + text_size.x;
-    let (rect, response) = ui.allocate_exact_size(vec2(tot_x, tot_y), Sense::click());
-
-    if ui.is_rect_visible(rect) {
-        let stroke = Stroke {
-            color: Color32::from_rgb(216, 216, 216),
-            width: 0.5,
-        };
-        let bg_fill = Color32::from_rgb(237, 237, 237);
-        let painter = ui.painter();
-
-        if response.clicked() {
-            ui.data_mut(|data| {
-                let flag: &mut bool = data.get_temp_mut_or_default(id);
-                *flag = !*flag;
-            });
-        }
-
-        // Change cursor on hover
-        if ui.rect_contains_pointer(rect) {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-
-        // Paint background
-        painter.rect_stroke(rect, corner_radius, stroke, StrokeKind::Outside);
-        if response.hovered() || active {
-            painter.rect_filled(rect, corner_radius, bg_fill);
-        }
-
-        let mut cursor_pos = pos2(rect.min.x + out_pad.x, rect.center().y);
-
-        // Paint Icon
-        let icon_rect = Align2::LEFT_CENTER.anchor_size(cursor_pos, icon_size);
-        cursor_pos.x += icon_size.x + in_pad;
-        icon.to_image()
-            .tint(icon_color)
-            .fit_to_exact_size(icon_rect.size())
-            .paint_at(ui, icon_rect);
-
-        // Paint text
-        let icon_rect = Align2::LEFT_CENTER.anchor_size(cursor_pos, text_size);
-        painter.galley(icon_rect.min, galley, text_color);
-
-        // // Paint text
-        // let center_a = Pos2::new(rect.max.x + 5.0, off_y);
-        // let center_b = Pos2::new(rect.max.x + 5.0, on_y);
-        // let active_text_color = ui.app_visuals().text_color;
-        // let unactive_text_color = active_text_color.gamma_multiply(0.5);
-        // let base_font = ui.app_style().base_font_of(12.0);
-        // let bold_font = ui.app_style().bold_font_of(12.0);
-
-        // let text = "ETHERNET";
-        // let (font, text_color) = if click_t > 0.5 {
-        //     (base_font.clone(), unactive_text_color)
-        // } else {
-        //     (bold_font.clone(), active_text_color)
-        // };
-        // painter.text(center_a, Align2::LEFT_CENTER, text, font, text_color);
-        // let text = "SERIAL";
-        // let (font, text_color) = if click_t > 0.5 {
-        //     (bold_font, active_text_color)
-        // } else {
-        //     (base_font, unactive_text_color)
-        // };
-        // painter.text(center_b, Align2::LEFT_CENTER, text, font, text_color);
-    }
-} */
 
 fn vertical_toggle(ui: &mut Ui) {
     let width = 17.5;

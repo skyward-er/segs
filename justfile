@@ -17,4 +17,4 @@ format:
 
 [confirm]
 clear-metadata:
-    rm -r ~/Library/Application\ Support/eu.skyward.segs/metadata
+    rm -r ~/Library/Application\ Support/eu.skyward.segs/metadata_dev

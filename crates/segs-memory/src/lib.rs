@@ -68,6 +68,14 @@ impl MemoryControl {
         memory.temp(id).get().map(|v| v.read(|v: &V| v.clone()))
     }
 
+    pub fn get_temp_or_insert<V>(&self, id: Id, default: V) -> V
+    where
+        V: Temporary + Clone,
+    {
+        let mut memory = self.0.write().unwrap();
+        memory.temp_mut(id).or_insert(default).read(|v: &V| v.clone())
+    }
+
     pub fn get_temp_or_default<V>(&self, id: Id) -> V
     where
         V: Temporary + Default + Clone,
@@ -138,6 +146,11 @@ impl MemoryControl {
     pub fn get_perm_or_insert<V: Persistent>(&self, id: Id, default: V) -> V {
         let mut memory = self.0.write().unwrap();
         memory.perm_mut(id).or_insert(default).read(|v: &V| v.clone())
+    }
+
+    pub fn get_perm_or_insert_with<V: Persistent>(&self, id: Id, default: impl FnOnce() -> V) -> V {
+        let mut memory = self.0.write().unwrap();
+        memory.perm_mut(id).or_insert_with(default).read(|v: &V| v.clone())
     }
 
     pub fn get_perm_or_default<V>(&self, id: Id) -> V

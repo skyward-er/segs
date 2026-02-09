@@ -207,7 +207,7 @@ fn override_dark_style(_style: &mut Style) {}
 /// Override light theme styles.
 fn override_light_style(style: &mut Style) {
     // General visuals
-    style.visuals.panel_fill = Color32::from_rgb(252, 252, 252);
+    style.visuals.panel_fill = Color32::from_rgb(246, 246, 246);
 
     // Widget styles
     let active = &mut style.visuals.widgets.active;

@@ -3022,6 +3022,8 @@ dependencies = [
  "eframe",
  "egui",
  "segs-assets",
+ "segs-memory",
+ "serde",
  "smallvec",
 ]
 

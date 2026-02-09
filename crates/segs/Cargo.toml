@@ -8,9 +8,11 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+directories = "6.0.0"
 eframe.workspace = true
 egui.workspace = true
 mimalloc = { version = "0.1.48", features = ["v3"] }
 segs-assets.path = "../segs-assets"
+segs-memory.path = "../segs-memory"
 segs-plot.path = "../segs-plot"
 segs-ui.path = "../segs-ui"
