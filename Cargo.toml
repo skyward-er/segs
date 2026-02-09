@@ -12,7 +12,7 @@ members = [
     "crates/segs-assets",
     "crates/segs",
     "crates/segs-ui",
-    "crates/segs-plot",
+    "crates/segs-plot", "crates/segs-memory",
 ]
 
 [workspace.dependencies]
@@ -20,3 +20,4 @@ eframe = "0.33.3"
 egui = { version = "0.33.3", default-features = false }
 emath = { version = "0.33.3", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
