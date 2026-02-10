@@ -1,7 +1,7 @@
-use egui::{Align, Color32, Context, Frame, Layout, Margin, Stroke, Vec2};
+use egui::{Align, Context, Frame, Layout, Margin, Vec2};
 use segs_assets::icons;
 use segs_ui::{
-    UiComponentExt,
+    StyleExt, UiComponentExt,
     containers::ResizablePanel,
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
@@ -150,14 +150,15 @@ pub fn main_view(
         let mut collapsed_right = !panel_controls.right_panel_visible;
         let mut collapsed_bottom = !panel_controls.bottom_panel_visible;
 
+        let visuals = ctx.app_visuals();
         // Outer frames are for the hierarchical ResizablePanel structure, just fill color
-        let panel_outer_frame = Frame::new().fill(Color32::from_rgb(246, 246, 246));
+        let panel_outer_frame = Frame::new().fill(visuals.egui().panel_fill);
         // Inner ones use margin to create spacing between panels and content
         let panel_inner_frame = Frame::new().inner_margin(10.);
-        let main_inner_frame = Frame::new()
+        let main_inner_frame = panel_inner_frame
             .corner_radius(5.0)
-            .fill(Color32::from_rgb(252, 252, 252))
-            .stroke(Stroke::new(1., Color32::from_rgb(242, 242, 242)));
+            .fill(visuals.main_view_fill)
+            .stroke(visuals.main_view_stroke);
 
         let left = ResizablePanel::horizontal_left()
             .collapsed(&mut collapsed_left)

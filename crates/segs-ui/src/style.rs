@@ -4,7 +4,7 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, Guard};
-use egui::{Color32, Style, Theme, ThemePreference, Visuals, style::WidgetVisuals};
+use egui::{Color32, Stroke, Style, Theme, ThemePreference, Visuals, style::WidgetVisuals};
 use segs_assets::{Font, fonts::Figtree};
 
 pub static DARK: OnceLock<Arc<AppStyle>> = OnceLock::new();
@@ -67,6 +67,10 @@ pub struct AppVisuals {
     /// Egui orginal style struct
     egui: EguiStyleRef,
 
+    // ~ Main View Visuals ~
+    pub main_view_fill: Color32,
+    pub main_view_stroke: Stroke,
+
     /// Widget style definitions
     pub widget_style: WidgetStyle,
 
@@ -84,6 +88,11 @@ impl AppVisuals {
     fn dark(egui: EguiStyleRef) -> Self {
         Self {
             widget_style: WidgetStyle::dark(egui.clone()),
+
+            // ~ Main View Visuals ~
+            main_view_fill: Color32::from_rgb(16, 16, 17),
+            main_view_stroke: Stroke::new(1., Color32::from_rgb(39, 40, 45)),
+
             shadow_color: Color32::from_white_alpha(40),
             accent_color: Color32::from_rgb(0, 132, 255),
             enabled_color: Color32::from_rgb(23, 150, 87),
@@ -94,6 +103,11 @@ impl AppVisuals {
     fn light(egui: EguiStyleRef) -> Self {
         Self {
             widget_style: WidgetStyle::light(egui.clone()),
+
+            // ~ Main View Visuals ~
+            main_view_fill: Color32::from_rgb(252, 252, 252),
+            main_view_stroke: Stroke::new(1., Color32::from_rgb(242, 242, 242)),
+
             shadow_color: Color32::from_black_alpha(20),
             accent_color: Color32::from_rgb(232, 157, 86),
             enabled_color: Color32::from_rgb(88, 232, 160),
@@ -202,7 +216,10 @@ fn override_egui_styles(style: &mut Style) {
 }
 
 /// Override dark theme styles.
-fn override_dark_style(_style: &mut Style) {}
+fn override_dark_style(style: &mut Style) {
+    // General visuals
+    style.visuals.panel_fill = Color32::from_rgb(9, 9, 9);
+}
 
 /// Override light theme styles.
 fn override_light_style(style: &mut Style) {

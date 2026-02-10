@@ -25,7 +25,7 @@ fn main() -> eframe::Result<()> {
             .with_icon(app_icon),
         ..Default::default()
     };
-    eframe::run_native("SEGS v2", options, Box::new(|cc| Ok(Box::new(MyApp::new(cc)))))
+    eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(MyApp::new(cc)))))
 }
 
 struct MyApp {

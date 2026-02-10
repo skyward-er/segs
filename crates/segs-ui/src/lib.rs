@@ -22,7 +22,17 @@ pub trait StyleExt {
 
 impl StyleExt for egui::Ui {
     fn app_style(&self) -> Arc<AppStyle> {
-        let app_style = match self.ctx().theme() {
+        self.ctx().app_style()
+    }
+
+    fn app_visuals(&self) -> &AppVisuals {
+        self.ctx().app_visuals()
+    }
+}
+
+impl StyleExt for egui::Context {
+    fn app_style(&self) -> Arc<AppStyle> {
+        let app_style = match self.theme() {
             Theme::Dark => style::DARK.get().unwrap().clone(),
             Theme::Light => style::LIGHT.get().unwrap().clone(),
         };
@@ -31,7 +41,7 @@ impl StyleExt for egui::Ui {
     }
 
     fn app_visuals(&self) -> &AppVisuals {
-        let app_style = match self.ctx().theme() {
+        let app_style = match self.theme() {
             Theme::Dark => &style::DARK.get().unwrap(),
             Theme::Light => &style::LIGHT.get().unwrap(),
         };
