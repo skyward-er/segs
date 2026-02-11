@@ -2,10 +2,11 @@ use egui::{Align, Context, Frame, Layout, Margin, SidePanel, Vec2};
 use segs_assets::icons;
 use segs_ui::{
     StyleExt,
-    components::buttons,
     containers::ResizablePanel,
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
+
+use crate::ui::components::buttons;
 
 #[derive(Debug, Clone, Default)]
 pub struct TopBarControls {
@@ -210,7 +211,8 @@ pub fn main_view(
         let mut collapsed_bottom = !panel_controls.bottom_panel_visible;
 
         let visuals = ctx.app_visuals();
-        // Outer frames are for the hierarchical ResizablePanel structure, just fill color
+        // Outer frames are for the hierarchical ResizablePanel structure, just fill
+        // color
         let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
         // Inner ones use margin to create spacing between panels and content
         let panel_inner_frame = Frame::new().inner_margin(10.);

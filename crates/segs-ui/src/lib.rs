@@ -1,4 +1,3 @@
-pub mod components;
 pub mod containers;
 mod style;
 pub mod widgets;

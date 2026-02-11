@@ -1,7 +1,6 @@
 use egui::{Response, Theme, Ui, Widget, vec2};
 use segs_assets::icons::{self, Icon};
-
-use crate::widgets::{UiWidgetExt, buttons::RibbonToggle};
+use segs_ui::widgets::{UiWidgetExt, buttons::RibbonToggle};
 
 pub fn lock_mode_toggle(ui: &mut Ui, active: &mut bool) -> Response {
     ui.icon_toggle(icons::Lock::unlocked(), icons::Lock::locked(), active)
