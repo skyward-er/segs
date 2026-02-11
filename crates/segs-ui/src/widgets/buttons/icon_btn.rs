@@ -58,7 +58,7 @@ impl<'a> Widget for IconBtn<'a> {
 }
 
 fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
-    let toggle_size = Vec2::new(26.0, 26.0);
+    let toggle_size = Vec2::new(25., 25.);
     let (rect, response) = ui.allocate_exact_size(toggle_size, Sense::click());
     let id = response.id;
 
@@ -71,16 +71,15 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
     // Paint the button
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let scale = 1.0 + (hover_t * 0.02) - (active_t * 0.06);
-        let animated_rect = rect.expand2(rect.size() * (scale - 1.0) * 0.5);
+        let scale = 1. + (hover_t * 0.1) - (active_t * 0.15);
+        let animated_rect = rect.expand2(rect.shrink(1.).size() * (scale - 1.0) * 0.5);
 
-        if hover_t > 0.0 {
-            let shadow_size = hover_t * 2.5;
+        if hover_t > 0. {
             let shadow_color = ui.app_visuals().shadow_color_lerp(hover_t);
-            painter.rect_filled(animated_rect.shrink(shadow_size), 4.0, shadow_color);
+            painter.rect_filled(animated_rect.shrink(1.), 5., shadow_color);
         }
 
-        let icon_rect = animated_rect.shrink(6.0);
+        let icon_rect = animated_rect.shrink(2.);
         let icon_color = ui.visuals().text_color();
         icon.to_image()
             .tint(icon_color)

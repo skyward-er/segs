@@ -61,7 +61,8 @@ pub mod svgs {
     pub static ADD_FOLDER: egui::ImageSource = include_svg!("svgs", "add_folder.svg");
     pub static ADD_LAYOUT: egui::ImageSource = include_svg!("svgs", "add_layout.svg");
     pub static ALERT: egui::ImageSource = include_svg!("svgs", "alert.svg");
-    pub static ANTENNA: egui::ImageSource = include_svg!("svgs", "antenna.svg");
+    pub static ANTENNA_OUTLINE: egui::ImageSource = include_svg!("svgs", "antenna_outline.svg");
+    pub static ANTENNA_SOLID: egui::ImageSource = include_svg!("svgs", "antenna_solid.svg");
     pub static ARCHIVE_OUTLINE: egui::ImageSource = include_svg!("svgs", "archive_outline.svg");
     pub static ARCHIVE_SOLID: egui::ImageSource = include_svg!("svgs", "archive_solid.svg");
     pub static ARROW_DOWN: egui::ImageSource = include_svg!("svgs", "arrow_down.svg");
@@ -82,7 +83,11 @@ pub mod svgs {
     pub static EYE_CROSSED: egui::ImageSource = include_svg!("svgs", "eye_crossed.svg");
     pub static EYE_OPEN: egui::ImageSource = include_svg!("svgs", "eye_open.svg");
     pub static FOLD_ALL: egui::ImageSource = include_svg!("svgs", "fold_all.svg");
+    pub static FUNCTION_OUTLINE: egui::ImageSource = include_svg!("svgs", "function_outline.svg");
+    pub static FUNCTION_SOLID: egui::ImageSource = include_svg!("svgs", "function_solid.svg");
     pub static GLOBE: egui::ImageSource = include_svg!("svgs", "globe.svg");
+    pub static LAYOUT_GRID_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_grid_outline.svg");
+    pub static LAYOUT_GRID_SOLID: egui::ImageSource = include_svg!("svgs", "layout_grid_solid.svg");
     pub static LAYOUT_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_outline.svg");
     pub static LAYOUT_SOLID: egui::ImageSource = include_svg!("svgs", "layout_solid.svg");
     pub static LEFT_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "left_panel_outline.svg");
@@ -97,6 +102,8 @@ pub mod svgs {
     pub static PALETTE: egui::ImageSource = include_svg!("svgs", "palette.svg");
     pub static PLOTS: egui::ImageSource = include_svg!("svgs", "plots.svg");
     pub static PULSE: egui::ImageSource = include_svg!("svgs", "pulse.svg");
+    pub static RECTANGLE_VERTICAL_OUTLINE: egui::ImageSource = include_svg!("svgs", "rectangle_vertical_outline.svg");
+    pub static RECTANGLE_VERTICAL_SOLID: egui::ImageSource = include_svg!("svgs", "rectangle_vertical_solid.svg");
     pub static REFRESH: egui::ImageSource = include_svg!("svgs", "refresh.svg");
     pub static RETICLE_EMPTY: egui::ImageSource = include_svg!("svgs", "reticle_empty.svg");
     pub static RETICLE_OUTLINE: egui::ImageSource = include_svg!("svgs", "reticle_outline.svg");

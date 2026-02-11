@@ -4,11 +4,24 @@ use std::{
 };
 
 use arc_swap::{ArcSwap, Guard};
-use egui::{Color32, Stroke, Style, Theme, ThemePreference, Visuals, style::WidgetVisuals};
+use egui::{Color32, Shadow, Stroke, Style, Theme, ThemePreference, Visuals, style::WidgetVisuals};
 use segs_assets::{Font, fonts::Figtree};
 
 pub static DARK: OnceLock<Arc<AppStyle>> = OnceLock::new();
 pub static LIGHT: OnceLock<Arc<AppStyle>> = OnceLock::new();
+
+/// Panel fill, color of the background.
+const LEVEL_0_COLOR_DARK: Color32 = Color32::from_rgb(9, 9, 9);
+const LEVEL_0_COLOR_LIGHT: Color32 = Color32::from_rgb(240, 240, 240);
+/// Color or collapsed panels, in the middle.
+const LEVEL_1_COLOR_DARK: Color32 = Color32::from_rgb(16, 16, 17);
+const LEVEL_1_COLOR_LIGHT: Color32 = Color32::from_rgb(249, 249, 249);
+/// Color of the main view, the layer above panels.
+const LEVEL_2_COLOR_DARK: Color32 = Color32::from_rgb(20, 20, 21);
+const LEVEL_2_COLOR_LIGHT: Color32 = Color32::from_rgb(252, 252, 252);
+/// Popup fill, color of the uppermost layer.
+const LEVEL_3_COLOR_DARK: Color32 = Color32::BLACK;
+const LEVEL_3_COLOR_LIGHT: Color32 = Color32::WHITE;
 
 #[derive(Debug)]
 pub struct AppStyle {
@@ -69,7 +82,14 @@ pub struct AppVisuals {
 
     // ~ Main View Visuals ~
     pub main_view_fill: Color32,
+    pub main_panels_fill: Color32,
     pub main_view_stroke: Stroke,
+
+    // These two controls how menu icons are tinted in active/inactive states.
+    pub menu_icon_inactive_color: Color32,
+    pub menu_icon_active_color: Color32,
+    pub menu_icon_shadow_color_hover: Color32,
+    pub menu_icon_shadow_color_active: Color32,
 
     /// Widget style definitions
     pub widget_style: WidgetStyle,
@@ -88,11 +108,13 @@ impl AppVisuals {
     fn dark(egui: EguiStyleRef) -> Self {
         Self {
             widget_style: WidgetStyle::dark(egui.clone()),
-
-            // ~ Main View Visuals ~
-            main_view_fill: Color32::from_rgb(16, 16, 17),
+            main_view_fill: LEVEL_2_COLOR_DARK,
+            main_panels_fill: LEVEL_1_COLOR_DARK,
             main_view_stroke: Stroke::new(1., Color32::from_rgb(39, 40, 45)),
-
+            menu_icon_inactive_color: Color32::from_rgb(149, 149, 151),
+            menu_icon_active_color: Color32::WHITE,
+            menu_icon_shadow_color_hover: Color32::from_rgb(21, 22, 25),
+            menu_icon_shadow_color_active: Color32::from_rgb(30, 31, 34),
             shadow_color: Color32::from_white_alpha(40),
             accent_color: Color32::from_rgb(0, 132, 255),
             enabled_color: Color32::from_rgb(23, 150, 87),
@@ -103,11 +125,13 @@ impl AppVisuals {
     fn light(egui: EguiStyleRef) -> Self {
         Self {
             widget_style: WidgetStyle::light(egui.clone()),
-
-            // ~ Main View Visuals ~
-            main_view_fill: Color32::from_rgb(252, 252, 252),
-            main_view_stroke: Stroke::new(1., Color32::from_rgb(242, 242, 242)),
-
+            main_view_fill: LEVEL_2_COLOR_LIGHT,
+            main_panels_fill: LEVEL_1_COLOR_LIGHT,
+            main_view_stroke: Stroke::new(1., Color32::from_rgb(216, 216, 216)),
+            menu_icon_inactive_color: Color32::from_rgb(89, 90, 91),
+            menu_icon_active_color: Color32::from_rgb(26, 26, 26),
+            menu_icon_shadow_color_hover: Color32::from_rgb(232, 232, 232),
+            menu_icon_shadow_color_active: Color32::from_rgb(232, 232, 232),
             shadow_color: Color32::from_black_alpha(20),
             accent_color: Color32::from_rgb(232, 157, 86),
             enabled_color: Color32::from_rgb(88, 232, 160),
@@ -218,13 +242,23 @@ fn override_egui_styles(style: &mut Style) {
 /// Override dark theme styles.
 fn override_dark_style(style: &mut Style) {
     // General visuals
-    style.visuals.panel_fill = Color32::from_rgb(9, 9, 9);
+    style.visuals.panel_fill = LEVEL_0_COLOR_DARK;
 }
 
 /// Override light theme styles.
 fn override_light_style(style: &mut Style) {
     // General visuals
-    style.visuals.panel_fill = Color32::from_rgb(246, 246, 246);
+    style.visuals.panel_fill = LEVEL_0_COLOR_LIGHT;
+
+    // Customizing popup frames
+    style.visuals.window_stroke = Stroke::new(1., Color32::from_rgb(216, 216, 216));
+    style.visuals.window_fill = LEVEL_3_COLOR_LIGHT;
+    style.visuals.popup_shadow = Shadow {
+        offset: [1, 2],
+        blur: 3,
+        spread: 0,
+        color: Color32::from_rgb(232, 232, 232),
+    };
 
     // Widget styles
     let active = &mut style.visuals.widgets.active;

@@ -1,11 +1,10 @@
-mod components;
+pub mod components;
 pub mod containers;
 mod style;
 pub mod widgets;
 
 use std::sync::Arc;
 
-pub use components::UiComponentExt;
 use egui::Theme;
 pub use style::setup_style;
 

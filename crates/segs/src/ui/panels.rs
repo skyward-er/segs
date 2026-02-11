@@ -1,7 +1,8 @@
-use egui::{Align, Context, Frame, Layout, Margin, Vec2};
+use egui::{Align, Context, Frame, Layout, Margin, SidePanel, Vec2};
 use segs_assets::icons;
 use segs_ui::{
-    StyleExt, UiComponentExt,
+    StyleExt,
+    components::buttons,
     containers::ResizablePanel,
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
@@ -9,14 +10,12 @@ use segs_ui::{
 #[derive(Debug, Clone, Default)]
 pub struct TopBarControls {
     pub lock_mode_active: bool,
-    pub focus_mode_active: bool,
     pub panels_controls: PanelsControls,
 }
 
 pub fn top_controls_bar(ctx: &Context, controls: &mut TopBarControls) {
     let TopBarControls {
         lock_mode_active,
-        focus_mode_active,
         panels_controls:
             PanelsControls {
                 left_panel_visible,
@@ -35,16 +34,15 @@ pub fn top_controls_bar(ctx: &Context, controls: &mut TopBarControls) {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // Theme toggle button
-                ui.theme_toggle_btn();
+                buttons::theme_toggle(ui);
 
                 // Panel toggle buttons
-                ui.right_panel_toggle_btn(right_panel_visible);
-                ui.bottom_panel_toggle_btn(bottom_panel_visible);
-                ui.left_panel_toggle_btn(left_panel_visible);
+                buttons::right_panel_toggle(ui, right_panel_visible);
+                buttons::bottom_panel_toggle(ui, bottom_panel_visible);
+                buttons::left_panel_toggle(ui, left_panel_visible);
 
-                // Lock & Focus mode toggle button
-                ui.focus_mode_toggle(focus_mode_active);
-                ui.lock_mode_toggle(lock_mode_active);
+                // Lock mode toggle button
+                buttons::lock_mode_toggle(ui, lock_mode_active);
             });
         });
 }
@@ -56,7 +54,7 @@ pub struct BottomBarControls {
 
 pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
     egui::TopBottomPanel::bottom("bottom_panel")
-        .show_separator_line(true)
+        .show_separator_line(false)
         .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
         .show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -114,7 +112,7 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
 
                     let btn = UnpaddedBottomBarButton::default()
                         .padded()
-                        .add_icon(icons::Antenna)
+                        .add_icon(icons::Antenna::outline())
                         .add_text("Sources");
                     ui.add(btn);
 
@@ -125,6 +123,65 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                     ui.add(btn);
                 });
             });
+        });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeftMenuSelector {
+    PaneControls,
+    LayoutComposer,
+    LevelEditor,
+    DataflowEditor,
+    OnlineResources,
+    Charts,
+}
+
+pub fn left_bar(ctx: &Context, selector: &mut Option<LeftMenuSelector>) {
+    let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
+    SidePanel::left("menu_panel")
+        .frame(frame)
+        .resizable(false)
+        .show_separator_line(false)
+        .exact_width(34.)
+        .show(ctx, |ui| {
+            ui.spacing_mut().item_spacing = Vec2::ZERO;
+            ui.add_space(5.);
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::PaneControls,
+                icons::RectangleVertical::outline(),
+                icons::RectangleVertical::solid(),
+            ));
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::LayoutComposer,
+                icons::Layout::outline(),
+                icons::Layout::solid(),
+            ));
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::LevelEditor,
+                icons::Stack::outline(),
+                icons::Stack::solid(),
+            ));
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::DataflowEditor,
+                icons::Function::outline(),
+                icons::Function::solid(),
+            ));
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::OnlineResources,
+                icons::Cloud::outline(),
+                icons::Cloud::solid(),
+            ));
+            ui.add(buttons::LeftBarMenuButton::new(
+                selector,
+                LeftMenuSelector::Charts,
+                icons::Charts::outline(),
+                icons::Charts::solid(),
+            ));
         });
 }
 
@@ -143,8 +200,10 @@ pub fn main_view(
     add_contents_bottom: impl FnOnce(&mut egui::Ui),
     add_contents_main: impl FnOnce(&mut egui::Ui),
 ) {
-    let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
-    egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
+    let visuals = ctx.app_visuals();
+    let back_frame = Frame::new().fill(visuals.egui().panel_fill);
+    let front_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
+    egui::CentralPanel::default().frame(back_frame).show(ctx, |ui| {
         // Define collapse state based on visibility
         let mut collapsed_left = !panel_controls.left_panel_visible;
         let mut collapsed_right = !panel_controls.right_panel_visible;
@@ -152,11 +211,11 @@ pub fn main_view(
 
         let visuals = ctx.app_visuals();
         // Outer frames are for the hierarchical ResizablePanel structure, just fill color
-        let panel_outer_frame = Frame::new().fill(visuals.egui().panel_fill);
+        let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
         // Inner ones use margin to create spacing between panels and content
         let panel_inner_frame = Frame::new().inner_margin(10.);
         let main_inner_frame = panel_inner_frame
-            .corner_radius(5.0)
+            .corner_radius(5.)
             .fill(visuals.main_view_fill)
             .stroke(visuals.main_view_stroke);
 
@@ -176,42 +235,44 @@ pub fn main_view(
 
         let layout = Layout::top_down(Align::Min);
 
-        left.show(ui, |panel| {
-            panel
-                .show_left(|ui| {
-                    panel_inner_frame.show(ui, |ui| {
-                        ui.set_min_size(ui.available_size());
-                        ui.with_layout(layout, add_contents_left);
-                    });
-                })
-                .show_right(|ui| {
-                    right.show(ui, |panel| {
-                        panel
-                            .show_right(|ui| {
-                                panel_inner_frame.show(ui, |ui| {
-                                    ui.set_min_size(ui.available_size());
-                                    ui.with_layout(layout, add_contents_right);
-                                });
-                            })
-                            .show_left(|ui| {
-                                bottom.show(ui, |panel| {
-                                    panel
-                                        .show_bottom(|ui| {
-                                            panel_inner_frame.show(ui, |ui| {
-                                                ui.set_min_size(ui.available_size());
-                                                ui.with_layout(layout, add_contents_bottom);
+        front_frame.show(ui, |ui| {
+            left.show(ui, |panel| {
+                panel
+                    .show_left(|ui| {
+                        panel_inner_frame.show(ui, |ui| {
+                            ui.set_min_size(ui.available_size());
+                            ui.with_layout(layout, add_contents_left);
+                        });
+                    })
+                    .show_right(|ui| {
+                        right.show(ui, |panel| {
+                            panel
+                                .show_right(|ui| {
+                                    panel_inner_frame.show(ui, |ui| {
+                                        ui.set_min_size(ui.available_size());
+                                        ui.with_layout(layout, add_contents_right);
+                                    });
+                                })
+                                .show_left(|ui| {
+                                    bottom.show(ui, |panel| {
+                                        panel
+                                            .show_bottom(|ui| {
+                                                panel_inner_frame.show(ui, |ui| {
+                                                    ui.set_min_size(ui.available_size());
+                                                    ui.with_layout(layout, add_contents_bottom);
+                                                });
+                                            })
+                                            .show_top(|ui| {
+                                                main_inner_frame.show(ui, |ui| {
+                                                    ui.set_min_size(ui.available_size());
+                                                    ui.with_layout(layout, add_contents_main);
+                                                });
                                             });
-                                        })
-                                        .show_top(|ui| {
-                                            main_inner_frame.show(ui, |ui| {
-                                                ui.set_min_size(ui.available_size());
-                                                ui.with_layout(layout, add_contents_main);
-                                            });
-                                        });
+                                    });
                                 });
-                            });
+                        });
                     });
-                });
+            });
         });
 
         // Update visibility state based on collapses
