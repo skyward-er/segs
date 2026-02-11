@@ -8,7 +8,10 @@ use segs_assets::{install_fonts, install_icons, load_app_icon};
 use segs_memory::{MemoryExt, init_memory};
 use segs_ui::setup_style;
 
-use crate::ui::panels::{BottomBarControls, LeftMenuSelector, TopBarControls};
+use crate::ui::{
+    components::left_menu::LeftMenuSelector,
+    panels::{BottomBarControls, TopBarControls},
+};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

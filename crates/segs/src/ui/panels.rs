@@ -6,7 +6,10 @@ use segs_ui::{
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
 
-use crate::ui::components::buttons;
+use crate::ui::components::{
+    buttons::{bottom_panel_toggle, left_panel_toggle, lock_mode_toggle, right_panel_toggle, theme_toggle},
+    left_menu::{LeftBarMenuButton, LeftMenuSelector},
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct TopBarControls {
@@ -35,15 +38,15 @@ pub fn top_controls_bar(ctx: &Context, controls: &mut TopBarControls) {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 // Theme toggle button
-                buttons::theme_toggle(ui);
+                theme_toggle(ui);
 
                 // Panel toggle buttons
-                buttons::right_panel_toggle(ui, right_panel_visible);
-                buttons::bottom_panel_toggle(ui, bottom_panel_visible);
-                buttons::left_panel_toggle(ui, left_panel_visible);
+                right_panel_toggle(ui, right_panel_visible);
+                bottom_panel_toggle(ui, bottom_panel_visible);
+                left_panel_toggle(ui, left_panel_visible);
 
                 // Lock mode toggle button
-                buttons::lock_mode_toggle(ui, lock_mode_active);
+                lock_mode_toggle(ui, lock_mode_active);
             });
         });
 }
@@ -98,8 +101,7 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                         .add_space(5.)
                         .add_icon(icon)
                         .add_space(10.);
-                    let res = ui.add(btn);
-                    if res.clicked() {
+                    if ui.add(btn).clicked() {
                         controls.notifications_active = !controls.notifications_active;
                     }
 
@@ -127,16 +129,6 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
         });
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LeftMenuSelector {
-    PaneControls,
-    LayoutComposer,
-    LevelEditor,
-    DataflowEditor,
-    OnlineResources,
-    Charts,
-}
-
 pub fn left_bar(ctx: &Context, selector: &mut Option<LeftMenuSelector>) {
     let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
     SidePanel::left("menu_panel")
@@ -147,37 +139,37 @@ pub fn left_bar(ctx: &Context, selector: &mut Option<LeftMenuSelector>) {
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.add_space(5.);
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::PaneControls,
                 icons::RectangleVertical::outline(),
                 icons::RectangleVertical::solid(),
             ));
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::LayoutComposer,
                 icons::Layout::outline(),
                 icons::Layout::solid(),
             ));
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::LevelEditor,
                 icons::Stack::outline(),
                 icons::Stack::solid(),
             ));
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::DataflowEditor,
                 icons::Function::outline(),
                 icons::Function::solid(),
             ));
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::OnlineResources,
                 icons::Cloud::outline(),
                 icons::Cloud::solid(),
             ));
-            ui.add(buttons::LeftBarMenuButton::new(
+            ui.add(LeftBarMenuButton::new(
                 selector,
                 LeftMenuSelector::Charts,
                 icons::Charts::outline(),

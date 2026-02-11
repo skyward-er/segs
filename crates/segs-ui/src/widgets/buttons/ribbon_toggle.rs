@@ -34,6 +34,11 @@ impl<'a> RibbonToggle<'a> {
         self
     }
 
+    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
+        self.tooltip_text = Some(text.into());
+        self
+    }
+
     fn show(self, ui: &mut Ui) -> Response {
         let Self {
             active,
