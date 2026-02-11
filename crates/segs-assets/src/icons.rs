@@ -6,6 +6,7 @@ mod archive;
 mod arrow;
 mod bell;
 mod charts;
+mod cloud;
 mod cog;
 mod documents;
 mod error;
@@ -24,11 +25,13 @@ mod plots;
 mod pulse;
 mod refresh;
 mod reticle;
+mod stack;
 mod star;
 mod tag;
 mod themes;
 mod usb;
 mod warning;
+mod window;
 
 pub use add_file::AddFile;
 pub use add_folder::AddFolder;
@@ -38,6 +41,7 @@ pub use archive::Archive;
 pub use arrow::Arrow;
 pub use bell::Bell;
 pub use charts::Charts;
+pub use cloud::Cloud;
 pub use cog::Cog;
 pub use documents::Documents;
 use egui::{Image, ImageSource, Vec2};
@@ -57,11 +61,13 @@ pub use plots::Plots;
 pub use pulse::Pulse;
 pub use refresh::Refresh;
 pub use reticle::Reticle;
+pub use stack::Stack;
 pub use star::Star;
 pub use tag::Tag;
 pub use themes::{Moon, Sun};
 pub use usb::Usb;
 pub use warning::Warning;
+pub use window::Window;
 
 /// Icon representation. An icon can be converted to an egui Image and has a
 /// svg source representation.

@@ -62,15 +62,19 @@ pub mod svgs {
     pub static ADD_LAYOUT: egui::ImageSource = include_svg!("svgs", "add_layout.svg");
     pub static ALERT: egui::ImageSource = include_svg!("svgs", "alert.svg");
     pub static ANTENNA: egui::ImageSource = include_svg!("svgs", "antenna.svg");
-    pub static ARCHIVE: egui::ImageSource = include_svg!("svgs", "archive.svg");
+    pub static ARCHIVE_OUTLINE: egui::ImageSource = include_svg!("svgs", "archive_outline.svg");
+    pub static ARCHIVE_SOLID: egui::ImageSource = include_svg!("svgs", "archive_solid.svg");
     pub static ARROW_DOWN: egui::ImageSource = include_svg!("svgs", "arrow_down.svg");
     pub static ARROW_UP: egui::ImageSource = include_svg!("svgs", "arrow_up.svg");
     pub static BELL_OUTLINE: egui::ImageSource = include_svg!("svgs", "bell_outline.svg");
     pub static BELL_SOLID: egui::ImageSource = include_svg!("svgs", "bell_solid.svg");
     pub static BOTTOM_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "bottom_panel_outline.svg");
     pub static BOTTOM_PANEL_SOLID: egui::ImageSource = include_svg!("svgs", "bottom_panel_solid.svg");
-    pub static CHARTS: egui::ImageSource = include_svg!("svgs", "charts.svg");
+    pub static CHARTS_OUTLINE: egui::ImageSource = include_svg!("svgs", "charts_outline.svg");
+    pub static CHARTS_SOLID: egui::ImageSource = include_svg!("svgs", "charts_solid.svg");
     pub static CIRCLED_CROSS: egui::ImageSource = include_svg!("svgs", "circled_cross.svg");
+    pub static CLOUD_OUTLINE: egui::ImageSource = include_svg!("svgs", "cloud_outline.svg");
+    pub static CLOUD_SOLID: egui::ImageSource = include_svg!("svgs", "cloud_solid.svg");
     pub static COG: egui::ImageSource = include_svg!("svgs", "cog.svg");
     pub static DOCUMENTS: egui::ImageSource = include_svg!("svgs", "documents.svg");
     pub static ETHERNET_PORT: egui::ImageSource = include_svg!("svgs", "ethernet-port.svg");
@@ -79,7 +83,8 @@ pub mod svgs {
     pub static EYE_OPEN: egui::ImageSource = include_svg!("svgs", "eye_open.svg");
     pub static FOLD_ALL: egui::ImageSource = include_svg!("svgs", "fold_all.svg");
     pub static GLOBE: egui::ImageSource = include_svg!("svgs", "globe.svg");
-    pub static LAYOUT: egui::ImageSource = include_svg!("svgs", "layout.svg");
+    pub static LAYOUT_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_outline.svg");
+    pub static LAYOUT_SOLID: egui::ImageSource = include_svg!("svgs", "layout_solid.svg");
     pub static LEFT_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "left_panel_outline.svg");
     pub static LEFT_PANEL_SOLID: egui::ImageSource = include_svg!("svgs", "left_panel_solid.svg");
     pub static LENS: egui::ImageSource = include_svg!("svgs", "lens.svg");
@@ -98,11 +103,15 @@ pub mod svgs {
     pub static RETICLE_SOLID: egui::ImageSource = include_svg!("svgs", "reticle_solid.svg");
     pub static RIGHT_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "right_panel_outline.svg");
     pub static RIGHT_PANEL_SOLID: egui::ImageSource = include_svg!("svgs", "right_panel_solid.svg");
+    pub static STACK_OUTLINE: egui::ImageSource = include_svg!("svgs", "stack_outline.svg");
+    pub static STACK_SOLID: egui::ImageSource = include_svg!("svgs", "stack_solid.svg");
     pub static STAR_OUTLINE: egui::ImageSource = include_svg!("svgs", "star_outline.svg");
     pub static STAR_SOLID: egui::ImageSource = include_svg!("svgs", "star_solid.svg");
     pub static SUN_OUTLINE: egui::ImageSource = include_svg!("svgs", "sun_outline.svg");
     pub static SUN_SOLID: egui::ImageSource = include_svg!("svgs", "sun_solid.svg");
     pub static TAG: egui::ImageSource = include_svg!("svgs", "tag.svg");
     pub static USB: egui::ImageSource = include_svg!("svgs", "usb.svg");
+    pub static WINDOW_OUTLINE: egui::ImageSource = include_svg!("svgs", "window_outline.svg");
+    pub static WINDOW_SOLID: egui::ImageSource = include_svg!("svgs", "window_solid.svg");
 }
 // ~~~ END AUTOMATICALLY GENERATED CODE ~~~

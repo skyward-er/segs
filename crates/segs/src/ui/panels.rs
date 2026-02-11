@@ -75,7 +75,7 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
 
                     let btn = UnpaddedBottomBarButton::default()
                         .padded()
-                        .add_icon(icons::Layout)
+                        .add_icon(icons::Layout::outline())
                         .add_text("Layouts");
                     ui.add(btn);
 

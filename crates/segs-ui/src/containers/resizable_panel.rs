@@ -154,7 +154,7 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
             sides,
             style,
         } = self;
-        let dir = direction.to_absolute_direction();
+        let dir = direction.to_direction();
         let side = dir.side(align);
 
         // We use the maximum available size to fit the available space to the panel.
@@ -466,7 +466,7 @@ impl Default for ContainerStyle {
                 color: Color32::from_rgb(242, 242, 242),
             },
             separator_active: SeparatorStyle {
-                width: 3.0,
+                width: 2.0,
                 color: Color32::from_rgb(152, 152, 153),
             },
         }
@@ -482,17 +482,17 @@ pub struct HorizontalDirection;
 pub struct VerticalDirection;
 
 pub trait DirectionTrait {
-    fn to_absolute_direction(&self) -> Direction;
+    fn to_direction(&self) -> Direction;
 }
 
 impl DirectionTrait for HorizontalDirection {
-    fn to_absolute_direction(&self) -> Direction {
+    fn to_direction(&self) -> Direction {
         Direction::Horizontal
     }
 }
 
 impl DirectionTrait for VerticalDirection {
-    fn to_absolute_direction(&self) -> Direction {
+    fn to_direction(&self) -> Direction {
         Direction::Vertical
     }
 }

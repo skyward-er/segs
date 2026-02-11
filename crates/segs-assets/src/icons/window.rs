@@ -2,15 +2,15 @@ use super::Icon;
 use crate::sources::svgs;
 
 #[derive(Clone, Copy, Default)]
-pub struct Layout {
+pub struct Window {
     variant: Variant,
 }
 
-impl Icon for Layout {
+impl Icon for Window {
     fn as_image_source(&self) -> &egui::ImageSource<'static> {
         match self.variant {
-            Variant::Outline => &svgs::LAYOUT_OUTLINE,
-            Variant::Solid => &svgs::LAYOUT_SOLID,
+            Variant::Outline => &svgs::WINDOW_OUTLINE,
+            Variant::Solid => &svgs::WINDOW_SOLID,
         }
     }
 }
@@ -22,7 +22,7 @@ enum Variant {
     Solid,
 }
 
-impl Layout {
+impl Window {
     pub fn solid() -> Self {
         Self {
             variant: Variant::Solid,
