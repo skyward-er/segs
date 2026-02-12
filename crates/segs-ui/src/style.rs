@@ -17,10 +17,10 @@ const LEVEL_0_COLOR_LIGHT: Color32 = Color32::from_rgb(240, 240, 240);
 const LEVEL_1_COLOR_DARK: Color32 = Color32::from_rgb(16, 16, 17);
 const LEVEL_1_COLOR_LIGHT: Color32 = Color32::from_rgb(249, 249, 249);
 /// Color of the main view, the layer above panels.
-const LEVEL_2_COLOR_DARK: Color32 = Color32::from_rgb(20, 20, 21);
+const LEVEL_2_COLOR_DARK: Color32 = Color32::from_rgb(18, 18, 19);
 const LEVEL_2_COLOR_LIGHT: Color32 = Color32::from_rgb(252, 252, 252);
 /// Popup fill, color of the uppermost layer.
-const LEVEL_3_COLOR_DARK: Color32 = Color32::BLACK;
+const LEVEL_3_COLOR_DARK: Color32 = Color32::from_rgb(28, 29, 31);
 const LEVEL_3_COLOR_LIGHT: Color32 = Color32::WHITE;
 
 #[derive(Debug)]
@@ -91,6 +91,8 @@ pub struct AppVisuals {
     pub menu_icon_shadow_color_hover: Color32,
     pub menu_icon_shadow_color_active: Color32,
 
+    pub button_hover_shadow_color: Color32,
+
     /// Widget style definitions
     pub widget_style: WidgetStyle,
 
@@ -115,6 +117,7 @@ impl AppVisuals {
             menu_icon_active_color: Color32::WHITE,
             menu_icon_shadow_color_hover: Color32::from_rgb(21, 22, 25),
             menu_icon_shadow_color_active: Color32::from_rgb(30, 31, 34),
+            button_hover_shadow_color: Color32::from_rgb(42, 43, 48),
             shadow_color: Color32::from_white_alpha(40),
             accent_color: Color32::from_rgb(0, 132, 255),
             enabled_color: Color32::from_rgb(23, 150, 87),
@@ -131,7 +134,8 @@ impl AppVisuals {
             menu_icon_inactive_color: Color32::from_rgb(89, 90, 91),
             menu_icon_active_color: Color32::from_rgb(26, 26, 26),
             menu_icon_shadow_color_hover: Color32::from_rgb(232, 232, 232),
-            menu_icon_shadow_color_active: Color32::from_rgb(232, 232, 232),
+            menu_icon_shadow_color_active: Color32::from_rgb(226, 226, 226),
+            button_hover_shadow_color: Color32::from_rgb(232, 232, 232),
             shadow_color: Color32::from_black_alpha(20),
             accent_color: Color32::from_rgb(232, 157, 86),
             enabled_color: Color32::from_rgb(88, 232, 160),
@@ -243,6 +247,21 @@ fn override_egui_styles(style: &mut Style) {
 fn override_dark_style(style: &mut Style) {
     // General visuals
     style.visuals.panel_fill = LEVEL_0_COLOR_DARK;
+
+    // Customizing popup frames
+    style.visuals.window_stroke = Stroke::new(1., Color32::from_rgb(57, 59, 66));
+    // This is the color of the Separator widget
+    style.visuals.widgets.noninteractive.bg_stroke.color = Color32::from_rgb(57, 59, 66);
+    style.visuals.window_fill = LEVEL_3_COLOR_DARK;
+    style.visuals.popup_shadow = Shadow {
+        offset: [1, 2],
+        blur: 3,
+        spread: 0,
+        color: Color32::from_rgb(21, 22, 25),
+    };
+
+    // Override text color to improve contrast in dark mode
+    style.visuals.override_text_color = Some(Color32::from_rgb(227, 228, 229));
 }
 
 /// Override light theme styles.

@@ -16,3 +16,4 @@ segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"
 segs-plot.path = "../segs-plot"
 segs-ui.path = "../segs-ui"
+serde = { workspace = true, features = ["derive"] }

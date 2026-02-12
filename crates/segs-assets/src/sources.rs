@@ -110,6 +110,7 @@ pub mod svgs {
     pub static RETICLE_SOLID: egui::ImageSource = include_svg!("svgs", "reticle_solid.svg");
     pub static RIGHT_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "right_panel_outline.svg");
     pub static RIGHT_PANEL_SOLID: egui::ImageSource = include_svg!("svgs", "right_panel_solid.svg");
+    pub static SQUARE_ROTATED_SOLID: egui::ImageSource = include_svg!("svgs", "square_rotated_solid.svg");
     pub static STACK_OUTLINE: egui::ImageSource = include_svg!("svgs", "stack_outline.svg");
     pub static STACK_SOLID: egui::ImageSource = include_svg!("svgs", "stack_solid.svg");
     pub static STAR_OUTLINE: egui::ImageSource = include_svg!("svgs", "star_outline.svg");

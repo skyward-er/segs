@@ -188,7 +188,7 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
             } else {
                 let (max_main, max_cross) = (dir.vec_main(max_size), dir.vec_cross(max_size));
                 let side_first_size = dir.side_vec2(separator_pos, max_cross);
-                let side_second_size = dir.side_vec2(max_main - separator_pos - 1., max_cross);
+                let side_second_size = dir.side_vec2(max_main - separator_pos, max_cross);
                 let separator_size = dir.side_vec2(style.separator_inactive.width, max_cross);
 
                 let (rect_first, _) = ui.allocate_exact_size(side_first_size, Sense::empty());

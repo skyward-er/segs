@@ -1,4 +1,4 @@
-use egui::{CursorIcon, Label, Rect, RectAlign, Response, Sense, Tooltip, Ui, Vec2, Widget, vec2};
+use egui::{CursorIcon, Frame, Label, Rect, RectAlign, Response, Sense, Tooltip, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
 
 use crate::StyleExt;
@@ -55,7 +55,8 @@ impl<'a> RibbonToggle<'a> {
         // Customize tooltip
         if let Some(text) = tooltip_text {
             let mut tooltip = Tooltip::for_enabled(&response);
-            tooltip.popup = tooltip.popup.align(RectAlign::RIGHT);
+            let frame = Frame::popup(ui.style()).inner_margin(vec2(5., 3.));
+            tooltip.popup = tooltip.popup.align(RectAlign::RIGHT).frame(frame);
             tooltip.show(|ui| {
                 ui.add(Label::new(text).selectable(false));
             });

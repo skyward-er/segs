@@ -1,17 +1,22 @@
-use egui::{Align, Context, Frame, Layout, Margin, SidePanel, Vec2};
+use egui::{Align, Align2, Area, Context, Frame, Layout, Margin, SidePanel, TextEdit, Ui, Vec2, vec2};
 use segs_assets::icons;
+use segs_memory::MemoryExt;
 use segs_ui::{
-    StyleExt,
+    StyleExt, UiExt,
     containers::ResizablePanel,
-    widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
+    widgets::{
+        buttons::{BottomBarButton, UnpaddedBottomBarButton},
+        labels::VerticalSelectableLabel,
+    },
 };
+use serde::{Deserialize, Serialize};
 
 use crate::ui::components::{
     buttons::{bottom_panel_toggle, left_panel_toggle, lock_mode_toggle, right_panel_toggle, theme_toggle},
     left_menu::{LeftBarMenuButton, LeftMenuSelector},
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TopBarControls {
     pub lock_mode_active: bool,
     pub panels_controls: PanelsControls,
@@ -56,6 +61,14 @@ pub struct BottomBarControls {
     pub notifications_active: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum SourceSelection {
+    Ethernet,
+    Automatic,
+    #[default]
+    Serial,
+}
+
 pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
     egui::TopBottomPanel::bottom("bottom_panel")
         .show_separator_line(false)
@@ -63,11 +76,60 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
         .show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    let temp_id = ui.id().with("bottom_bar_sources_toggle");
+                    let source_toggled: bool = ui.ctx().mem().get_temp_or_default(temp_id);
+                    let icon = if source_toggled {
+                        icons::Antenna::solid()
+                    } else {
+                        icons::Antenna::outline()
+                    };
                     let btn = UnpaddedBottomBarButton::default()
                         .add_space(10.)
-                        .add_icon(icons::Pulse)
+                        .add_icon(icon)
                         .add_space(5.);
-                    ui.add(btn);
+                    let res = ui.add(btn);
+
+                    if res.clicked() {
+                        ui.ctx().mem().insert_temp(temp_id, !source_toggled);
+                    }
+
+                    if source_toggled {
+                        let pivot = res.rect.left_top() + vec2(7., -7.);
+                        let id = ui.id().with("bottom_bar_sources_menu");
+                        let res = Area::new(id)
+                            .pivot(Align2::LEFT_BOTTOM)
+                            .fixed_pos(pivot)
+                            .show(ctx, |ui| {
+                                let style = ui.style();
+                                Frame::new()
+                                    .corner_radius(style.visuals.menu_corner_radius)
+                                    .shadow(style.visuals.popup_shadow)
+                                    .fill(style.visuals.window_fill())
+                                    .stroke(style.visuals.window_stroke())
+                                    .show(ui, |ui| {
+                                        // Frame::new().inner_margin(vec2(10., 5.)).show(ui, |ui| {
+                                        //     asfas(ui);
+                                        // });
+                                        // ui.add(Separator::default().spacing(0.));
+                                        Frame::new().inner_margin(vec2(5., 5.)).show(ui, |ui| {
+                                            ui.spacing_mut().item_spacing = Vec2::ZERO;
+                                            let id = ui.id().with("source_selector");
+                                            let mut selector = ui.ctx().mem().get_temp_or_default(id);
+                                            let widget = VerticalSelectableLabel::new(&mut selector)
+                                                .add_variant(SourceSelection::Ethernet, "ethernet")
+                                                .add_variant(SourceSelection::Automatic, "automatic")
+                                                .add_variant(SourceSelection::Serial, "serial");
+                                            ui.add(widget);
+                                            ui.ctx().mem().insert_temp(id, selector);
+                                        });
+                                    })
+                            })
+                            .response;
+
+                        if ui.pointer_clicked_outside(&res) {
+                            ui.ctx().mem().insert_temp(temp_id, false);
+                        }
+                    }
 
                     let btn = UnpaddedBottomBarButton::default()
                         .padded()
@@ -178,7 +240,7 @@ pub fn left_bar(ctx: &Context, selector: &mut Option<LeftMenuSelector>) {
         });
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PanelsControls {
     pub left_panel_visible: bool,
     pub right_panel_visible: bool,
@@ -208,6 +270,7 @@ pub fn main_view(
         let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
         // Inner ones use margin to create spacing between panels and content
         let panel_inner_frame = Frame::new().inner_margin(10.);
+        // let panel_inner_frame = Frame::NONE;
         let main_inner_frame = panel_inner_frame
             .corner_radius(5.)
             .fill(visuals.main_view_fill)
@@ -274,4 +337,11 @@ pub fn main_view(
         panel_controls.right_panel_visible = !collapsed_right;
         panel_controls.bottom_panel_visible = !collapsed_bottom;
     });
+}
+
+fn asfas(ui: &mut Ui) {
+    let id = ui.id().with("text_edit_example");
+    let mut text_label = ui.ctx().mem().get_temp_or_insert(id, String::from("IP Address"));
+    TextEdit::singleline(&mut text_label).show(ui);
+    ui.ctx().mem().insert_temp(id, text_label);
 }

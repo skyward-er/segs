@@ -2982,6 +2982,7 @@ dependencies = [
  "segs-memory",
  "segs-plot",
  "segs-ui",
+ "serde",
 ]
 
 [[package]]
