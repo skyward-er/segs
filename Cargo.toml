@@ -12,7 +12,9 @@ members = [
     "crates/segs-assets",
     "crates/segs",
     "crates/segs-ui",
-    "crates/segs-plot", "crates/segs-memory",
+    "crates/segs-plot",
+    "crates/segs-memory",
+    "crates/segs-mavlink",
 ]
 
 [workspace.dependencies]
