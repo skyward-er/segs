@@ -12,7 +12,7 @@ const DEFAULT_PAD: f32 = 4.0;
 pub trait BottomBarButton: BottomBarButtonImpl + Sized {
     fn add_icon(mut self, icon: impl Icon + 'static) -> Self {
         self.contents().push(ContentAtoms::Image {
-            size: icon.fit_size(Vec2::splat(14.)),
+            size: icon.fit_size(Vec2::splat(15.)),
             image: Arc::new(icon),
         });
         self

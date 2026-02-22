@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use egui::{
-    Align, Color32, CursorIcon, Frame, Id, Layout, Pos2, Rect, Response, Sense, Ui, UiBuilder, Vec2,
+    Align, Color32, CursorIcon, Frame, Id, Layout, Pos2, Rect, Response, Sense, Stroke, Ui, UiBuilder, Vec2,
     emath::GuiRounding, vec2,
 };
 use segs_memory::MemoryExt;
@@ -130,6 +130,22 @@ impl ResizablePanel<'_, VerticalDirection> {
 impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
     pub fn collapsed(mut self, collapsed: &'a mut bool) -> Self {
         self.collapsed = Some(collapsed);
+        self
+    }
+
+    pub fn set_minimum_size(mut self, minimum_size: f32) -> Self {
+        self.minimum_size = minimum_size;
+        self
+    }
+
+    pub fn set_maximum_size(mut self, maximum_size: f32) -> Self {
+        self.maximum_size = maximum_size;
+        self
+    }
+
+    pub fn inactive_separator_stroke(mut self, stroke: Stroke) -> Self {
+        self.style.separator_inactive.color = stroke.color;
+        self.style.separator_inactive.width = stroke.width;
         self
     }
 
@@ -453,29 +469,24 @@ struct ContainerStyle {
     animate: bool,
 
     // - Separator styles -
-    separator_inactive: SeparatorStyle,
-    separator_active: SeparatorStyle,
+    separator_inactive: Stroke,
+    separator_active: Stroke,
 }
 
 impl Default for ContainerStyle {
     fn default() -> Self {
         Self {
             animate: true,
-            separator_inactive: SeparatorStyle {
+            separator_inactive: Stroke {
                 width: 1.0,
                 color: Color32::from_rgb(242, 242, 242),
             },
-            separator_active: SeparatorStyle {
+            separator_active: Stroke {
                 width: 2.0,
                 color: Color32::from_rgb(152, 152, 153),
             },
         }
     }
-}
-
-struct SeparatorStyle {
-    width: f32,
-    color: Color32,
 }
 
 pub struct HorizontalDirection;

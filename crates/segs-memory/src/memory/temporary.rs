@@ -67,6 +67,11 @@ where
         self.map.insert(self.key, Box::new(value));
         self.occupied = true;
     }
+
+    pub fn remove(&mut self) -> Option<V> {
+        self.occupied = false;
+        self.map.remove(&self.key)?.downcast::<V>().ok().map(|v| *v)
+    }
 }
 
 pub struct TempCell<V>(V);

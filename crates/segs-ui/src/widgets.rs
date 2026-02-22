@@ -3,6 +3,7 @@ use segs_assets::icons::Icon;
 
 pub mod buttons;
 pub mod labels;
+pub mod text;
 
 pub trait UiWidgetExt {
     fn check(&mut self, active: &mut bool) -> Response;

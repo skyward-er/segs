@@ -1,19 +1,19 @@
-use egui::{Align, Align2, Area, Context, Frame, Layout, Margin, SidePanel, TextEdit, Ui, Vec2, vec2};
+use egui::{Align, Align2, Context, Frame, Layout, Margin, SidePanel, Ui, Vec2};
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::{
-    StyleExt, UiExt,
+    StyleExt,
     containers::ResizablePanel,
-    widgets::{
-        buttons::{BottomBarButton, UnpaddedBottomBarButton},
-        labels::VerticalSelectableLabel,
-    },
+    widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
 use serde::{Deserialize, Serialize};
 
-use crate::ui::components::{
-    buttons::{bottom_panel_toggle, left_panel_toggle, lock_mode_toggle, right_panel_toggle, theme_toggle},
-    left_menu::{LeftBarMenuButton, LeftMenuSelector},
+use crate::ui::{
+    components::{
+        buttons::{bottom_panel_toggle, left_panel_toggle, lock_mode_toggle, right_panel_toggle, theme_toggle},
+        left_menu::{LeftBarMenuButton, LeftMenuSelector},
+    },
+    popups,
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,14 +61,6 @@ pub struct BottomBarControls {
     pub notifications_active: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum SourceSelection {
-    Ethernet,
-    Automatic,
-    #[default]
-    Serial,
-}
-
 pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
     egui::TopBottomPanel::bottom("bottom_panel")
         .show_separator_line(false)
@@ -77,7 +69,8 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let temp_id = ui.id().with("bottom_bar_sources_toggle");
-                    let source_toggled: bool = ui.ctx().mem().get_temp_or_default(temp_id);
+                    let mut source_toggled: bool = ui.ctx().mem().get_temp_or_default(temp_id);
+
                     let icon = if source_toggled {
                         icons::Antenna::solid()
                     } else {
@@ -86,70 +79,20 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                     let btn = UnpaddedBottomBarButton::default()
                         .add_space(10.)
                         .add_icon(icon)
+                        .add_space(5.)
+                        .add_text("Sources")
                         .add_space(5.);
                     let res = ui.add(btn);
 
+                    let res = res.on_hover_cursor(egui::CursorIcon::PointingHand);
                     if res.clicked() {
-                        ui.ctx().mem().insert_temp(temp_id, !source_toggled);
+                        source_toggled = !source_toggled;
                     }
 
-                    if source_toggled {
-                        let pivot = res.rect.left_top() + vec2(7., -7.);
-                        let id = ui.id().with("bottom_bar_sources_menu");
-                        let res = Area::new(id)
-                            .pivot(Align2::LEFT_BOTTOM)
-                            .fixed_pos(pivot)
-                            .show(ctx, |ui| {
-                                let style = ui.style();
-                                Frame::new()
-                                    .corner_radius(style.visuals.menu_corner_radius)
-                                    .shadow(style.visuals.popup_shadow)
-                                    .fill(style.visuals.window_fill())
-                                    .stroke(style.visuals.window_stroke())
-                                    .show(ui, |ui| {
-                                        // Frame::new().inner_margin(vec2(10., 5.)).show(ui, |ui| {
-                                        //     asfas(ui);
-                                        // });
-                                        // ui.add(Separator::default().spacing(0.));
-                                        Frame::new().inner_margin(vec2(5., 5.)).show(ui, |ui| {
-                                            ui.spacing_mut().item_spacing = Vec2::ZERO;
-                                            let id = ui.id().with("source_selector");
-                                            let mut selector = ui.ctx().mem().get_temp_or_default(id);
-                                            let widget = VerticalSelectableLabel::new(&mut selector)
-                                                .add_variant(SourceSelection::Ethernet, "ethernet")
-                                                .add_variant(SourceSelection::Automatic, "automatic")
-                                                .add_variant(SourceSelection::Serial, "serial");
-                                            ui.add(widget);
-                                            ui.ctx().mem().insert_temp(id, selector);
-                                        });
-                                    })
-                            })
-                            .response;
+                    popups::ConnectionPopup::new(&mut source_toggled, res.rect.left_top(), Align2::LEFT_BOTTOM)
+                        .show(ui);
 
-                        if ui.pointer_clicked_outside(&res) {
-                            ui.ctx().mem().insert_temp(temp_id, false);
-                        }
-                    }
-
-                    let btn = UnpaddedBottomBarButton::default()
-                        .padded()
-                        .add_icon(icons::Documents)
-                        .add_text("Help");
-                    ui.add(btn);
-
-                    let btn = UnpaddedBottomBarButton::default()
-                        .padded()
-                        .add_icon(icons::Layout::outline())
-                        .add_text("Layouts");
-                    ui.add(btn);
-
-                    let btn = UnpaddedBottomBarButton::default()
-                        .add_icon(icons::Arrow::up())
-                        .add_space(2.0)
-                        .add_icon(icons::Arrow::down())
-                        .add_space(4.0)
-                        .add_text("0.5/s");
-                    ui.add(btn);
+                    ui.ctx().mem().insert_temp(temp_id, source_toggled);
                 });
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -173,12 +116,6 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                         .add_text("0")
                         .add_icon(icons::Warning)
                         .add_text("0");
-                    ui.add(btn);
-
-                    let btn = UnpaddedBottomBarButton::default()
-                        .padded()
-                        .add_icon(icons::Antenna::outline())
-                        .add_text("Sources");
                     ui.add(btn);
 
                     let btn = UnpaddedBottomBarButton::default()
@@ -250,10 +187,10 @@ pub struct PanelsControls {
 pub fn main_view(
     ctx: &Context,
     panel_controls: &mut PanelsControls,
-    add_contents_left: impl FnOnce(&mut egui::Ui),
-    add_contents_right: impl FnOnce(&mut egui::Ui),
-    add_contents_bottom: impl FnOnce(&mut egui::Ui),
-    add_contents_main: impl FnOnce(&mut egui::Ui),
+    add_contents_left: impl FnOnce(&mut Ui),
+    add_contents_right: impl FnOnce(&mut Ui),
+    add_contents_bottom: impl FnOnce(&mut Ui),
+    add_contents_main: impl FnOnce(&mut Ui),
 ) {
     let visuals = ctx.app_visuals();
     let back_frame = Frame::new().fill(visuals.egui().panel_fill);
@@ -337,11 +274,4 @@ pub fn main_view(
         panel_controls.right_panel_visible = !collapsed_right;
         panel_controls.bottom_panel_visible = !collapsed_bottom;
     });
-}
-
-fn asfas(ui: &mut Ui) {
-    let id = ui.id().with("text_edit_example");
-    let mut text_label = ui.ctx().mem().get_temp_or_insert(id, String::from("IP Address"));
-    TextEdit::singleline(&mut text_label).show(ui);
-    ui.ctx().mem().insert_temp(id, text_label);
 }

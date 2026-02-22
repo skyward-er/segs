@@ -76,12 +76,28 @@ impl MemoryControl {
         memory.temp_mut(id).or_insert(default).read(|v: &V| v.clone())
     }
 
+    pub fn get_temp_or_insert_with<V>(&self, id: Id, default: impl FnOnce() -> V) -> V
+    where
+        V: Temporary + Clone,
+    {
+        let mut memory = self.0.write().unwrap();
+        memory.temp_mut(id).or_insert_with(default).read(|v: &V| v.clone())
+    }
+
     pub fn get_temp_or_default<V>(&self, id: Id) -> V
     where
         V: Temporary + Default + Clone,
     {
         let mut memory = self.0.write().unwrap();
         memory.temp_mut(id).or_default().read(|v: &V| v.clone())
+    }
+
+    pub fn remove_temp<V>(&self, id: Id) -> Option<V>
+    where
+        V: Temporary + Clone,
+    {
+        let mut memory = self.0.write().unwrap();
+        memory.temp_mut(id).remove()
     }
 
     pub fn read_temp_or_insert<V: Temporary, O>(&self, id: Id, default: V, reader: impl FnOnce(&V) -> O) -> O {

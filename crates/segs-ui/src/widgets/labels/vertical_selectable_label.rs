@@ -1,4 +1,4 @@
-use egui::{Rect, Response, Ui, UiBuilder, Vec2, Widget, emath::easing, vec2};
+use egui::{Rect, Response, Ui, UiBuilder, Vec2, Widget, emath::easing, lerp, vec2};
 use segs_assets::{
     Font,
     fonts::Figtree,
@@ -78,7 +78,7 @@ impl<'a, V: PartialEq> VerticalSelectableLabel<'a, V> {
                 .paint_at(ui, icon_rect);
         }
 
-        ui.response()
+        responses.into_iter().reduce(|a, b| a.union(b)).unwrap_or(ui.response())
     }
 }
 
@@ -114,7 +114,7 @@ impl<V: PartialEq> SelectableLabel<V> {
             // Style elements
             let inactive_color = ui.app_visuals().menu_icon_inactive_color;
             let active_color = ui.app_visuals().menu_icon_active_color;
-            let animation_time = 0.2;
+            let animation_time = 0.3;
 
             // Set ids for animations
             let id = ui.id();
@@ -123,6 +123,12 @@ impl<V: PartialEq> SelectableLabel<V> {
 
             // Animate selection state
             let selection_t = ui.ctx().animate_bool_with_time(select_id, is_selected, animation_time);
+            let hover_t = ui.ctx().animate_bool_with_time_and_easing(
+                hover_id,
+                response.hovered(),
+                animation_time,
+                easing::cubic_out,
+            );
 
             // Layout text with appropriate font and color based on selection state
             let font_id = if is_selected {
@@ -131,15 +137,11 @@ impl<V: PartialEq> SelectableLabel<V> {
                 Figtree::medium()
             }
             .sized(11.);
-            let text_color = inactive_color.lerp_to_gamma(active_color, selection_t);
+            let text_color = inactive_color.lerp_to_gamma(active_color, selection_t.max(hover_t));
             let galley = painer.layout_no_wrap(text.to_string(), font_id, text_color);
 
             // Change cursor on hover
             response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-
-            // Get animation states
-            let is_hovered = response.hovered();
-            let hover_t = ui.ctx().animate_bool_with_time(hover_id, is_hovered, animation_time);
 
             // Handle click to update selection
             if response.clicked() {
@@ -147,9 +149,9 @@ impl<V: PartialEq> SelectableLabel<V> {
             }
 
             // Lerp colors and paint elements
-            let shadow_color = ui.app_visuals().button_hover_shadow_color.gamma_multiply(hover_t);
-            painer.rect_filled(rect, 2., shadow_color);
-            painer.circle_filled(selector_pos, 2., inactive_color);
+            let radius = lerp(2.0..=3.0, hover_t);
+            let color = inactive_color.lerp_to_gamma(active_color, hover_t);
+            painer.circle_filled(selector_pos, radius, color);
 
             // Paint text
             painer.galley(text_start, galley, text_color);

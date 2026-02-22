@@ -1,8 +1,9 @@
 use egui::{Response, Ui, Widget, vec2};
 use segs_assets::icons::Icon;
 use segs_ui::widgets::buttons::RibbonToggle;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LeftMenuSelector {
     PaneControls,
     LayoutComposer,
