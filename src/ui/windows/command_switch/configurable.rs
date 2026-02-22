@@ -85,6 +85,12 @@ impl ConfigurableCommand {
                 Key::Num8,
                 Key::Num9,
             ];
+            let mut selected_fields = selected_fields
+                .iter()
+                .cloned()
+                .take(keys.len())
+                .collect::<Vec<_>>();
+            selected_fields.sort_unstable();
             for (field_id, key) in selected_fields.iter().zip(keys) {
                 let field = field_id
                     .to_mav_field(message.message_id(), &MAVLINK_PROFILE)
