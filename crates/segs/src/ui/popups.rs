@@ -82,7 +82,8 @@ impl<'a> Popup<'a> {
                 })
                 .response;
 
-            // After a sizing pass, request a discard to avoid showing a frame without the open popup contents
+            // After a sizing pass, request a discard to avoid showing a frame without the
+            // open popup contents
             if force_sizing_pass {
                 ui.ctx().request_discard("record popup size after forced sizing pass");
             }

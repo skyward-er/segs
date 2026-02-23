@@ -2,7 +2,7 @@ use egui::{Align, Align2, Context, Frame, Layout, Margin, SidePanel, Ui, Vec2};
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::{
-    StyleExt,
+    CtxStyleExt,
     containers::ResizablePanel,
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
@@ -192,16 +192,17 @@ pub fn main_view(
     add_contents_bottom: impl FnOnce(&mut Ui),
     add_contents_main: impl FnOnce(&mut Ui),
 ) {
-    let visuals = ctx.app_visuals();
-    let back_frame = Frame::new().fill(visuals.egui().panel_fill);
-    let front_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
+    let app_style = ctx.app_style();
+    let visuals = &ctx.style().visuals;
+    let back_frame = Frame::new().fill(visuals.panel_fill);
+    let front_frame = Frame::new().corner_radius(5.).fill(app_style.main_panels_fill);
     egui::CentralPanel::default().frame(back_frame).show(ctx, |ui| {
         // Define collapse state based on visibility
         let mut collapsed_left = !panel_controls.left_panel_visible;
         let mut collapsed_right = !panel_controls.right_panel_visible;
         let mut collapsed_bottom = !panel_controls.bottom_panel_visible;
 
-        let visuals = ctx.app_visuals();
+        let visuals = ctx.app_style();
         // Outer frames are for the hierarchical ResizablePanel structure, just fill
         // color
         let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);

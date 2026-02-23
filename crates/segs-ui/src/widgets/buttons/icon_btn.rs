@@ -1,7 +1,7 @@
 use egui::{Response, Sense, Ui, Vec2, Widget};
 use segs_assets::icons::Icon;
 
-use crate::StyleExt;
+use crate::CtxStyleExt;
 
 pub struct IconBtn<'a> {
     variant: Variant<'a>,
@@ -75,7 +75,7 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
         let animated_rect = rect.expand2(rect.shrink(1.).size() * (scale - 1.0) * 0.5);
 
         if hover_t > 0. {
-            let shadow_color = ui.app_visuals().shadow_color_lerp(hover_t);
+            let shadow_color = ui.app_style().shadow_color_lerp(hover_t);
             painter.rect_filled(animated_rect.shrink(1.), 5., shadow_color);
         }
 

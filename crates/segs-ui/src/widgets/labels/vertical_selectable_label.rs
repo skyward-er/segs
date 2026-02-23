@@ -5,7 +5,7 @@ use segs_assets::{
     icons::{self, Icon},
 };
 
-use crate::{AnimationExt, StyleExt};
+use crate::{AnimationExt, CtxStyleExt};
 
 pub struct VerticalSelectableLabel<'a, V: PartialEq> {
     selector: &'a mut V,
@@ -73,7 +73,7 @@ impl<'a, V: PartialEq> VerticalSelectableLabel<'a, V> {
             let icon_rect = Rect::from_center_size(selector_pos, Vec2::splat(10.));
             icons::SquareRotated
                 .to_image()
-                .tint(ui.app_visuals().menu_icon_active_color)
+                .tint(ui.app_style().menu_icon_active_color)
                 .fit_to_exact_size(icon_rect.size())
                 .paint_at(ui, icon_rect);
         }
@@ -112,8 +112,8 @@ impl<V: PartialEq> SelectableLabel<V> {
             let text_start = rect.left_top() + vec2(20., 3.);
 
             // Style elements
-            let inactive_color = ui.app_visuals().menu_icon_inactive_color;
-            let active_color = ui.app_visuals().menu_icon_active_color;
+            let inactive_color = ui.app_style().menu_icon_inactive_color;
+            let active_color = ui.app_style().menu_icon_active_color;
             let animation_time = 0.3;
 
             // Set ids for animations

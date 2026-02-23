@@ -5,8 +5,6 @@ use egui::{
 };
 use segs_assets::{Font, fonts::Figtree, icons::Icon};
 
-use crate::StyleExt;
-
 pub struct SelectableLabel<'a, E: Eq> {
     selected: &'a mut E,
     options: Vec<LabelOption<E>>,
@@ -123,10 +121,11 @@ struct LabelJob {
 
 impl LabelJob {
     fn layout(self, ui: &mut Ui, is_active: bool) -> LabelLayout {
-        let style = ui.app_style();
         let LabelJob { icon, text } = self;
 
-        let stroke_color = style.interact_active(is_active).egui().fg_stroke.color;
+        let style = &ui.visuals().widgets;
+        let stroke_color = if is_active { style.active } else { style.inactive }.fg_stroke.color;
+
         let font = Figtree::medium().sized(15.);
 
         let galley = ui.painter().layout_no_wrap(text, font, stroke_color);
@@ -181,8 +180,8 @@ impl LabelLayout {
         image.fit_to_exact_size(ICON_SIZE).paint_at(ui, icon_rect);
 
         // Paint text
-        let style = ui.app_style();
-        let stroke_color = style.interact_active(is_active).egui().fg_stroke.color;
+        let style = &ui.visuals().widgets;
+        let stroke_color = if is_active { style.active } else { style.inactive }.fg_stroke.color;
         painter.galley(text_rect.min, galley, stroke_color);
     }
 }

@@ -1,6 +1,6 @@
 use egui::{CursorIcon, Response, Sense, Ui, Widget, emath::easing, lerp, pos2, vec2};
 
-use crate::StyleExt;
+use crate::CtxStyleExt;
 
 pub struct Toggle<'a> {
     flag: &'a mut bool,
@@ -43,7 +43,7 @@ fn add_toggle(ui: &mut Ui, active: &mut bool) {
         let style = ui.style().interact(&response);
 
         // Paint background
-        let enabled_color = ui.app_visuals().enabled_color;
+        let enabled_color = ui.app_style().enabled_color;
         let bg_color = style.bg_fill.lerp_to_gamma(enabled_color, click_t);
         let corner_radius = height / 2.0;
         painter.rect_filled(rect, corner_radius, bg_color);

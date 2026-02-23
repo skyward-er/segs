@@ -66,6 +66,7 @@ impl<'a> TextEdit<'a> {
         } = self;
 
         Frame::new()
+            // FIXME: handle theme properly
             .fill(Color32::BLACK.gamma_multiply(0.4))
             .corner_radius(3)
             .inner_margin(1)

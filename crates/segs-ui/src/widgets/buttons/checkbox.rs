@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
 
-use crate::StyleExt;
+use crate::CtxStyleExt;
 
 pub struct Checkbox<'a> {
     flag: &'a mut bool,
@@ -57,7 +57,7 @@ fn add_checkbox(ui: &mut Ui, active: &mut bool) -> Response {
 
         // Paint background
         let style = &ui.style().interact(&response);
-        let accent = ui.app_visuals().accent_color;
+        let accent = ui.app_style().accent_color;
         let bg_color = style.bg_fill.lerp_to_gamma(accent, click_t);
         painter.rect_filled(rect, 2.0, bg_color);
 

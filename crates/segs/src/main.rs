@@ -1,3 +1,4 @@
+mod communication;
 mod ui;
 mod utils;
 
@@ -6,7 +7,7 @@ use std::f32::consts::FRAC_PI_2;
 use eframe::egui;
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Layout, Rect, Response, Sense, Separator, Ui, UiBuilder,
-    Vec2, ViewportBuilder, vec2,
+    Vec2, ViewportBuilder, Widget, vec2,
 };
 use mimalloc::MiMalloc;
 use segs_assets::{
@@ -16,7 +17,16 @@ use segs_assets::{
     install_fonts, install_icons, load_app_icon,
 };
 use segs_memory::{MemoryExt, init_memory};
-use segs_ui::{StyleExt, containers::ResizablePanel, setup_style};
+use segs_ui::{
+    AppStyle, CtxStyleExt,
+    containers::ResizablePanel,
+    setup_style,
+    widgets::{
+        buttons::{Checkbox, Toggle},
+        labels::VerticalSelectableLabel,
+        text::ValueEdit,
+    },
+};
 
 use crate::ui::{
     components::left_menu::LeftMenuSelector,
@@ -67,6 +77,10 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Sync the current style based on the theme, and get a guard to keep it alive
+        // for the frame
+        let _guard = AppStyle::sync(ctx);
+
         panels::top_controls_bar(ctx, &mut self.top_bar_controls);
         panels::bottom_controls_bar(ctx, &mut self.bottom_bar_controls);
         panels::left_bar(ctx, &mut self.menu_panel_selected);
@@ -102,7 +116,7 @@ fn left_panel_contents(ui: &mut egui::Ui) {
     // let (rect, response) = ui.allocate_exact_size(desired_size, Sense::empty());
 
     // let painter = ui.painter();
-    // let visuals = ui.app_visuals();
+    // let visuals = ui.app_style();
     // let mut cr = CornerRadius::ZERO;
     // cr.nw = 5;
     // painter.rect_filled(rect, cr, visuals.main_view_fill);
@@ -121,61 +135,64 @@ fn bottom_panel_contents(ui: &mut egui::Ui) {
 
 fn main_panel_contents(ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
-        let frame = egui::Frame::group(ui.style())
-            .fill(egui::Color32::from_gray(30))
-            .show(ui, |ui| {
-                ui.set_min_size(egui::vec2(200.0, 100.0));
-                ui.label("Drop files here");
-            });
+        ui.spacing_mut().item_spacing = Vec2::splat(15.);
 
-        // 1. Check if files are currently being hovered over the window
-        if !ui.input(|i| i.raw.hovered_files.is_empty()) {
-            let text = "Release to upload!";
-            // You can draw a highlight or a tooltip
-            ui.ctx().debug_painter().text(
-                frame.response.rect.center(),
-                egui::Align2::CENTER_CENTER,
-                text,
-                egui::FontId::proportional(20.0),
-                egui::Color32::WHITE,
-            );
+        // Value Edit
+        let mut port: u16 = ui.ctx().mem().get_temp_or_default(Id::new("port"));
+        ValueEdit::new(&mut port)
+            .char_limit(5)
+            .with_width(50.)
+            .hint_text("PORT...")
+            .horizontal_align(Align::Center)
+            .show(ui);
+        ui.ctx().mem().insert_temp(Id::new("port"), port);
+
+        // Checkbox
+        let mut checked: bool = ui.ctx().mem().get_temp_or_default(Id::new("checkbox"));
+        Checkbox::new(&mut checked).ui(ui);
+        ui.ctx().mem().insert_temp(Id::new("checkbox"), checked);
+
+        // Toggle
+        let mut toggled = ui.ctx().mem().get_temp_or_default(Id::new("toggle"));
+        Toggle::new(&mut toggled).ui(ui);
+        ui.ctx().mem().insert_temp(Id::new("toggle"), toggled);
+
+        // Vertical Radio Button
+        #[derive(PartialEq, Default, Clone)]
+        enum Options {
+            #[default]
+            Option1,
+            Option2,
+            Option3,
         }
 
-        // 2. Collect dropped files
-        ui.input(|i| {
-            for file in &i.raw.dropped_files {
-                if let Some(path) = &file.path {
-                    println!("Dropped file: {:?}", path);
-                    let downloaded_dor = utils::get_downloaded_dirpath().join("dialects");
-                    std::fs::create_dir_all(&downloaded_dor).expect("Failed to create downloaded/dialects directory");
-                    let filename = path.file_name().unwrap();
-                    let dest_path = downloaded_dor.join(filename);
-                    std::fs::copy(path, dest_path).expect("Failed to copy dropped file");
-                    println!("File copied to downloaded/dialects");
-                } else if let Some(bytes) = &file.bytes {
-                    println!("Dropped {} bytes", bytes.len());
-                }
-            }
-        });
+        let mut selection = ui.ctx().mem().get_temp_or_default(Id::new("radio_selection"));
+        VerticalSelectableLabel::new(&mut selection)
+            .add_variant(Options::Option1, "Option 1")
+            .add_variant(Options::Option2, "Option 2")
+            .add_variant(Options::Option3, "Option 3")
+            .ui(ui);
+        ui.ctx().mem().insert_temp(Id::new("radio_selection"), selection);
     });
 }
 
 fn dataflow(ctx: &egui::Context, left_panel_visible: &mut bool) {
-    let visuals = ctx.app_visuals();
-    let back_frame = Frame::new().fill(visuals.egui().panel_fill);
+    let app_style = ctx.app_style();
+    let visuals = &ctx.style().visuals;
+    let back_frame = Frame::new().fill(visuals.panel_fill);
     let mut cr = CornerRadius::same(5);
     // Only round the left corners
     cr.ne = 0;
     cr.se = 0;
     let front_frame = Frame::new()
         .corner_radius(cr)
-        .fill(visuals.main_panels_fill)
-        .stroke(visuals.main_view_stroke);
+        .fill(app_style.main_panels_fill)
+        .stroke(app_style.main_view_stroke);
     egui::CentralPanel::default().frame(back_frame).show(ctx, |ui| {
         // Define collapse state based on visibility
         let mut collapsed_left = !*left_panel_visible;
 
-        let visuals = ctx.app_visuals();
+        let visuals = ctx.app_style();
         let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
         let panel_inner_frame = Frame::NONE;
         let main_inner_frame = panel_inner_frame.corner_radius(5.).fill(visuals.main_panels_fill);
@@ -227,7 +244,7 @@ fn dataflow_right(ui: &mut egui::Ui) {
 }
 
 fn add_separator(ui: &mut Ui) {
-    ui.visuals_mut().widgets.noninteractive.bg_stroke = ui.ctx().app_visuals().main_view_stroke;
+    ui.visuals_mut().widgets.noninteractive.bg_stroke = ui.ctx().app_style().main_view_stroke;
     ui.add(Separator::default().spacing(0.));
 }
 
@@ -302,7 +319,7 @@ fn section_selector(ui: &mut Ui) -> Response {
         icons::CaretDown::outline()
     };
     let icon_rect = Rect::from_center_size(icon_rect.center(), vec2(10., 10.));
-    let icon_color = ui.app_visuals().menu_icon_active_color;
+    let icon_color = ui.app_style().menu_icon_active_color;
     icon.to_image()
         .tint(icon_color)
         .fit_to_exact_size(icon_rect.size())
@@ -318,7 +335,7 @@ fn section_controls(ui: &mut Ui) -> Response {
 
     if response.hovered() {
         let painter = ui.painter();
-        let shadow_color = ui.app_visuals().menu_icon_shadow_color_hover;
+        let shadow_color = ui.app_style().menu_icon_shadow_color_hover;
         painter.rect_filled(rect.shrink2(vec2(0., 3.)), 0., shadow_color);
     }
 
@@ -333,7 +350,7 @@ fn section_controls(ui: &mut Ui) -> Response {
             ui.add_space(5.);
             ribbon_control(ui);
             let pos = ui.cursor().left_center();
-            let text_color = ui.app_visuals().menu_icon_inactive_color;
+            let text_color = ui.app_style().menu_icon_inactive_color;
             ui.painter().text(
                 pos,
                 Align2::LEFT_CENTER,
@@ -352,7 +369,7 @@ fn ribbon_control(ui: &mut Ui) -> Response {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(17.));
-    let icon_color = ui.app_visuals().menu_icon_inactive_color;
+    let icon_color = ui.app_style().menu_icon_inactive_color;
     icons::Cloud::plus()
         .to_image()
         .tint(icon_color)
