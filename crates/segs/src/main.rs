@@ -7,7 +7,7 @@ use std::f32::consts::FRAC_PI_2;
 use eframe::egui;
 use egui::{
     Align, Align2, Area, Color32, CornerRadius, Frame, Id, Layout, Rect, Response, Sense, Separator, Ui, UiBuilder,
-    Vec2, ViewportBuilder, Widget, vec2,
+    Vec2, ViewportBuilder, vec2,
 };
 use mimalloc::MiMalloc;
 use segs_assets::{
@@ -18,14 +18,9 @@ use segs_assets::{
 };
 use segs_memory::{MemoryExt, init_memory};
 use segs_ui::{
-    AppStyle, CtxStyleExt,
     containers::ResizablePanel,
-    setup_style,
-    widgets::{
-        buttons::{Checkbox, Toggle},
-        labels::VerticalSelectableLabel,
-        text::ValueEdit,
-    },
+    style::{AppStyle, CtxStyleExt, UiStyleExt, setup_style},
+    widgets::text::ValueEdit,
 };
 
 use crate::ui::{
@@ -134,46 +129,17 @@ fn bottom_panel_contents(ui: &mut egui::Ui) {
 }
 
 fn main_panel_contents(ui: &mut egui::Ui) {
-    ui.vertical_centered(|ui| {
-        ui.spacing_mut().item_spacing = Vec2::splat(15.);
-
-        // Value Edit
-        let mut port: u16 = ui.ctx().mem().get_temp_or_default(Id::new("port"));
-        ValueEdit::new(&mut port)
-            .char_limit(5)
-            .with_width(50.)
-            .hint_text("PORT...")
-            .horizontal_align(Align::Center)
-            .show(ui);
-        ui.ctx().mem().insert_temp(Id::new("port"), port);
-
-        // Checkbox
-        let mut checked: bool = ui.ctx().mem().get_temp_or_default(Id::new("checkbox"));
-        Checkbox::new(&mut checked).ui(ui);
-        ui.ctx().mem().insert_temp(Id::new("checkbox"), checked);
-
-        // Toggle
-        let mut toggled = ui.ctx().mem().get_temp_or_default(Id::new("toggle"));
-        Toggle::new(&mut toggled).ui(ui);
-        ui.ctx().mem().insert_temp(Id::new("toggle"), toggled);
-
-        // Vertical Radio Button
-        #[derive(PartialEq, Default, Clone)]
-        enum Options {
-            #[default]
-            Option1,
-            Option2,
-            Option3,
-        }
-
-        let mut selection = ui.ctx().mem().get_temp_or_default(Id::new("radio_selection"));
-        VerticalSelectableLabel::new(&mut selection)
-            .add_variant(Options::Option1, "Option 1")
-            .add_variant(Options::Option2, "Option 2")
-            .add_variant(Options::Option3, "Option 3")
-            .ui(ui);
-        ui.ctx().mem().insert_temp(Id::new("radio_selection"), selection);
-    });
+    ui.with_style_override(
+        |s| {
+            s.current_background_fill = s.main_view_fill;
+        },
+        |ui| {
+            ui.vertical_centered(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::splat(15.);
+                ui.label("Main panel");
+            });
+        },
+    );
 }
 
 fn dataflow(ctx: &egui::Context, left_panel_visible: &mut bool) {
@@ -319,7 +285,7 @@ fn section_selector(ui: &mut Ui) -> Response {
         icons::CaretDown::outline()
     };
     let icon_rect = Rect::from_center_size(icon_rect.center(), vec2(10., 10.));
-    let icon_color = ui.app_style().menu_icon_active_color;
+    let icon_color = ui.app_style().left_bar.icon_active_color;
     icon.to_image()
         .tint(icon_color)
         .fit_to_exact_size(icon_rect.size())
@@ -335,7 +301,7 @@ fn section_controls(ui: &mut Ui) -> Response {
 
     if response.hovered() {
         let painter = ui.painter();
-        let shadow_color = ui.app_style().menu_icon_shadow_color_hover;
+        let shadow_color = ui.app_style().left_bar.shadow_color_hover;
         painter.rect_filled(rect.shrink2(vec2(0., 3.)), 0., shadow_color);
     }
 
@@ -350,7 +316,7 @@ fn section_controls(ui: &mut Ui) -> Response {
             ui.add_space(5.);
             ribbon_control(ui);
             let pos = ui.cursor().left_center();
-            let text_color = ui.app_style().menu_icon_inactive_color;
+            let text_color = ui.app_style().left_bar.icon_inactive_color;
             ui.painter().text(
                 pos,
                 Align2::LEFT_CENTER,
@@ -369,7 +335,7 @@ fn ribbon_control(ui: &mut Ui) -> Response {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(17.));
-    let icon_color = ui.app_style().menu_icon_inactive_color;
+    let icon_color = ui.app_style().left_bar.icon_inactive_color;
     icons::Cloud::plus()
         .to_image()
         .tint(icon_color)
@@ -377,13 +343,4 @@ fn ribbon_control(ui: &mut Ui) -> Response {
         .paint_at(ui, icon_rect);
 
     response
-}
-
-fn panel_content(ui: &mut Ui) -> Response {
-    Frame::new()
-        .inner_margin(8.)
-        .show(ui, |ui| {
-            ui.label("Dataflow left panel");
-        })
-        .response
 }

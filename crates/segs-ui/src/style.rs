@@ -1,11 +1,10 @@
 mod colors;
 mod stack;
 
+use colors::*;
 use egui::{Color32, Shadow, Stroke, Theme, ThemePreference};
 use segs_assets::{Font, fonts::Figtree};
 pub use stack::{AppStyle, CtxStyleExt, UiStyleExt};
-
-use colors::*;
 
 /// Setup egui styles to match SEGS UI design.
 pub fn setup_style(ctx: &egui::Context) {
@@ -13,8 +12,7 @@ pub fn setup_style(ctx: &egui::Context) {
     ctx.all_styles_mut(override_egui_styles);
     ctx.style_mut_of(Theme::Dark, override_dark_style);
     ctx.style_mut_of(Theme::Light, override_light_style);
-    // ctx.set_theme(ThemePreference::System); // FIXME
-    ctx.set_theme(ThemePreference::Dark);
+    ctx.set_theme(ThemePreference::System);
 
     // Initialize global styles
     AppStyle::setup(Style::dark(), Style::light());
@@ -24,59 +22,58 @@ pub fn setup_style(ctx: &egui::Context) {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Style {
-    // ~ Main View Visuals ~
+    pub is_dark: bool,
+    // ---- Main View Visuals -------------------
     pub main_view_fill: Color32,
     pub main_panels_fill: Color32,
     pub main_view_stroke: Stroke,
-
-    // These two controls how menu icons are tinted in active/inactive states.
-    pub menu_icon_inactive_color: Color32,
-    pub menu_icon_active_color: Color32,
-    pub menu_icon_shadow_color_hover: Color32,
-    pub menu_icon_shadow_color_active: Color32,
-
-    pub button_hover_shadow_color: Color32,
-
-    /// Shadow color (e.g. for hover effects)
-    pub shadow_color: Color32,
-
+    // ------------------------------------------
+    pub left_bar: LeftBarMenuStyle,
+    pub widgets: WidgetStyles,
+    pub text_edit: TextEditStyle,
+    /// Shadow color (e.g. hover effects)
+    pub shadow_fill: Color32,
     /// Color used for accents/highlights
-    pub accent_color: Color32,
-
-    /// A good color for enabled states
-    pub enabled_color: Color32,
+    pub accent_fill: Color32,
+    /// A good color for confirmation states
+    pub confirmation_fill: Color32,
+    // ---- Stack-related states ----------------
+    // These fields are relative to the position
+    // in the ui traversal stack
+    // ------------------------------------------
+    pub current_background_fill: Color32,
 }
 
 impl Style {
     pub fn dark() -> Self {
         Self {
-            main_view_fill: LEVEL_2_COLOR_DARK,
-            main_panels_fill: LEVEL_1_COLOR_DARK,
-            main_view_stroke: Stroke::new(1., Color32::from_rgb(39, 40, 45)),
-            menu_icon_inactive_color: Color32::from_rgb(149, 149, 151),
-            menu_icon_active_color: Color32::WHITE,
-            menu_icon_shadow_color_hover: Color32::from_rgb(21, 22, 25),
-            menu_icon_shadow_color_active: Color32::from_rgb(30, 31, 34),
-            button_hover_shadow_color: Color32::from_rgb(42, 43, 48),
-            shadow_color: Color32::from_white_alpha(40),
-            accent_color: Color32::from_rgb(0, 132, 255),
-            enabled_color: Color32::from_rgb(23, 150, 87),
+            is_dark: true,
+            main_view_fill: MAIN_VIEW_DARK,
+            main_panels_fill: PANEL_DARK,
+            main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_DARK),
+            left_bar: LeftBarMenuStyle::dark(),
+            widgets: WidgetStyles::dark(),
+            text_edit: TextEditStyle::dark(),
+            shadow_fill: SHADOW_STRONG_ON_BACKGROUND_DARK,
+            accent_fill: ACCENT_FILL_DARK,
+            confirmation_fill: CONFIRMATION_FILL_DARK,
+            current_background_fill: BACKGROUND_DARK,
         }
     }
 
     pub fn light() -> Self {
         Self {
-            main_view_fill: LEVEL_2_COLOR_LIGHT,
-            main_panels_fill: LEVEL_1_COLOR_LIGHT,
-            main_view_stroke: Stroke::new(1., Color32::from_rgb(216, 216, 216)),
-            menu_icon_inactive_color: Color32::from_rgb(89, 90, 91),
-            menu_icon_active_color: Color32::from_rgb(26, 26, 26),
-            menu_icon_shadow_color_hover: Color32::from_rgb(232, 232, 232),
-            menu_icon_shadow_color_active: Color32::from_rgb(226, 226, 226),
-            button_hover_shadow_color: Color32::from_rgb(232, 232, 232),
-            shadow_color: Color32::from_black_alpha(20),
-            accent_color: Color32::from_rgb(232, 157, 86),
-            enabled_color: Color32::from_rgb(88, 232, 160),
+            is_dark: false,
+            main_view_fill: MAIN_VIEW_LIGHT,
+            main_panels_fill: PANEL_LIGHT,
+            main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_LIGHT),
+            left_bar: LeftBarMenuStyle::light(),
+            widgets: WidgetStyles::light(),
+            text_edit: TextEditStyle::light(),
+            shadow_fill: SHADOW_STRONG_ON_BACKGROUND_LIGHT,
+            accent_fill: ACCENT_FILL_LIGHT,
+            confirmation_fill: CONFIRMATION_FILL_LIGHT,
+            current_background_fill: BACKGROUND_LIGHT,
         }
     }
 
@@ -87,11 +84,139 @@ impl Style {
     pub fn bold_font_of(&self, size: f32) -> egui::FontId {
         Figtree::extra_bold().sized(size)
     }
+}
 
-    /// Get shadow color based on current visual mode.
-    /// `a` is a multiplier for the alpha channel.
-    pub fn shadow_color_lerp(&self, a: f32) -> Color32 {
-        Color32::TRANSPARENT.lerp_to_gamma(self.shadow_color, a)
+#[derive(Clone, Debug, PartialEq)]
+pub struct LeftBarMenuStyle {
+    pub icon_inactive_color: Color32,
+    pub icon_active_color: Color32,
+    pub shadow_color_hover: Color32,
+    pub shadow_color_active: Color32,
+}
+
+impl LeftBarMenuStyle {
+    fn dark() -> Self {
+        Self {
+            icon_inactive_color: ICON_INACTIVE_ON_BACKGROUND_DARK,
+            icon_active_color: ICON_ACTIVE_ON_BACKGROUND_DARK,
+            shadow_color_hover: SHADOW_LIGHT_ON_BACKGROUND_DARK,
+            shadow_color_active: SHADOW_MEDIUM_ON_BACKGROUND_DARK,
+        }
+    }
+
+    fn light() -> Self {
+        Self {
+            icon_inactive_color: ICON_INACTIVE_ON_BACKGROUND_LIGHT,
+            icon_active_color: ICON_ACTIVE_ON_BACKGROUND_LIGHT,
+            shadow_color_hover: SHADOW_LIGHT_ON_BACKGROUND_LIGHT,
+            shadow_color_active: SHADOW_MEDIUM_ON_BACKGROUND_LIGHT,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WidgetStyles {
+    pub noninteractive: InteractionStyle,
+    pub inactive: InteractionStyle,
+    pub hovered: InteractionStyle,
+    pub active: InteractionStyle,
+}
+
+impl WidgetStyles {
+    fn dark() -> Self {
+        Self {
+            noninteractive: InteractionStyle {
+                bg_fill: NONINTERACTIVE_WIDGET_BG_FILL_DARK,
+                bg_stroke_color: NONINTERACTIVE_WIDGET_BG_STROKE_DARK,
+                fg_stroke_color: NONINTERACTIVE_WIDGET_FG_STROKE_DARK,
+            },
+            inactive: InteractionStyle {
+                bg_fill: INACTIVE_WIDGET_BG_FILL_DARK,
+                bg_stroke_color: INACTIVE_WIDGET_BG_STROKE_DARK,
+                fg_stroke_color: INACTIVE_WIDGET_FG_STROKE_DARK,
+            },
+            hovered: InteractionStyle {
+                bg_fill: HOVERED_WIDGET_BG_FILL_DARK,
+                bg_stroke_color: HOVERED_WIDGET_BG_STROKE_DARK,
+                fg_stroke_color: HOVERED_WIDGET_FG_STROKE_DARK,
+            },
+            active: InteractionStyle {
+                bg_fill: ACTIVE_WIDGET_BG_FILL_DARK,
+                bg_stroke_color: ACTIVE_WIDGET_BG_STROKE_DARK,
+                fg_stroke_color: ACTIVE_WIDGET_FG_STROKE_DARK,
+            },
+        }
+    }
+
+    fn light() -> Self {
+        Self {
+            noninteractive: InteractionStyle {
+                bg_fill: NONINTERACTIVE_WIDGET_BG_FILL_LIGHT,
+                bg_stroke_color: NONINTERACTIVE_WIDGET_BG_STROKE_LIGHT,
+                fg_stroke_color: NONINTERACTIVE_WIDGET_FG_STROKE_LIGHT,
+            },
+            inactive: InteractionStyle {
+                bg_fill: INACTIVE_WIDGET_BG_FILL_LIGHT,
+                bg_stroke_color: INACTIVE_WIDGET_BG_STROKE_LIGHT,
+                fg_stroke_color: INACTIVE_WIDGET_FG_STROKE_LIGHT,
+            },
+            hovered: InteractionStyle {
+                bg_fill: HOVERED_WIDGET_BG_FILL_LIGHT,
+                bg_stroke_color: HOVERED_WIDGET_BG_STROKE_LIGHT,
+                fg_stroke_color: HOVERED_WIDGET_FG_STROKE_LIGHT,
+            },
+            active: InteractionStyle {
+                bg_fill: ACTIVE_WIDGET_BG_FILL_LIGHT,
+                bg_stroke_color: ACTIVE_WIDGET_BG_STROKE_LIGHT,
+                fg_stroke_color: ACTIVE_WIDGET_FG_STROKE_LIGHT,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct InteractionStyle {
+    pub bg_fill: Color32,
+    pub bg_stroke_color: Color32,
+    pub fg_stroke_color: Color32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextEditStyle {
+    pub inactive_fill: Color32,
+    pub hover_fill: Color32,
+    pub active_fill: Color32,
+}
+
+impl TextEditStyle {
+    fn dark() -> Self {
+        Self {
+            inactive_fill: TEXT_EDIT_INACTIVE_FILL_DARK,
+            hover_fill: TEXT_EDIT_HOVER_FILL_DARK,
+            active_fill: TEXT_EDIT_ACTIVE_FILL_DARK,
+        }
+    }
+
+    fn light() -> Self {
+        Self {
+            inactive_fill: TEXT_EDIT_INACTIVE_FILL_LIGHT,
+            hover_fill: TEXT_EDIT_HOVER_FILL_LIGHT,
+            active_fill: TEXT_EDIT_ACTIVE_FILL_LIGHT,
+        }
+    }
+}
+
+// ---- Custom override functions for panel levels -----------------------------
+
+pub mod presets {
+    use super::*;
+
+    pub fn popup_style(style: &mut Style) {
+        if style.is_dark {
+            style.widgets.noninteractive.bg_stroke_color = POPUP_STROKE_DARK;
+        } else {
+            style.widgets.noninteractive.bg_stroke_color = POPUP_STROKE_LIGHT;
+        }
     }
 }
 
@@ -100,7 +225,10 @@ impl Style {
 /// Override default egui styles to match SEGS UI design.
 fn override_egui_styles(style: &mut egui::Style) {
     // Animations
-    style.animation_time = 0.05;
+    style.animation_time = 0.1;
+
+    // Text
+    style.visuals.weak_text_alpha = 0.5;
 
     // Widget styles
     let inactive = &mut style.visuals.widgets.inactive;
@@ -113,51 +241,37 @@ fn override_egui_styles(style: &mut egui::Style) {
 /// Override dark theme styles.
 fn override_dark_style(style: &mut egui::Style) {
     // General visuals
-    style.visuals.panel_fill = LEVEL_0_COLOR_DARK;
+    style.visuals.panel_fill = BACKGROUND_DARK;
 
     // Customizing popup frames
-    style.visuals.window_stroke = Stroke::new(1., Color32::from_rgb(57, 59, 66));
-    // This is the color of the Separator widget
-    style.visuals.widgets.noninteractive.bg_stroke.color = Color32::from_rgb(57, 59, 66);
-    style.visuals.window_fill = LEVEL_3_COLOR_DARK;
+    style.visuals.window_stroke = Stroke::new(1., POPUP_STROKE_DARK);
+    style.visuals.window_fill = FOREGROUND_DARK;
     style.visuals.popup_shadow = Shadow {
         offset: [1, 2],
         blur: 3,
         spread: 0,
-        color: Color32::from_rgb(21, 22, 25),
+        color: POPUP_SHADOW_DARK,
     };
 
     // Override text color to improve contrast in dark mode
-    style.visuals.override_text_color = Some(Color32::from_rgb(227, 228, 229));
+    style.visuals.widgets.noninteractive.fg_stroke.color = TEXT_DARK;
 }
 
 /// Override light theme styles.
 fn override_light_style(style: &mut egui::Style) {
     // General visuals
-    style.visuals.panel_fill = LEVEL_0_COLOR_LIGHT;
+    style.visuals.panel_fill = BACKGROUND_LIGHT;
 
     // Customizing popup frames
-    style.visuals.window_stroke = Stroke::new(1., Color32::from_rgb(216, 216, 216));
-    style.visuals.window_fill = LEVEL_3_COLOR_LIGHT;
+    style.visuals.window_stroke = Stroke::new(1., POPUP_STROKE_LIGHT);
+    style.visuals.window_fill = FOREGROUND_LIGHT;
     style.visuals.popup_shadow = Shadow {
         offset: [1, 2],
         blur: 3,
         spread: 0,
-        color: Color32::from_rgb(232, 232, 232),
+        color: POPUP_SHADOW_LIGHT,
     };
 
-    // Widget styles
-    let active = &mut style.visuals.widgets.active;
-    let inactive = &mut style.visuals.widgets.inactive;
-    let hover = &mut style.visuals.widgets.hovered;
-
-    active.fg_stroke.color = Color32::from_rgb(27, 27, 27);
-    active.bg_fill = Color32::from_rgb(237, 237, 237);
-
-    inactive.bg_stroke.color = Color32::from_rgb(216, 216, 216);
-    inactive.bg_stroke.width = 0.5;
-
-    inactive.fg_stroke.color = Color32::from_rgb(92, 92, 92);
-
-    hover.bg_fill = active.bg_fill;
+    // Override text color to improve contrast in dark mode
+    style.visuals.widgets.noninteractive.fg_stroke.color = TEXT_LIGHT;
 }

@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use egui::{Align, Id, Response, Ui, UiBuilder};
+use egui::{Align, Id, Response, Ui, UiBuilder, Widget, vec2};
 use segs_memory::MemoryExt;
 
 use crate::widgets::text::TextEdit;
@@ -86,14 +86,10 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         // of parsing and validation.
         let mut buffer_text: String = ui.ctx().mem().get_temp_or_insert(buffer_id, text.to_string());
         let text_edit = {
-            let mut text_edit = TextEdit::new(&mut buffer_text)
+            let mut text_edit = TextEdit::singleline(&mut buffer_text)
                 .id(edit_id)
                 .hint_text(text_hint)
                 .horizontal_align(horizontal_align);
-
-            if let Some(desided_width) = desided_width {
-                text_edit = text_edit.with_width(desided_width);
-            }
 
             if let Some(limit) = self.char_limit {
                 text_edit = text_edit.char_limit(limit);
@@ -103,7 +99,11 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         };
 
         // Check if the edit content has changed or if the edit has lost focus.
-        let response = text_edit.show(ui);
+        let response = if let Some(width) = desided_width {
+            ui.add_sized(vec2(width, 0.), text_edit)
+        } else {
+            ui.add(text_edit)
+        };
         let update = if update_while_editing {
             // Update when the edit content has changed.
             response.changed()
@@ -126,5 +126,11 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         ui.ctx().mem().insert_temp(buffer_id, buffer_text);
 
         response
+    }
+}
+
+impl<V: FromStr + Display> Widget for ValueEdit<'_, V> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        self.show(ui)
     }
 }

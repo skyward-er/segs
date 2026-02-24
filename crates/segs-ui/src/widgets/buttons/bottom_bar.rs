@@ -4,7 +4,7 @@ use egui::{Color32, Galley, Pos2, Rect, Response, Sense, Theme, Vec2, Widget};
 use segs_assets::icons::Icon;
 use smallvec::SmallVec;
 
-use crate::CtxStyleExt;
+use crate::style::CtxStyleExt;
 
 const DEFAULT_PAD: f32 = 4.0;
 
@@ -154,7 +154,7 @@ fn bottom_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
 
         // Paint shadow on hover
         if response.hovered() {
-            let shadow_color = ui.app_style().shadow_color;
+            let shadow_color = ui.app_style().shadow_fill;
             painter.rect_filled(btn_rect, 0., shadow_color);
         }
 

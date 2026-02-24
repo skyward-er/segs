@@ -2,9 +2,13 @@ use std::{fmt::Display, net::Ipv4Addr, str::FromStr};
 
 use egui::{Align2, Frame, Id, Label, Pos2, Response, RichText, Ui, Vec2, vec2};
 use segs_memory::MemoryExt;
-use segs_ui::widgets::{
-    labels::VerticalSelectableLabel,
-    text::{TextEdit, ValueEdit},
+use segs_ui::{
+    style::presets,
+    widgets::{
+        Separator,
+        labels::VerticalSelectableLabel,
+        text::{TextEdit, ValueEdit},
+    },
 };
 
 use crate::ui::{components::value_edits, popups};
@@ -60,13 +64,13 @@ fn connection_ui(ui: &mut Ui) {
             Frame::new().inner_margin(2.5).show(ui, |ui| {
                 ethernet_conn_ui(ui);
             });
-            ui.add(egui::Separator::default().spacing(0.));
+            Separator::default().spacing(0.).ui_with_style(ui, presets::popup_style);
         }
         SourceSelection::Serial => {
             Frame::new().inner_margin(2.5).show(ui, |ui| {
                 serial_conn_ui(ui);
             });
-            ui.add(egui::Separator::default().spacing(0.));
+            Separator::default().spacing(0.).ui_with_style(ui, presets::popup_style);
         }
         SourceSelection::Automatic => (),
     }
@@ -87,7 +91,7 @@ fn connection_ui(ui: &mut Ui) {
 
 fn ethernet_conn_ui(ui: &mut Ui) -> Response {
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = Vec2::new(3., 2.);
+        ui.spacing_mut().item_spacing = Vec2::new(5., 2.);
 
         let id = ui.id().with("ip_address");
         let mut addr: Ipv4Addr = ui.ctx().mem().get_temp_or_insert(id, Ipv4Addr::new(127, 0, 0, 1));
@@ -164,8 +168,8 @@ fn serial_conn_ui(ui: &mut Ui) {
 fn asdasd(ui: &mut Ui) {
     Frame::new().inner_margin(2.5).show(ui, |ui| {
         let id_text_edit = ui.id().with("_text_edit");
-        let mut text = ui.ctx().mem().get_temp_or_default(id_text_edit);
-        TextEdit::new(&mut text).hint_text("Select Variant...").show(ui);
+        let mut text: String = ui.ctx().mem().get_temp_or_default(id_text_edit);
+        TextEdit::singleline(&mut text).hint_text("Select Variant...").show(ui);
         ui.ctx().mem().insert_temp(id_text_edit, text);
     });
 

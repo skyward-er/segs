@@ -1,7 +1,7 @@
-use egui::{Response, Sense, Ui, Vec2, Widget};
+use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget};
 use segs_assets::icons::Icon;
 
-use crate::CtxStyleExt;
+use crate::style::CtxStyleExt;
 
 pub struct IconBtn<'a> {
     variant: Variant<'a>,
@@ -75,7 +75,7 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
         let animated_rect = rect.expand2(rect.shrink(1.).size() * (scale - 1.0) * 0.5);
 
         if hover_t > 0. {
-            let shadow_color = ui.app_style().shadow_color_lerp(hover_t);
+            let shadow_color = ui.app_style().shadow_fill.gamma_multiply(hover_t);
             painter.rect_filled(animated_rect.shrink(1.), 5., shadow_color);
         }
 
@@ -87,5 +87,5 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
             .paint_at(ui, icon_rect);
     }
 
-    response
+    response.on_hover_cursor(CursorIcon::PointingHand)
 }

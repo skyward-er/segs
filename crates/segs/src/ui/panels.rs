@@ -2,8 +2,8 @@ use egui::{Align, Align2, Context, Frame, Layout, Margin, SidePanel, Ui, Vec2};
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::{
-    CtxStyleExt,
     containers::ResizablePanel,
+    style::CtxStyleExt,
     widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
 };
 use serde::{Deserialize, Serialize};

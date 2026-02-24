@@ -1,7 +1,7 @@
 use egui::{CursorIcon, Frame, Label, Rect, RectAlign, Response, Sense, Tooltip, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
 
-use crate::CtxStyleExt;
+use crate::style::CtxStyleExt;
 
 pub struct RibbonToggle<'a> {
     active: &'a mut bool,
@@ -84,17 +84,17 @@ impl<'a> RibbonToggle<'a> {
             // Paint the shadow
             let visuals = ui.app_style();
             let shadow_color = if active_t > 0. {
-                visuals.menu_icon_shadow_color_active.gamma_multiply(active_t)
+                visuals.left_bar.shadow_color_active.gamma_multiply(active_t)
             } else {
-                visuals.menu_icon_shadow_color_hover.gamma_multiply(hover_t)
+                visuals.left_bar.shadow_color_hover.gamma_multiply(hover_t)
             };
             painter.rect_filled(rect, 0., shadow_color);
 
             // Paint the icon
             let icon_rect = Rect::from_center_size(rect.center(), icon_size);
             let visuals = ui.app_style();
-            let inactive_color = visuals.menu_icon_inactive_color;
-            let active_color = visuals.menu_icon_active_color;
+            let inactive_color = visuals.left_bar.icon_inactive_color;
+            let active_color = visuals.left_bar.icon_active_color;
             let icon_color = inactive_color.lerp_to_gamma(active_color, combined_t);
 
             if active_t < 1. {

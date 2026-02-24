@@ -1,6 +1,6 @@
 use egui::{CursorIcon, Response, Sense, Ui, Widget, emath::easing, lerp, pos2, vec2};
 
-use crate::CtxStyleExt;
+use crate::style::CtxStyleExt;
 
 pub struct Toggle<'a> {
     flag: &'a mut bool,
@@ -26,7 +26,7 @@ fn add_toggle(ui: &mut Ui, active: &mut bool) {
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let id = ui.next_auto_id().with("toggle_asd");
+        let id = response.id;
 
         // Toggle flag on click
         if response.clicked() {
@@ -39,12 +39,20 @@ fn add_toggle(ui: &mut Ui, active: &mut bool) {
         // Animation factor
         let click_t = ui
             .ctx()
-            .animate_bool_with_time_and_easing(id.with("anim"), *active, 0.1, easing::cubic_in);
-        let style = ui.style().interact(&response);
+            .animate_bool_with_easing(id.with("_click_t"), *active, easing::cubic_in);
+        let hover_t = ui
+            .ctx()
+            .animate_bool_responsive(id.with("_hover_t"), response.hovered());
+        let style = ui.app_style();
 
         // Paint background
-        let enabled_color = ui.app_style().enabled_color;
-        let bg_color = style.bg_fill.lerp_to_gamma(enabled_color, click_t);
+        let enabled_color = style.confirmation_fill;
+        let bg_fill = style
+            .widgets
+            .inactive
+            .bg_fill
+            .lerp_to_gamma(style.widgets.hovered.bg_fill, hover_t);
+        let bg_color = bg_fill.lerp_to_gamma(enabled_color, click_t);
         let corner_radius = height / 2.0;
         painter.rect_filled(rect, corner_radius, bg_color);
 
@@ -56,7 +64,7 @@ fn add_toggle(ui: &mut Ui, active: &mut bool) {
         let center = pos2(x, y);
         let radius = corner_radius - 2.0;
 
-        let circle_color = ui.visuals().panel_fill;
+        let circle_color = style.current_background_fill;
         painter.circle_filled(center, radius, circle_color);
     }
 }

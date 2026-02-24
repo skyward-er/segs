@@ -3,7 +3,10 @@ use segs_assets::icons::Icon;
 
 pub mod buttons;
 pub mod labels;
+mod separator;
 pub mod text;
+
+pub use separator::Separator;
 
 pub trait UiWidgetExt {
     fn check(&mut self, active: &mut bool) -> Response;

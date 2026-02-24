@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
 
-use crate::CtxStyleExt;
+use crate::style::CtxStyleExt;
 
 pub struct Checkbox<'a> {
     flag: &'a mut bool,
@@ -51,19 +51,28 @@ fn add_checkbox(ui: &mut Ui, active: &mut bool) -> Response {
 
         // Animation factor
         ui.style_mut().animation_time = 0.1;
-        let click_t = ui.ctx().animate_bool(id.with("active_t"), *active);
+        let click_t = ui.ctx().animate_bool(id.with("_active_t"), *active);
+        let hover_t = ui
+            .ctx()
+            .animate_bool_responsive(id.with("_hover_t"), response.hovered());
 
         let painter = ui.painter();
 
         // Paint background
-        let style = &ui.style().interact(&response);
-        let accent = ui.app_style().accent_color;
-        let bg_color = style.bg_fill.lerp_to_gamma(accent, click_t);
+        let style = ui.app_style();
+        let accent = style.accent_fill;
+        let bg_fill = style
+            .widgets
+            .inactive
+            .bg_fill
+            .lerp_to_gamma(style.widgets.hovered.bg_fill, hover_t);
+        let bg_color = bg_fill.lerp_to_gamma(accent, click_t);
         painter.rect_filled(rect, 2.0, bg_color);
 
         // Paint cross
         let t = (click_t + pressed_t * 0.5).clamp(0.0, 1.0);
-        paint_parametric_check(ui, rect.shrink(1.0), t, style.fg_stroke);
+        let interact_style = ui.style().interact(&response);
+        paint_parametric_check(ui, rect.shrink(1.0), t, interact_style.fg_stroke);
 
         response
     } else {
