@@ -11,6 +11,7 @@ license.workspace = true
 directories = "6.0.0"
 eframe.workspace = true
 egui.workspace = true
+enum_dispatch = "0.3.13"
 mimalloc = { version = "0.1.48", features = ["v3"] }
 segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"

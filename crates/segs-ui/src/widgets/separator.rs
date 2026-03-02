@@ -2,7 +2,8 @@ use egui::{Response, Sense, Ui, Vec2, Widget, vec2};
 
 use crate::style::{CtxStyleExt, Style, UiStyleExt};
 
-/// A visual separator. A horizontal or vertical line (depending on [`crate::Layout`]).
+/// A visual separator. A horizontal or vertical line (depending on
+/// [`crate::Layout`]).
 ///
 /// ```
 /// ui.add(egui::Separator::default());

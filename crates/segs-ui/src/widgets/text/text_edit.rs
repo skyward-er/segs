@@ -51,8 +51,8 @@ type LayouterFn<'t> = &'t mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> Arc<Galley
 /// ```
 ///
 ///
-/// You can also use [`TextEdit`] to show text that can be selected, but not edited.
-/// To do so, pass in a `&mut` reference to a `&str`, for instance:
+/// You can also use [`TextEdit`] to show text that can be selected, but not
+/// edited. To do so, pass in a `&mut` reference to a `&str`, for instance:
 ///
 /// ```
 /// fn selectable_text(ui: &mut egui::Ui, mut text: &str) {
@@ -101,7 +101,8 @@ impl TextEdit<'_> {
 }
 
 impl<'t> TextEdit<'t> {
-    /// No newlines (`\n`) allowed. Pressing enter key will result in the [`TextEdit`] losing focus (`response.lost_focus`).
+    /// No newlines (`\n`) allowed. Pressing enter key will result in the
+    /// [`TextEdit`] losing focus (`response.lost_focus`).
     pub fn singleline(text: &'t mut dyn TextBuffer) -> Self {
         Self {
             desired_height_rows: 1,
@@ -111,7 +112,9 @@ impl<'t> TextEdit<'t> {
         }
     }
 
-    /// A [`TextEdit`] for multiple lines. Pressing enter key will create a new line by default (can be changed with [`return_key`](TextEdit::return_key)).
+    /// A [`TextEdit`] for multiple lines. Pressing enter key will create a new
+    /// line by default (can be changed with
+    /// [`return_key`](TextEdit::return_key)).
     pub fn multiline(text: &'t mut dyn TextBuffer) -> Self {
         Self {
             text,
@@ -158,13 +161,15 @@ impl<'t> TextEdit<'t> {
         self
     }
 
-    /// A source for the unique [`Id`], e.g. `.id_source("second_text_edit_field")` or `.id_source(loop_index)`.
+    /// A source for the unique [`Id`], e.g.
+    /// `.id_source("second_text_edit_field")` or `.id_source(loop_index)`.
     #[inline]
     pub fn id_source(self, id_salt: impl std::hash::Hash) -> Self {
         self.id_salt(id_salt)
     }
 
-    /// A source for the unique [`Id`], e.g. `.id_salt("second_text_edit_field")` or `.id_salt(loop_index)`.
+    /// A source for the unique [`Id`], e.g.
+    /// `.id_salt("second_text_edit_field")` or `.id_salt(loop_index)`.
     #[inline]
     pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
         self.id_salt = Some(Id::new(id_salt));
@@ -173,8 +178,8 @@ impl<'t> TextEdit<'t> {
 
     /// Show a faint hint text when the text field is empty.
     ///
-    /// If the hint text needs to be persisted even when the text field has input,
-    /// the following workaround can be used:
+    /// If the hint text needs to be persisted even when the text field has
+    /// input, the following workaround can be used:
     /// ```
     /// # egui::__run_test_ui(|ui| {
     /// # let mut my_string = String::new();
@@ -230,11 +235,12 @@ impl<'t> TextEdit<'t> {
     /// This can be used to implement things like syntax highlighting.
     ///
     /// This function will be called at least once per frame,
-    /// so it is strongly suggested that you cache the results of any syntax highlighter
-    /// so as not to waste CPU highlighting the same string every frame.
+    /// so it is strongly suggested that you cache the results of any syntax
+    /// highlighter so as not to waste CPU highlighting the same string
+    /// every frame.
     ///
-    /// The arguments is the enclosing [`Ui`] (so you can access e.g. [`Ui::fonts`]),
-    /// the text and the wrap width.
+    /// The arguments is the enclosing [`Ui`] (so you can access e.g.
+    /// [`Ui::fonts`]), the text and the wrap width.
     ///
     /// ```
     /// # egui::__run_test_ui(|ui| {
@@ -255,9 +261,11 @@ impl<'t> TextEdit<'t> {
         self
     }
 
-    /// Default is `true`. If set to `false` then you cannot interact with the text (neither edit or select it).
+    /// Default is `true`. If set to `false` then you cannot interact with the
+    /// text (neither edit or select it).
     ///
-    /// Consider using [`Ui::add_enabled`] instead to also give the [`TextEdit`] a greyed out look.
+    /// Consider using [`Ui::add_enabled`] instead to also give the [`TextEdit`]
+    /// a greyed out look.
     #[inline]
     pub fn interactive(mut self, interactive: bool) -> Self {
         self.interactive = interactive;
@@ -272,7 +280,8 @@ impl<'t> TextEdit<'t> {
     }
 
     /// Set to 0.0 to keep as small as possible.
-    /// Set to [`f32::INFINITY`] to take up all available space (i.e. disable automatic word wrap).
+    /// Set to [`f32::INFINITY`] to take up all available space (i.e. disable
+    /// automatic word wrap).
     #[inline]
     pub fn desired_width(mut self, desired_width: f32) -> Self {
         self.desired_width = Some(desired_width);
@@ -299,9 +308,11 @@ impl<'t> TextEdit<'t> {
         self
     }
 
-    /// When `true` (default), the cursor will initially be placed at the end of the text.
+    /// When `true` (default), the cursor will initially be placed at the end of
+    /// the text.
     ///
-    /// When `false`, the cursor will initially be placed at the beginning of the text.
+    /// When `false`, the cursor will initially be placed at the beginning of
+    /// the text.
     #[inline]
     pub fn cursor_at_end(mut self, b: bool) -> Self {
         self.cursor_at_end = b;
@@ -357,7 +368,8 @@ impl<'t> TextEdit<'t> {
     /// This combination will cause a newline on multiline,
     /// whereas on singleline it will cause the widget to lose focus.
     ///
-    /// This combination is optional and can be disabled by passing [`None`] into this function.
+    /// This combination is optional and can be disabled by passing [`None`]
+    /// into this function.
     #[inline]
     pub fn return_key(mut self, return_key: impl Into<Option<KeyboardShortcut>>) -> Self {
         self.return_key = return_key.into();
@@ -521,7 +533,8 @@ impl TextEdit<'_> {
                 ui.output_mut(|o| o.mutable_text_under_cursor = true);
             }
 
-            // TODO(emilk): drag selected text to either move or clone (ctrl on windows, alt on mac)
+            // TODO(emilk): drag selected text to either move or clone (ctrl on windows, alt
+            // on mac)
 
             let cursor_at_pointer = galley.cursor_from_pos(pointer_pos - rect.min + state.text_offset);
 
@@ -642,9 +655,10 @@ impl TextEdit<'_> {
             }
 
             if !clip_text {
-                // Allocate additional space if edits were made this frame that changed the size. This is important so that,
-                // if there's a ScrollArea, it can properly scroll to the cursor.
-                // Condition `!clip_text` is important to avoid breaking layout for `TextEdit::singleline` (PR #5640)
+                // Allocate additional space if edits were made this frame that changed the
+                // size. This is important so that, if there's a ScrollArea, it
+                // can properly scroll to the cursor. Condition `!clip_text` is
+                // important to avoid breaking layout for `TextEdit::singleline` (PR #5640)
                 let extra_size = galley.size() - rect.size();
                 if extra_size.x > 0.0 || extra_size.y > 0.0 {
                     match ui.layout().main_dir() {
@@ -692,8 +706,10 @@ impl TextEdit<'_> {
 
                     // Only show (and blink) cursor if the egui viewport has focus.
                     // This is for two reasons:
-                    // * Don't give the impression that the user can type into a window without focus
-                    // * Don't repaint the ui because of a blinking cursor in an app that is not in focus
+                    // * Don't give the impression that the user can type into a window without
+                    //   focus
+                    // * Don't repaint the ui because of a blinking cursor in an app that is not in
+                    //   focus
                     let viewport_has_focus = ui.ctx().input(|i| i.focused);
                     if viewport_has_focus {
                         text_selection::visuals::paint_text_cursor(
@@ -805,7 +821,8 @@ fn events(
     let mut cursor_range = state.cursor.range(galley).unwrap_or(default_cursor_range);
 
     // We feed state to the undoer both before and after handling input
-    // so that the undoer creates automatic saves even when there are no events for a while.
+    // so that the undoer creates automatic saves even when there are no events for
+    // a while.
     state
         .undoer
         .lock()
@@ -900,7 +917,8 @@ fn events(
                 if multiline {
                     let mut ccursor = text.delete_selected(&cursor_range);
                     text.insert_text_at(&mut ccursor, "\n", char_limit);
-                    // TODO(emilk): if code editor, auto-indent by same leading tabs, + one if the lines end on an opening bracket
+                    // TODO(emilk): if code editor, auto-indent by same leading tabs, + one if the
+                    // lines end on an opening bracket
                     Some(CCursorRange::one(ccursor))
                 } else {
                     ui.memory_mut(|mem| mem.surrender_focus(id)); // End input with enter

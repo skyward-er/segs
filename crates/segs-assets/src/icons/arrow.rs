@@ -3,28 +3,27 @@ use crate::sources::svgs;
 
 #[derive(Clone, Copy, Default)]
 pub struct Arrow {
-    up: bool,
+    variant: ArrowVariant,
 }
 
 impl Arrow {
-    pub fn up() -> Self {
-        Self { up: true }
-    }
-
-    pub fn down() -> Self {
-        Self { up: false }
+    pub fn narrow_right() -> Self {
+        Self {
+            variant: ArrowVariant::NarrowRight,
+        }
     }
 }
 
 impl Icon for Arrow {
     fn as_image_source(&self) -> &egui::ImageSource<'static> {
-        match self.up {
-            true => &svgs::ARROW_UP,
-            false => &svgs::ARROW_DOWN,
+        match self.variant {
+            ArrowVariant::NarrowRight => &svgs::ARROW_NARROW_RIGHT,
         }
     }
+}
 
-    fn aspect_ratio(&self) -> f32 {
-        4.0 / 5.0
-    }
+#[derive(Clone, Copy, Default)]
+enum ArrowVariant {
+    #[default]
+    NarrowRight,
 }

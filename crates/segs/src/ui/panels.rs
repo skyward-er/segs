@@ -1,67 +1,7 @@
-use egui::{Align, Align2, Context, Frame, Layout, Margin, SidePanel, Ui, Vec2};
-use segs_assets::icons;
-use segs_memory::MemoryExt;
-use segs_ui::{
-    containers::ResizablePanel,
-    style::CtxStyleExt,
-    widgets::buttons::{BottomBarButton, UnpaddedBottomBarButton},
-};
-use serde::{Deserialize, Serialize};
+use egui::{Align, Context, Frame, Layout, Ui};
+use segs_ui::{containers::ResizablePanel, style::CtxStyleExt};
 
-use crate::ui::{
-    components::{
-        buttons::{bottom_panel_toggle, left_panel_toggle, lock_mode_toggle, right_panel_toggle, theme_toggle},
-        left_menu::{LeftBarMenuButton, LeftMenuSelector},
-    },
-    popups,
-};
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TopBarControls {
-    pub lock_mode_active: bool,
-    pub panels_controls: PanelsControls,
-}
-
-pub fn top_controls_bar(ctx: &Context, controls: &mut TopBarControls) {
-    let TopBarControls {
-        lock_mode_active,
-        panels_controls:
-            PanelsControls {
-                left_panel_visible,
-                right_panel_visible,
-                bottom_panel_visible,
-            },
-    } = controls;
-    egui::TopBottomPanel::top("top_panel")
-        .show_separator_line(false)
-        .frame(
-            Frame::new()
-                .inner_margin(Margin::same(4))
-                .fill(ctx.style().visuals.panel_fill),
-        )
-        .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing = Vec2::ZERO;
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                // Theme toggle button
-                theme_toggle(ui);
-
-                // Panel toggle buttons
-                right_panel_toggle(ui, right_panel_visible);
-                bottom_panel_toggle(ui, bottom_panel_visible);
-                left_panel_toggle(ui, left_panel_visible);
-
-                // Lock mode toggle button
-                lock_mode_toggle(ui, lock_mode_active);
-            });
-        });
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BottomBarControls {
-    pub notifications_active: bool,
-}
-
-pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
+/* pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
     egui::TopBottomPanel::bottom("bottom_panel")
         .show_separator_line(false)
         .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
@@ -69,7 +9,7 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let temp_id = ui.id().with("bottom_bar_sources_toggle");
-                    let mut source_toggled: bool = ui.ctx().mem().get_temp_or_default(temp_id);
+                    let mut source_toggled: bool = ui.mem().get_temp_or_default(temp_id);
 
                     let icon = if source_toggled {
                         icons::Antenna::solid()
@@ -92,7 +32,7 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                     popups::ConnectionPopup::new(&mut source_toggled, res.rect.left_top(), Align2::LEFT_BOTTOM)
                         .show(ui);
 
-                    ui.ctx().mem().insert_temp(temp_id, source_toggled);
+                    ui.mem().insert_temp(temp_id, source_toggled);
                 });
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -126,65 +66,9 @@ pub fn bottom_controls_bar(ctx: &Context, controls: &mut BottomBarControls) {
                 });
             });
         });
-}
+} */
 
-pub fn left_bar(ctx: &Context, selector: &mut Option<LeftMenuSelector>) {
-    let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
-    SidePanel::left("menu_panel")
-        .frame(frame)
-        .resizable(false)
-        .show_separator_line(false)
-        .exact_width(34.)
-        .show(ctx, |ui| {
-            ui.spacing_mut().item_spacing = Vec2::ZERO;
-            ui.add_space(5.);
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::PaneControls,
-                icons::RectangleVertical::outline(),
-                icons::RectangleVertical::solid(),
-            ));
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::LayoutComposer,
-                icons::Layout::outline(),
-                icons::Layout::solid(),
-            ));
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::LevelEditor,
-                icons::Stack::outline(),
-                icons::Stack::solid(),
-            ));
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::DataflowEditor,
-                icons::Function::outline(),
-                icons::Function::solid(),
-            ));
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::OnlineResources,
-                icons::Cloud::outline(),
-                icons::Cloud::solid(),
-            ));
-            ui.add(LeftBarMenuButton::new(
-                selector,
-                LeftMenuSelector::Charts,
-                icons::Charts::outline(),
-                icons::Charts::solid(),
-            ));
-        });
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PanelsControls {
-    pub left_panel_visible: bool,
-    pub right_panel_visible: bool,
-    pub bottom_panel_visible: bool,
-}
-
-pub fn main_view(
+/* pub fn main_view(
     ctx: &Context,
     panel_controls: &mut PanelsControls,
     add_contents_left: impl FnOnce(&mut Ui),
@@ -276,3 +160,4 @@ pub fn main_view(
         panel_controls.bottom_panel_visible = !collapsed_bottom;
     });
 }
+ */

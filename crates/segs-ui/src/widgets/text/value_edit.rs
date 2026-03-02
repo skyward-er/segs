@@ -84,7 +84,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         // Text edit with the buffer string. The buffer is used to allow editing the
         // text without immediately updating the value, which allows for better handling
         // of parsing and validation.
-        let mut buffer_text: String = ui.ctx().mem().get_temp_or_insert(buffer_id, text.to_string());
+        let mut buffer_text: String = ui.mem().get_temp_or_insert(buffer_id, text.to_string());
         let text_edit = {
             let mut text_edit = TextEdit::singleline(&mut buffer_text)
                 .id(edit_id)
@@ -123,7 +123,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         }
 
         // Save back the buffer text to memory for the next frame
-        ui.ctx().mem().insert_temp(buffer_id, buffer_text);
+        ui.mem().insert_temp(buffer_id, buffer_text);
 
         response
     }

@@ -29,6 +29,7 @@ pub struct Style {
     pub main_view_stroke: Stroke,
     // ------------------------------------------
     pub left_bar: LeftBarMenuStyle,
+    pub mode_toggle: ModeToggleStyle,
     pub widgets: WidgetStyles,
     pub text_edit: TextEditStyle,
     /// Shadow color (e.g. hover effects)
@@ -52,6 +53,7 @@ impl Style {
             main_panels_fill: PANEL_DARK,
             main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_DARK),
             left_bar: LeftBarMenuStyle::dark(),
+            mode_toggle: ModeToggleStyle::dark(),
             widgets: WidgetStyles::dark(),
             text_edit: TextEditStyle::dark(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_DARK,
@@ -68,6 +70,7 @@ impl Style {
             main_panels_fill: PANEL_LIGHT,
             main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_LIGHT),
             left_bar: LeftBarMenuStyle::light(),
+            mode_toggle: ModeToggleStyle::light(),
             widgets: WidgetStyles::light(),
             text_edit: TextEditStyle::light(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_LIGHT,
@@ -110,6 +113,40 @@ impl LeftBarMenuStyle {
             icon_active_color: ICON_ACTIVE_ON_BACKGROUND_LIGHT,
             shadow_color_hover: SHADOW_LIGHT_ON_BACKGROUND_LIGHT,
             shadow_color_active: SHADOW_MEDIUM_ON_BACKGROUND_LIGHT,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModeToggleStyle {
+    pub border_color_inactive: Color32,
+    pub border_color_active: Color32,
+    pub bg_fill_color_inactive: Color32,
+    pub bg_fill_color_active: Color32,
+    pub stroke_color_inactive: Color32,
+    pub stroke_color_active: Color32,
+}
+
+impl ModeToggleStyle {
+    fn dark() -> Self {
+        Self {
+            border_color_inactive: MAIN_VIEW_STROKE_DARK,
+            border_color_active: HOVERED_WIDGET_BG_STROKE_DARK,
+            bg_fill_color_inactive: MAIN_VIEW_DARK,
+            bg_fill_color_active: FOREGROUND_DARK,
+            stroke_color_inactive: ICON_INACTIVE_ON_BACKGROUND_DARK,
+            stroke_color_active: ICON_ACTIVE_ON_BACKGROUND_DARK,
+        }
+    }
+
+    fn light() -> Self {
+        Self {
+            border_color_inactive: MAIN_VIEW_STROKE_LIGHT,
+            border_color_active: HOVERED_WIDGET_BG_STROKE_LIGHT,
+            bg_fill_color_inactive: MAIN_VIEW_LIGHT,
+            bg_fill_color_active: FOREGROUND_LIGHT,
+            stroke_color_inactive: ICON_INACTIVE_ON_BACKGROUND_LIGHT,
+            stroke_color_active: ICON_ACTIVE_ON_BACKGROUND_LIGHT,
         }
     }
 }

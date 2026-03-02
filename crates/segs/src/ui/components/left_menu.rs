@@ -1,42 +1,20 @@
 use egui::{Response, Ui, Widget, vec2};
 use segs_assets::icons::Icon;
 use segs_ui::widgets::buttons::RibbonToggle;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LeftMenuSelector {
-    PaneControls,
-    LayoutComposer,
-    LevelEditor,
-    DataflowEditor,
-    OnlineResources,
-    Charts,
-}
-
-impl LeftMenuSelector {
-    fn tooltip(&self) -> &'static str {
-        match self {
-            LeftMenuSelector::PaneControls => "Pane controls",
-            LeftMenuSelector::LayoutComposer => "Layout composer",
-            LeftMenuSelector::LevelEditor => "Level editor",
-            LeftMenuSelector::DataflowEditor => "Dataflow editor",
-            LeftMenuSelector::OnlineResources => "Online resources",
-            LeftMenuSelector::Charts => "Charts",
-        }
-    }
-}
+use crate::ui::views::configuration::ConfigurationView;
 
 pub struct LeftBarMenuButton<'a> {
-    selector: &'a mut Option<LeftMenuSelector>,
-    selected_variant: LeftMenuSelector,
+    selector: &'a mut Option<ConfigurationView>,
+    selected_variant: ConfigurationView,
     inactive_icon: Box<dyn Icon>,
     active_icon: Box<dyn Icon>,
 }
 
 impl<'a> LeftBarMenuButton<'a> {
     pub fn new(
-        selector: &'a mut Option<LeftMenuSelector>,
-        selected_variant: LeftMenuSelector,
+        selector: &'a mut Option<ConfigurationView>,
+        selected_variant: ConfigurationView,
         inactive_icon: impl Icon + 'static,
         active_icon: impl Icon + 'static,
     ) -> Self {

@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use egui::{
-    Align, Color32, CursorIcon, Frame, Id, Layout, Pos2, Rect, Response, Sense, Stroke, Ui, UiBuilder, Vec2,
-    emath::GuiRounding, vec2,
+    Align, Color32, CursorIcon, Frame, Id, InnerResponse, Layout, Pos2, Rect, Response, Sense, Stroke, Ui, UiBuilder,
+    Vec2, emath::GuiRounding, vec2,
 };
 use segs_memory::MemoryExt;
 use serde::{Deserialize, Serialize};
@@ -159,7 +159,7 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
         self
     }
 
-    pub fn show(self, ui: &mut Ui, add_contents: impl FnOnce(&mut PanelUI<D>)) {
+    pub fn show(self, ui: &mut Ui, add_contents: impl FnOnce(&mut PanelUI<D>)) -> InnerResponse<TemporaryPanelState> {
         let Self {
             direction,
             panel_side: align,
@@ -183,9 +183,9 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
             let id = id.unwrap_or_else(|| ui.id().with("resizable_panel"));
 
             let default_pers = PersistentPanelState::new(minimum_size);
-            let pstate = ui.ctx().mem().get_perm_or_insert(id, default_pers.clone());
+            let pstate = ui.mem().get_perm_or_insert(id, default_pers.clone());
             let default_temp = TemporaryPanelState::new(pstate.separator_pos);
-            let tstate = ui.ctx().mem().get_temp_or_insert(id, default_temp.clone());
+            let tstate = ui.mem().get_temp_or_insert(id, default_temp.clone());
 
             // Determine the current separator interpolating for animation if enabled.
             let separator_pos = if style.animate && tstate.separator_pos != 0.0 {
@@ -195,17 +195,23 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
                 tstate.separator_pos
             };
 
+            // TODO(federico): Handle hiding the second pane side more "idiomatically" with
+            // clipping.
+            let extra_pad = dir.side_vec2(1., 0.);
             if collapsed.as_ref().is_some_and(|v| **v) {
-                let (rect_second, _) = ui.allocate_exact_size(max_size, Sense::empty());
+                let (rect_second, _) = ui.allocate_exact_size(max_size + extra_pad, Sense::empty());
 
                 // Show children UIs.
                 let mut panel_ui = PanelUI::new(align, sides, ui, None, rect_second);
                 add_contents(&mut panel_ui);
+
+                InnerResponse::new(tstate, ui.response())
             } else {
                 let (max_main, max_cross) = (dir.vec_main(max_size), dir.vec_cross(max_size));
                 let side_first_size = dir.side_vec2(separator_pos, max_cross);
-                let side_second_size = dir.side_vec2(max_main - separator_pos, max_cross);
-                let separator_size = dir.side_vec2(style.separator_inactive.width, max_cross);
+                let separator_width = style.separator_inactive.width;
+                let side_second_size = dir.side_vec2(max_main - separator_pos - separator_width, max_cross) + extra_pad;
+                let separator_size = dir.side_vec2(separator_width, max_cross);
 
                 let (rect_first, _) = ui.allocate_exact_size(side_first_size, Sense::empty());
                 let (rect_sep, response_sep) = ui.allocate_exact_size(separator_size, Sense::drag());
@@ -229,8 +235,11 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
                     style,
                 }
                 .show(ui);
+
+                InnerResponse::new(tstate, ui.response())
             }
-        });
+        })
+        .inner
     }
 }
 
@@ -281,7 +290,7 @@ impl Separator<'_> {
         if response.dragged() {
             if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
                 let pointer_dist = side.dist_from_panel_edge(pointer_pos, max_rect);
-                let mem = ui.ctx().mem();
+                let mem = ui.mem();
                 if pointer_dist < minimum_size {
                     // If collapsible, allow the panel to be fully hidden by dragging the separator
                     // all the way to the edge. Otherwise, clamp it to the minimum size.
@@ -415,8 +424,8 @@ impl<'a> PanelUI<'a, VerticalDirection> {
 }
 
 #[derive(Debug, Clone)]
-struct TemporaryPanelState {
-    separator_pos: f32,
+pub struct TemporaryPanelState {
+    pub separator_pos: f32,
 }
 
 impl TemporaryPanelState {

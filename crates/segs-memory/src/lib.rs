@@ -6,7 +6,7 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
-use egui::{Context, Id};
+use egui::{Context, Id, Ui};
 
 use crate::memory::{Memory, Persistent, Temporary};
 
@@ -40,6 +40,12 @@ impl MemoryExt for Context {
         // by the design of the library, as MemoryControl is only initialized once at
         // startup and then accessed immutably.
         MEMORY.get().unwrap()
+    }
+}
+
+impl MemoryExt for Ui {
+    fn mem(&self) -> &MemoryControl {
+        self.ctx().mem()
     }
 }
 

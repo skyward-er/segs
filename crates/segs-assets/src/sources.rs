@@ -85,6 +85,7 @@ pub mod svgs {
     pub static FOLD_ALL: egui::ImageSource = include_svg!("svgs", "fold_all.svg");
     pub static FUNCTION_OUTLINE: egui::ImageSource = include_svg!("svgs", "function_outline.svg");
     pub static FUNCTION_SOLID: egui::ImageSource = include_svg!("svgs", "function_solid.svg");
+    pub static GAUGE: egui::ImageSource = include_svg!("svgs", "gauge.svg");
     pub static GLOBE: egui::ImageSource = include_svg!("svgs", "globe.svg");
     pub static LAYOUT_GRID_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_grid_outline.svg");
     pub static LAYOUT_GRID_SOLID: egui::ImageSource = include_svg!("svgs", "layout_grid_solid.svg");
@@ -118,6 +119,7 @@ pub mod svgs {
     pub static SUN_OUTLINE: egui::ImageSource = include_svg!("svgs", "sun_outline.svg");
     pub static SUN_SOLID: egui::ImageSource = include_svg!("svgs", "sun_solid.svg");
     pub static TAG: egui::ImageSource = include_svg!("svgs", "tag.svg");
+    pub static TOOLS: egui::ImageSource = include_svg!("svgs", "tools.svg");
     pub static USB: egui::ImageSource = include_svg!("svgs", "usb.svg");
     pub static WINDOW_OUTLINE: egui::ImageSource = include_svg!("svgs", "window_outline.svg");
     pub static WINDOW_SOLID: egui::ImageSource = include_svg!("svgs", "window_solid.svg");

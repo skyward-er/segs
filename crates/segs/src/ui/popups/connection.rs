@@ -45,7 +45,7 @@ impl<'a> ConnectionPopup<'a> {
 
         let id = Id::new("connection_popup");
         let mut popup = popups::Popup::new(source_toggled, pivot_pos).id(id).pivot(pivot_align);
-        if ui.ctx().mem().remove_temp(Id::new("area_resize")).is_some_and(|b| b) {
+        if ui.mem().remove_temp(Id::new("area_resize")).is_some_and(|b| b) {
             popup = popup.forze_sizing_pass()
         }
         popup.show(ui, connection_ui);
@@ -54,7 +54,7 @@ impl<'a> ConnectionPopup<'a> {
 
 fn connection_ui(ui: &mut Ui) {
     let id = ui.id().with("_source_selector");
-    let mut selector = ui.ctx().mem().get_temp_or_default(id);
+    let mut selector = ui.mem().get_temp_or_default(id);
 
     ui.spacing_mut().item_spacing = Vec2::ZERO;
 
@@ -83,9 +83,9 @@ fn connection_ui(ui: &mut Ui) {
             .add_variant(SourceSelection::Automatic, "automatic")
             .add_variant(SourceSelection::Serial, "serial");
         if ui.add(widget).clicked() {
-            ui.ctx().mem().insert_temp(Id::new("area_resize"), true);
+            ui.mem().insert_temp(Id::new("area_resize"), true);
         }
-        ui.ctx().mem().insert_temp(id, selector);
+        ui.mem().insert_temp(id, selector);
     });
 }
 
@@ -94,19 +94,19 @@ fn ethernet_conn_ui(ui: &mut Ui) -> Response {
         ui.spacing_mut().item_spacing = Vec2::new(5., 2.);
 
         let id = ui.id().with("ip_address");
-        let mut addr: Ipv4Addr = ui.ctx().mem().get_temp_or_insert(id, Ipv4Addr::new(127, 0, 0, 1));
+        let mut addr: Ipv4Addr = ui.mem().get_temp_or_insert(id, Ipv4Addr::new(127, 0, 0, 1));
         labelled_value_edit(ui, "IP ADDRESS", value_edits::ip_value_edit(&mut addr));
-        ui.ctx().mem().insert_temp(id, addr);
+        ui.mem().insert_temp(id, addr);
 
         let id = ui.id().with("recv_port");
-        let mut recv_port = ui.ctx().mem().get_temp_or_insert(id, 42069);
+        let mut recv_port = ui.mem().get_temp_or_insert(id, 42069);
         labelled_value_edit(ui, "RECV PORT", value_edits::port_value_edit(&mut recv_port));
-        ui.ctx().mem().insert_temp(id, recv_port);
+        ui.mem().insert_temp(id, recv_port);
 
         let id = ui.id().with("send_port");
-        let mut send_port = ui.ctx().mem().get_temp_or_insert(id, 42070);
+        let mut send_port = ui.mem().get_temp_or_insert(id, 42070);
         labelled_value_edit(ui, "SEND PORT", value_edits::port_value_edit(&mut send_port));
-        ui.ctx().mem().insert_temp(id, send_port);
+        ui.mem().insert_temp(id, send_port);
     })
     .response
 }
@@ -121,10 +121,10 @@ fn serial_conn_ui(ui: &mut Ui) {
     let button = egui::Button::new("click");
     let response = ui.add(button);
     if response.clicked() {
-        ui.ctx().mem().insert_temp(enable_id, true);
+        ui.mem().insert_temp(enable_id, true);
     }
 
-    let enabled = ui.ctx().mem().get_temp_or_default(enable_id);
+    let enabled = ui.mem().get_temp_or_default(enable_id);
     let visible_t =
         ui.ctx()
             .animate_bool_with_time_and_easing(visible_id, enabled, 0.2, egui::emath::easing::cubic_out);
@@ -160,7 +160,7 @@ fn serial_conn_ui(ui: &mut Ui) {
 
         // Hide the popup if the user clicks outside of it
         if res.clicked_elsewhere() {
-            ui.ctx().mem().insert_temp(enable_id, false);
+            ui.mem().insert_temp(enable_id, false);
         }
     }
 }
@@ -168,9 +168,9 @@ fn serial_conn_ui(ui: &mut Ui) {
 fn asdasd(ui: &mut Ui) {
     Frame::new().inner_margin(2.5).show(ui, |ui| {
         let id_text_edit = ui.id().with("_text_edit");
-        let mut text: String = ui.ctx().mem().get_temp_or_default(id_text_edit);
+        let mut text: String = ui.mem().get_temp_or_default(id_text_edit);
         TextEdit::singleline(&mut text).hint_text("Select Variant...").show(ui);
-        ui.ctx().mem().insert_temp(id_text_edit, text);
+        ui.mem().insert_temp(id_text_edit, text);
     });
 
     ui.add(egui::Separator::default().spacing(0.));
