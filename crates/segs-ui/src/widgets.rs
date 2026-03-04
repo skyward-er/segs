@@ -1,11 +1,11 @@
-use egui::Response;
-use segs_assets::icons::Icon;
-
+pub mod atoms;
 pub mod buttons;
 pub mod labels;
 mod separator;
 pub mod text;
 
+use egui::Response;
+use segs_assets::icons::Icon;
 pub use separator::Separator;
 
 pub trait UiWidgetExt {
