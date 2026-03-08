@@ -3092,6 +3092,7 @@ dependencies = [
 name = "segs"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "directories",
  "eframe",
  "egui",
@@ -3103,6 +3104,7 @@ dependencies = [
  "segs-plot",
  "segs-ui",
  "serde",
+ "smallvec",
 ]
 
 [[package]]

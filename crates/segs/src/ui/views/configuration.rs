@@ -142,8 +142,8 @@ impl super::ViewTrait for ConfigurationView {
         //     .corner_radius(5)
         //     .show(ui, |ui| {
         //         let (selection_rect, selection_response) =
-        //             ui.allocate_exact_size(vec2(selection_width, height), Sense::click());
-        //         // ui.set_min_size(selection_rect.size());
+        //             ui.allocate_exact_size(vec2(selection_width, height),
+        // Sense::click());         // ui.set_min_size(selection_rect.size());
         //     });
 
         // ui.add_space(pad_width);
@@ -151,7 +151,7 @@ impl super::ViewTrait for ConfigurationView {
         let id = Id::new("current_mode");
         let mut mode: Mode = ui.mem().get_temp_or_default(id);
 
-        ModeToggle::new(&mut mode).with_height(18.).with_width(300.).show(ui);
+        ModeToggle::new(&mut mode).with_height(22.).with_width(300.).show(ui);
 
         ui.mem().insert_temp(id, mode);
     }

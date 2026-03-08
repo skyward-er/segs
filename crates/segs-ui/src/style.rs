@@ -84,8 +84,16 @@ impl Style {
         Figtree::medium().sized(size)
     }
 
+    pub fn semibold_font_of(&self, size: f32) -> egui::FontId {
+        Figtree::bold().sized(size)
+    }
+
     pub fn bold_font_of(&self, size: f32) -> egui::FontId {
         Figtree::extra_bold().sized(size)
+    }
+
+    pub fn italic_font_of(&self, size: f32) -> egui::FontId {
+        Figtree::medium().italic().sized(size)
     }
 }
 
@@ -251,8 +259,10 @@ pub mod presets {
     pub fn popup_style(style: &mut Style) {
         if style.is_dark {
             style.widgets.noninteractive.bg_stroke_color = POPUP_STROKE_DARK;
+            style.shadow_fill = SHADOW_STRONG_ON_BACKGROUND_DARK;
         } else {
             style.widgets.noninteractive.bg_stroke_color = POPUP_STROKE_LIGHT;
+            style.shadow_fill = SHADOW_MEDIUM_ON_BACKGROUND_LIGHT;
         }
     }
 }
@@ -304,8 +314,8 @@ fn override_light_style(style: &mut egui::Style) {
     style.visuals.window_fill = FOREGROUND_LIGHT;
     style.visuals.popup_shadow = Shadow {
         offset: [1, 2],
-        blur: 3,
-        spread: 0,
+        blur: 5,
+        spread: 1,
         color: POPUP_SHADOW_LIGHT,
     };
 
