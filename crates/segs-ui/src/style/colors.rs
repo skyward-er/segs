@@ -80,6 +80,13 @@ pub const TEXT_EDIT_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(214, 214, 214)
 pub const TEXT_EDIT_ACTIVE_FILL_DARK: Color32 = Color32::from_rgb(54, 54, 54);
 pub const TEXT_EDIT_ACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(200, 200, 200);
 
+pub const DRAG_VALUE_INACTIVE_FILL_DARK: Color32 = Color32::from_rgb(26, 26, 26);
+pub const DRAG_VALUE_INACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(228, 228, 228);
+pub const DRAG_VALUE_HOVER_FILL_DARK: Color32 = Color32::from_rgb(40, 40, 40);
+pub const DRAG_VALUE_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(214, 214, 214);
+pub const DRAG_VALUE_ACTIVE_FILL_DARK: Color32 = Color32::from_rgb(54, 54, 54);
+pub const DRAG_VALUE_ACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(200, 200, 200);
+
 // -----------------------------------------------------------------------------
 // Shadow Colors
 // -----------------------------------------------------------------------------

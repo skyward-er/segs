@@ -10,7 +10,7 @@ pub struct ValueEdit<'a, V: FromStr + Display> {
     id: Option<Id>,
     text_hint: String,
     horizontal_align: Align,
-    desided_width: Option<f32>,
+    desired_width: Option<f32>,
     update_while_editing: bool,
     char_limit: Option<usize>,
 }
@@ -22,7 +22,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
             id: None,
             text_hint: String::new(),
             horizontal_align: Align::LEFT,
-            desided_width: None,
+            desired_width: None,
             update_while_editing: false,
             char_limit: None,
         }
@@ -44,7 +44,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
     }
 
     pub fn with_width(mut self, width: f32) -> Self {
-        self.desided_width = Some(width);
+        self.desired_width = Some(width);
         self
     }
 
@@ -73,7 +73,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
             text,
             text_hint,
             horizontal_align,
-            desided_width,
+            desired_width,
             update_while_editing,
             ..
         } = self;
@@ -99,7 +99,7 @@ impl<'a, V: FromStr + Display> ValueEdit<'a, V> {
         };
 
         // Check if the edit content has changed or if the edit has lost focus.
-        let response = if let Some(width) = desided_width {
+        let response = if let Some(width) = desired_width {
             ui.add_sized(vec2(width, 0.), text_edit)
         } else {
             ui.add(text_edit)

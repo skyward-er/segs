@@ -32,6 +32,7 @@ pub struct Style {
     pub mode_toggle: ModeToggleStyle,
     pub widgets: WidgetStyles,
     pub text_edit: TextEditStyle,
+    pub drag_value: DragValueStyle,
     /// Shadow color (e.g. hover effects)
     pub shadow_fill: Color32,
     /// Color used for accents/highlights
@@ -56,6 +57,7 @@ impl Style {
             mode_toggle: ModeToggleStyle::dark(),
             widgets: WidgetStyles::dark(),
             text_edit: TextEditStyle::dark(),
+            drag_value: DragValueStyle::dark(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_DARK,
             accent_fill: ACCENT_FILL_DARK,
             confirmation_fill: CONFIRMATION_FILL_DARK,
@@ -73,6 +75,7 @@ impl Style {
             mode_toggle: ModeToggleStyle::light(),
             widgets: WidgetStyles::light(),
             text_edit: TextEditStyle::light(),
+            drag_value: DragValueStyle::light(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_LIGHT,
             accent_fill: ACCENT_FILL_LIGHT,
             confirmation_fill: CONFIRMATION_FILL_LIGHT,
@@ -247,6 +250,31 @@ impl TextEditStyle {
             inactive_fill: TEXT_EDIT_INACTIVE_FILL_LIGHT,
             hover_fill: TEXT_EDIT_HOVER_FILL_LIGHT,
             active_fill: TEXT_EDIT_ACTIVE_FILL_LIGHT,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DragValueStyle {
+    pub inactive_fill: Color32,
+    pub hover_fill: Color32,
+    pub active_fill: Color32,
+}
+
+impl DragValueStyle {
+    fn dark() -> Self {
+        Self {
+            inactive_fill: DRAG_VALUE_INACTIVE_FILL_DARK,
+            hover_fill: DRAG_VALUE_HOVER_FILL_DARK,
+            active_fill: DRAG_VALUE_ACTIVE_FILL_DARK,
+        }
+    }
+
+    fn light() -> Self {
+        Self {
+            inactive_fill: DRAG_VALUE_INACTIVE_FILL_LIGHT,
+            hover_fill: DRAG_VALUE_HOVER_FILL_LIGHT,
+            active_fill: DRAG_VALUE_ACTIVE_FILL_LIGHT,
         }
     }
 }

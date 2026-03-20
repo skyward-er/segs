@@ -10,7 +10,7 @@ use segs_assets::{
     icons::{self, Icon},
 };
 use segs_memory::MemoryExt;
-use segs_ui::{containers::ResizablePanel, style::CtxStyleExt};
+use segs_ui::{containers::ResizablePanel, style::CtxStyleExt, widgets::text::DragValue};
 use serde::{Deserialize, Serialize};
 
 use crate::ui::components::buttons;
@@ -26,6 +26,14 @@ impl super::ConfigurationViewTrait for DataflowEditorView {
         buttons::left_panel_toggle(ui, &mut left_panel_visible);
 
         ui.mem().insert_perm(id, left_panel_visible);
+    }
+
+    fn main_view_right_fn(&mut self, ui: &mut Ui) {
+        // Nel tuo codice UI potresti estrarlo così:
+
+        let mut num: f32 = ui.mem().get_temp_or_default(Id::new("example_drag_value"));
+        ui.add(DragValue::new(&mut num).suffix(" m/s"));
+        ui.mem().insert_temp(Id::new("example_drag_value"), num);
     }
 }
 
