@@ -3482,7 +3482,7 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 [[package]]
 name = "skyward_mavlink"
 version = "0.2.0"
-source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?rev=a1224747e83b4e94e5ce455eccc898c74564bc05#a1224747e83b4e94e5ce455eccc898c74564bc05"
+source = "git+https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git?rev=7eb779558eeaa9a3eb51ab558d2cc0278539f1af#7eb779558eeaa9a3eb51ab558d2cc0278539f1af"
 dependencies = [
  "bitflags 2.9.1",
  "mavlink-bindgen",
