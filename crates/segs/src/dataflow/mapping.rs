@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+use argh::FromArgValue;
+
+#[derive(FromArgValue)]
 pub enum MappingType {
     BuiltIn,
     LocalFile,

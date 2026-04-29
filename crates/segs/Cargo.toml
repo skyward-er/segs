@@ -21,3 +21,4 @@ segs-ui.path = "../segs-ui"
 segs-mavlink.path = "../segs-mavlink"
 serde = { workspace = true, features = ["derive"] }
 smallvec = "1.15.1"
+argh = "0.1.19"

@@ -1,3 +1,4 @@
+mod args;
 mod dataflow;
 mod ui;
 mod utils;
@@ -10,6 +11,7 @@ use segs_memory::{MemoryExt, init_memory};
 use segs_ui::style::{AppStyle, UiStyleExt, setup_style};
 use serde::{Deserialize, Serialize};
 
+use crate::args::AppArgs;
 use crate::dataflow::adapter::AdapterType;
 use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
 use crate::ui::views;
@@ -18,7 +20,9 @@ use crate::ui::views;
 static GLOBAL: MiMalloc = MiMalloc;
 
 // Standard eframe setup to run the app
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = args::parse_args()?;
+
     init_memory(utils::get_memory_dirpath()).expect("Failed to initialize memory system");
     let app_icon = load_app_icon();
     let options = eframe::NativeOptions {
@@ -30,7 +34,8 @@ fn main() -> eframe::Result<()> {
             .with_icon(app_icon),
         ..Default::default()
     };
-    eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
+    eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc, args)))))
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
 
 struct App {
@@ -45,7 +50,7 @@ struct AppState {
 }
 
 impl App {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, args: AppArgs) -> Self {
         let ctx = &_cc.egui_ctx;
         setup_style(ctx);
         install_fonts(ctx);
@@ -54,10 +59,23 @@ impl App {
         let state: AppState = ctx.mem().get_perm_or_default(Id::new("app_state"));
         let mut data_store = DataStore::new();
 
+        let data_adapter = match (args.transport, args.adapter, args.mapping) {
+            (Some(transport), Some(AdapterType::Mavlink), Some(mapping)) => {
+                println!("Loading MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
+                let adapter = MavlinkAdapter::new(transport, mapping).expect("Failed to create MAVLink adapter");
+                Some(Box::new(adapter) as Box<dyn DataAdapter>)
+            }
+            _ => None,
+        };
+
+        if let Some(ref adapter) = data_adapter {
+            adapter.prepare_data_store(&mut data_store);
+        }
+
         Self {
             state,
             data_store,
-            data_adapter: None,
+            data_adapter,
         }
     }
 }

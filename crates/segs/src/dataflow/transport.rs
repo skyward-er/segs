@@ -1,5 +1,8 @@
 use std::net::SocketAddrV4;
 
+use argh::FromArgValue;
+
+#[derive(FromArgValue)]
 pub enum TransportType {
     Ethernet,
     Serial,

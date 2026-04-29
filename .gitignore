@@ -1,5 +1,6 @@
 # Os generated files
 .DS_Store
+.args
 
 # Build related
 /target

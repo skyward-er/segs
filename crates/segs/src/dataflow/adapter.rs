@@ -1,9 +1,12 @@
+use argh::FromArgValue;
+
 use crate::dataflow::{
     DataStore,
     mapping::{DataMapping, MappingDescriptor},
     transport::DataTransport,
 };
 
+#[derive(FromArgValue)]
 pub enum AdapterType {
     Mavlink,
     // Future adapter types can be added here
