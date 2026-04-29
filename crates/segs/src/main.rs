@@ -1,4 +1,4 @@
-// mod communication;
+mod dataflow;
 mod ui;
 mod utils;
 
@@ -10,6 +10,8 @@ use segs_memory::{MemoryExt, init_memory};
 use segs_ui::style::{AppStyle, UiStyleExt, setup_style};
 use serde::{Deserialize, Serialize};
 
+use crate::dataflow::adapter::AdapterType;
+use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
 use crate::ui::views;
 
 #[global_allocator]
@@ -33,6 +35,8 @@ fn main() -> eframe::Result<()> {
 
 struct App {
     state: AppState,
+    data_store: DataStore,
+    data_adapter: Option<Box<dyn DataAdapter>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,7 +52,13 @@ impl App {
         install_icons(ctx);
 
         let state: AppState = ctx.mem().get_perm_or_default(Id::new("app_state"));
-        Self { state }
+        let mut data_store = DataStore::new();
+
+        Self {
+            state,
+            data_store,
+            data_adapter: None,
+        }
     }
 }
 
@@ -57,6 +67,11 @@ impl eframe::App for App {
         // Sync the current style based on the theme, and get a guard to keep it alive
         // for the frame
         let _guard = AppStyle::sync(ctx);
+
+        // Process incoming data
+        if let Some(ref mut adapter) = self.data_adapter {
+            adapter.process_incoming(&mut self.data_store);
+        }
 
         // Show the current view based on state
         self.state.view.show(ctx);

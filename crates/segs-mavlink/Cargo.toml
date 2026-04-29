@@ -13,4 +13,5 @@ mavlink-bindgen = { version = "0.17.1", default-features = false }
 mavlink-core = { version = "0.17.1", default-features = false, features = [
     "std",
 ] }
-serialport = "4.8.1"
+thiserror.workspace = true
+serialport = "4.9.0"

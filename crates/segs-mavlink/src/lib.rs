@@ -1,26 +1,29 @@
 pub mod connection;
 mod core;
+pub mod error;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::path::Path;
 
 use bytes::{Buf, BufMut, Bytes};
-use mavlink_bindgen::parser::{MavEnum, MavProfile as ProfileInfo, MavType};
-pub use mavlink_bindgen::parser::{MavMessage as MessageInfo, parse_profile};
+pub use mavlink_bindgen::parser::{MavEnum as EnumInfo, MavMessage as MessageInfo, MavProfile as ProfileInfo, MavType};
 pub use mavlink_core::MavlinkVersion;
 use mavlink_core::{MavHeader, error::ParserError, utils::remove_trailing_zeroes};
 
 use crate::core::MAVLinkMessageRaw;
+use crate::error::ProfileParseError;
 
+/// MAVLink profile optimized for reflection data lookup
 pub struct MavProfile {
-    pub enums: BTreeMap<String, MavEnum>,
+    pub enums: BTreeMap<String, EnumInfo>,
     pub messages: BTreeMap<u32, MessageInfo>,
 }
 
 impl MavProfile {
-    pub fn new(profile: ProfileInfo) -> Self {
+    pub fn from_profile_info(profile: &ProfileInfo) -> Self {
         Self {
             enums: profile.enums.clone(),
-            messages: profile.messages.into_values().map(|msg| (msg.id, msg)).collect(),
+            messages: profile.messages.iter().map(|(_, msg)| (msg.id, msg.clone())).collect(),
         }
     }
 }
@@ -157,4 +160,19 @@ impl MsgField {
             Self::Array(arr) => arr.into_iter().for_each(|item| item.ser(buf)),
         }
     }
+}
+
+pub fn parse_profile(profile_path: &Path) -> Result<ProfileInfo, ProfileParseError> {
+    let definitions_dir = profile_path.parent().unwrap_or_else(|| Path::new("."));
+    let mut parsed_files = HashSet::new();
+
+    let profile =
+        mavlink_bindgen::parser::parse_profile(definitions_dir, profile_path, &mut parsed_files).map_err(|e| {
+            ProfileParseError::ParseError {
+                err: e,
+                path: profile_path.to_path_buf(),
+            }
+        })?;
+
+    Ok(profile)
 }

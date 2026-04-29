@@ -18,5 +18,6 @@ segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"
 segs-plot.path = "../segs-plot"
 segs-ui.path = "../segs-ui"
+segs-mavlink.path = "../segs-mavlink"
 serde = { workspace = true, features = ["derive"] }
 smallvec = "1.15.1"
