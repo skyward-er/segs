@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod fonts;
 pub mod icons;
 mod sources;
