@@ -1,8 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use egui::{
-    Align, Align2, Area, Color32, CornerRadius, Frame, Id, Layout, Rect, Response, Sense, Separator, Ui, UiBuilder,
-    Vec2, vec2,
+    Align, Align2, Area, CentralPanel, Color32, CornerRadius, Frame, Id, Layout, Rect, Response, Sense, Separator, Ui, UiBuilder, Vec2, vec2
 };
 use segs_assets::{
     Font,
@@ -29,9 +28,9 @@ impl super::ConfigurationViewTrait for DataflowEditorView {
     }
 }
 
-fn dataflow(ctx: &egui::Context, left_panel_visible: &mut bool) {
-    let app_style = ctx.app_style();
-    let visuals = &ctx.style().visuals;
+fn dataflow(ui: &mut Ui, left_panel_visible: &mut bool) {
+    let app_style = ui.app_style();
+    let visuals = &ui.style().visuals;
     let back_frame = Frame::new().fill(visuals.panel_fill);
     let mut cr = CornerRadius::same(5);
     // Only round the left corners
@@ -41,11 +40,11 @@ fn dataflow(ctx: &egui::Context, left_panel_visible: &mut bool) {
         .corner_radius(cr)
         .fill(app_style.main_panels_fill)
         .stroke(app_style.main_view_stroke);
-    egui::CentralPanel::default().frame(back_frame).show(ctx, |ui| {
+    CentralPanel::default().frame(back_frame).show_inside(ui, |ui| {
         // Define collapse state based on visibility
         let mut collapsed_left = !*left_panel_visible;
 
-        let visuals = ctx.app_style();
+        let visuals = ui.app_style();
         let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
         let panel_inner_frame = Frame::NONE;
         let main_inner_frame = panel_inner_frame.corner_radius(5.).fill(visuals.main_panels_fill);

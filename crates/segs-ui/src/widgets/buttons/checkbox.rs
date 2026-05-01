@@ -18,7 +18,7 @@ impl<'a> Checkbox<'a> {
     }
 
     pub fn with_id(mut self, id: impl Hash) -> Self {
-        self.builder = self.builder.id(id);
+        self.builder = self.builder.id_salt(id);
         self
     }
 }

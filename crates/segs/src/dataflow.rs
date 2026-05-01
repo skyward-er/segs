@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod adapter;
 pub mod mapping;
 pub mod mavlink_adapter;

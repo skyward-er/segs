@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use egui::{Response, Theme, Ui};
 use segs_assets::icons;
 use segs_ui::widgets::UiWidgetExt;

@@ -191,7 +191,6 @@ fn show_layout_filter(ui: &mut Ui, id: Id, mode: &mut Mode, width: f32) {
     let mut margin = Margin::same(5);
     margin.bottom = 5;
     let response = TextEdit::singleline(&mut text)
-        .frame(false)
         .margin(margin)
         .hint_text("Search layout names...")
         .desired_width(width)

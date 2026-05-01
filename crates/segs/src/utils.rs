@@ -10,12 +10,6 @@ pub fn get_memory_dirpath() -> PathBuf {
     project_dirs().data_dir().to_path_buf().join("metadata")
 }
 
-/// Returns the directory path where the app downloaded data should be stored.
-#[inline]
-pub fn get_downloaded_dirpath() -> PathBuf {
-    project_dirs().data_dir().to_path_buf().join("downloaded")
-}
-
 // We use different directories for development and production to avoid
 // conflicts and ensure that we don't accidentally delete important data during
 // development.

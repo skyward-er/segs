@@ -30,7 +30,7 @@ impl AnimationExt for Context {
 /// Animates a value towards a target using a specified easing function and the
 /// default animation duration.
 pub fn animate_value_with_easing(ctx: &Context, id: Id, target_value: f32, easing: fn(f32) -> f32) -> f32 {
-    let animation_time = ctx.style().animation_time;
+    let animation_time = ctx.global_style().animation_time;
     animate_value_with_time_and_easing(ctx, id, target_value, animation_time, easing)
 }
 

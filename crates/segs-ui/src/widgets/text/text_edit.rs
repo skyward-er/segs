@@ -521,7 +521,7 @@ impl TextEdit<'_> {
             Sense::hover()
         };
         let mut response = ui.interact(outer_rect, id, sense);
-        response.intrinsic_size = Some(Vec2::new(desired_width, desired_outer_size.y));
+        response.set_intrinsic_size(Vec2::new(desired_width, desired_outer_size.y));
 
         // Don't sent `OutputEvent::Clicked` when a user presses the space bar
         response.flags -= response::Flags::FAKE_PRIMARY_CLICKED;

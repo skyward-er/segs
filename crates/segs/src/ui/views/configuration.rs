@@ -1,3 +1,5 @@
+#![allow(dead_code, unused)]
+
 mod dataflow_editor;
 mod layout_composer;
 mod level_editor;
@@ -5,7 +7,7 @@ mod online_resources;
 mod pane_controls;
 
 use egui::{
-    Align, CentralPanel, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Sense, SidePanel, Ui, Vec2, vec2,
+    Align, CentralPanel, Context, CornerRadius, CursorIcon, Frame, Id, Layout, Margin, Sense, Panel, Ui, Vec2, vec2,
 };
 use enum_dispatch::enum_dispatch;
 use segs_assets::icons::{self, Icon};
@@ -140,26 +142,26 @@ impl super::ViewTrait for ConfigurationView {
         ui.mem().insert_temp(id, mode);
     }
 
-    fn main_view_fn(&mut self, ctx: &Context) {
-        let frame = Frame::new().fill(ctx.style().visuals.panel_fill);
-        SidePanel::left("menu_panel")
+    fn main_view_fn(&mut self, ui: &mut Ui) {
+        let frame = Frame::new().fill(ui.style().visuals.panel_fill);
+        Panel::left("menu_panel")
             .frame(frame)
             .resizable(false)
             .show_separator_line(false)
-            .exact_width(34.)
-            .show(ctx, |ui| self.left_bar_fn(ui));
+            .exact_size(34.)
+            .show_inside(ui, |ui| self.left_bar_fn(ui));
 
-        let app_style = ctx.app_style();
-        let visuals = &ctx.style().visuals;
+        let app_style = ui.app_style();
+        let visuals = &ui.style().visuals;
         let id = Id::new("composition_left_panel_visible");
-        let mut left_panel_visible: bool = ctx.mem().get_perm_or_default(id);
+        let mut left_panel_visible: bool = ui.mem().get_perm_or_default(id);
         CentralPanel::default()
             .frame(Frame::new().fill(visuals.panel_fill))
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // Define collapse state based on visibility
                 let mut collapsed_left = !left_panel_visible;
 
-                let visuals = ctx.app_style();
+                let visuals = ui.app_style();
                 let panel_outer_frame = Frame::new().corner_radius(5.).fill(visuals.main_panels_fill);
                 let panel_inner_frame = Frame::NONE;
                 let main_inner_frame = panel_inner_frame.corner_radius(5.).fill(visuals.main_panels_fill);
@@ -205,7 +207,7 @@ impl super::ViewTrait for ConfigurationView {
                 // Update visibility state based on collapses
                 left_panel_visible = !collapsed_left;
             });
-        ctx.mem().insert_perm(id, left_panel_visible);
+        ui.mem().insert_perm(id, left_panel_visible);
     }
 }
 

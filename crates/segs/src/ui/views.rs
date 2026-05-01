@@ -1,7 +1,7 @@
 pub mod configuration;
 pub mod operator;
 
-use egui::{Align, Context, Frame, Layout, Margin, TopBottomPanel, Ui, Vec2};
+use egui::{Align, Frame, Layout, Margin, Panel, Ui, Vec2};
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
@@ -32,21 +32,21 @@ trait ViewTrait {
         // Default implementation does nothing
     }
 
-    fn main_view_fn(&mut self, _ctx: &Context) {
+    fn main_view_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 }
 
 impl View {
-    fn show_top_bar(&mut self, ctx: &Context) {
-        TopBottomPanel::top("top_panel")
+    fn show_top_bar(&mut self, ui: &mut Ui) {
+        Panel::top("top_panel")
             .show_separator_line(false)
             .frame(
                 Frame::new()
                     .inner_margin(Margin::symmetric(4, 3))
-                    .fill(ctx.style().visuals.panel_fill),
+                    .fill(ui.style().visuals.panel_fill),
             )
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let width = ui.max_rect().width();
@@ -80,9 +80,9 @@ impl View {
             });
     }
 
-    pub fn show(&mut self, ctx: &Context) {
-        self.show_top_bar(ctx);
-        self.main_view_fn(ctx);
+    pub fn show_inside(&mut self, ui: &mut Ui) {
+        self.show_top_bar(ui);
+        self.main_view_fn(ui);
     }
 }
 

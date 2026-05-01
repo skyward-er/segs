@@ -43,7 +43,7 @@ impl<'a, V: PartialEq> VerticalSelectableLabel<'a, V> {
             .into_iter()
             // Here use a scope to ensure unique ids for each label
             .map(|v| {
-                let builder = UiBuilder::new().id(&v.text);
+                let builder = UiBuilder::new().id_salt(&v.text);
                 ui.scope_builder(builder, |ui| v.show(ui, selector)).inner
             })
             .unzip();

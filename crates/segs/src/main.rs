@@ -3,8 +3,8 @@ mod dataflow;
 mod ui;
 mod utils;
 
-use eframe::egui;
-use egui::{Id, ViewportBuilder};
+use eframe::Frame;
+use egui::{Context, Id, Ui, ViewportBuilder};
 use mimalloc::MiMalloc;
 use serde::{Deserialize, Serialize};
 
@@ -82,25 +82,27 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Sync the current style based on the theme, and get a guard to keep it alive
-        // for the frame
-        let _guard = AppStyle::sync(ctx);
-
+    fn logic(&mut self, _ctx: &Context, _frame: &mut Frame) {
         // Process incoming data
         if let Some(ref mut adapter) = self.data_adapter {
             adapter.process_incoming(&mut self.data_store);
         }
+    }
+
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) {
+        // Sync the current style based on the theme, and get a guard to keep it alive
+        // for the frame
+        let _guard = AppStyle::sync(ui);
 
         // Show the status bar at the bottom
-        status_bar::show(self, ctx);
+        status_bar::show_inside(ui, self);
         // Show the current view based on state
-        self.state.view.show(ctx);
+        self.state.view.show_inside(ui);
 
         // Save the app state to memory at the end of the update loop
-        ctx.mem().insert_perm(Id::new("app_state"), self.state.clone());
+        ui.mem().insert_perm(Id::new("app_state"), self.state.clone());
         // Sync the persistent memory to disk to ensure the state is saved across
         // sessions
-        ctx.mem().sync_persistence().expect("Failed to sync persistent memory");
+        ui.mem().sync_persistence().expect("Failed to sync persistent memory");
     }
 }

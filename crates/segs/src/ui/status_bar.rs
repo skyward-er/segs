@@ -1,17 +1,17 @@
-use egui::{Align, Context, CursorIcon, Frame, Layout, TopBottomPanel, Vec2};
+use egui::{Align, CursorIcon, Frame, Layout, Panel, Ui, Vec2};
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton};
 
 use crate::{App, ui::popups};
 
-/// Shows the status bar at the bottom of the application window, displaying information and controls relevant to the
-/// current state of the application.
-pub fn show(app: &App, ctx: &Context) {
-    TopBottomPanel::bottom("status_bar")
+/// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
+/// the current state of the application.
+pub fn show_inside(ui: &mut Ui, app: &App) {
+    Panel::bottom("status_bar")
         .show_separator_line(false)
-        .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
-        .show(ctx, |ui| {
+        .frame(Frame::new().fill(ui.style().visuals.panel_fill))
+        .show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6., 0.);
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| show_left_side(app, ui));
