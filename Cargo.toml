@@ -1,5 +1,8 @@
 [workspace.package]
-authors = ["Federico Lolli <federico.lolli@skywarder.eu>"]
+authors = [
+    "Federico Lolli <federico.lolli@skywarder.eu>",
+    "Niccolò Betto <niccolo.betto@skywarder.eu>",
+]
 description = "Skyward Enhanced Ground Software"
 version = "0.1.0"
 edition = "2024"
