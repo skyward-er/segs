@@ -20,27 +20,19 @@ pub enum View {
 
 #[enum_dispatch]
 trait ViewTrait {
-    fn top_bar_left_fn(&mut self, ui: &mut Ui) {
+    fn top_bar_left_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn top_bar_middle_fn(&mut self, ui: &mut Ui) {
+    fn top_bar_middle_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn top_bar_right_fn(&mut self, ui: &mut Ui) {
+    fn top_bar_right_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn bottom_bar_left_fn(&mut self, ui: &mut Ui) {
-        // Default implementation does nothing
-    }
-
-    fn bottom_bar_right_fn(&mut self, ui: &mut Ui) {
-        // Default implementation does nothing
-    }
-
-    fn main_view_fn(&mut self, ctx: &Context) {
+    fn main_view_fn(&mut self, _ctx: &Context) {
         // Default implementation does nothing
     }
 }
@@ -88,25 +80,8 @@ impl View {
             });
     }
 
-    fn show_bottom_bar(&mut self, ctx: &Context) {
-        TopBottomPanel::bottom("bottom_panel")
-            .show_separator_line(false)
-            .frame(Frame::new().fill(ctx.style().visuals.panel_fill))
-            .show(ctx, |ui| {
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        self.bottom_bar_left_fn(ui);
-                    });
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        self.bottom_bar_right_fn(ui);
-                    });
-                });
-            });
-    }
-
     pub fn show(&mut self, ctx: &Context) {
         self.show_top_bar(ctx);
-        self.show_bottom_bar(ctx);
         self.main_view_fn(ctx);
     }
 }

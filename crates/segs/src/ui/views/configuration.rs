@@ -32,27 +32,19 @@ pub enum ConfigurationView {
 
 #[enum_dispatch]
 trait ConfigurationViewTrait {
-    fn top_bar_left_fn(&mut self, ui: &mut Ui) {
+    fn top_bar_left_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn top_bar_right_fn(&mut self, ui: &mut Ui) {
+    fn top_bar_right_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn bottom_bar_left_fn(&mut self, ui: &mut Ui) {
+    fn main_view_left_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 
-    fn bottom_bar_right_fn(&mut self, ui: &mut Ui) {
-        // Default implementation does nothing
-    }
-
-    fn main_view_left_fn(&mut self, ui: &mut Ui) {
-        // Default implementation does nothing
-    }
-
-    fn main_view_right_fn(&mut self, ui: &mut Ui) {
+    fn main_view_right_fn(&mut self, _ui: &mut Ui) {
         // Default implementation does nothing
     }
 }
@@ -116,14 +108,6 @@ impl super::ViewTrait for ConfigurationView {
 
     fn top_bar_right_fn(&mut self, ui: &mut Ui) {
         <Self as ConfigurationViewTrait>::top_bar_right_fn(self, ui);
-    }
-
-    fn bottom_bar_left_fn(&mut self, ui: &mut Ui) {
-        <Self as ConfigurationViewTrait>::bottom_bar_left_fn(self, ui);
-    }
-
-    fn bottom_bar_right_fn(&mut self, ui: &mut Ui) {
-        <Self as ConfigurationViewTrait>::bottom_bar_right_fn(self, ui);
     }
 
     fn top_bar_middle_fn(&mut self, ui: &mut Ui) {

@@ -6,10 +6,11 @@ use smallvec::SmallVec;
 
 use crate::style::CtxStyleExt;
 
-const DEFAULT_PAD: f32 = 4.0;
+const DEFAULT_CONTENT_PAD: f32 = 5.0;
+const DEFAULT_MARGIN: Vec2 = Vec2::new(6., 3.);
 
 #[allow(private_bounds)]
-pub trait BottomBarButton: BottomBarButtonImpl + Sized {
+pub trait StatusBarButton: StatusBarButtonImpl + Sized {
     fn add_icon(mut self, icon: impl Icon + 'static) -> Self {
         self.contents().push(ContentAtoms::Image {
             size: icon.fit_size(Vec2::splat(15.)),
@@ -33,12 +34,12 @@ pub trait BottomBarButton: BottomBarButtonImpl + Sized {
 }
 
 #[derive(Clone, Default)]
-pub struct UnpaddedBottomBarButton {
+pub struct UnpaddedStatusBarButton {
     contents: Vec<ContentAtoms>,
 }
 
 #[derive(Clone)]
-pub struct PaddedBottomBarButton {
+pub struct PaddedStatusBarButton {
     contents: Vec<ContentAtoms>,
     padding: f32,
 }
@@ -50,42 +51,42 @@ enum ContentAtoms {
     Space(f32),
 }
 
-impl BottomBarButton for UnpaddedBottomBarButton {}
-impl BottomBarButton for PaddedBottomBarButton {}
+impl StatusBarButton for UnpaddedStatusBarButton {}
+impl StatusBarButton for PaddedStatusBarButton {}
 
-trait BottomBarButtonImpl {
+trait StatusBarButtonImpl {
     fn contents(&mut self) -> &mut Vec<ContentAtoms>;
 }
 
-impl BottomBarButtonImpl for UnpaddedBottomBarButton {
+impl StatusBarButtonImpl for UnpaddedStatusBarButton {
     // No-op for unpadded button
     fn contents(&mut self) -> &mut Vec<ContentAtoms> {
         &mut self.contents
     }
 }
 
-impl BottomBarButtonImpl for PaddedBottomBarButton {
+impl StatusBarButtonImpl for PaddedStatusBarButton {
     fn contents(&mut self) -> &mut Vec<ContentAtoms> {
         &mut self.contents
     }
 }
 
-impl UnpaddedBottomBarButton {
+impl UnpaddedStatusBarButton {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_padding(self, padding: f32) -> PaddedBottomBarButton {
-        PaddedBottomBarButton {
+    pub fn with_padding(self, padding: f32) -> PaddedStatusBarButton {
+        PaddedStatusBarButton {
             contents: self.contents,
             padding,
         }
     }
 
-    pub fn padded(self) -> PaddedBottomBarButton {
-        PaddedBottomBarButton {
+    pub fn padded(self) -> PaddedStatusBarButton {
+        PaddedStatusBarButton {
             contents: self.contents,
-            padding: DEFAULT_PAD,
+            padding: DEFAULT_CONTENT_PAD,
         }
     }
 
@@ -95,13 +96,13 @@ impl UnpaddedBottomBarButton {
     }
 }
 
-impl Widget for UnpaddedBottomBarButton {
+impl Widget for UnpaddedStatusBarButton {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        bottom_bar_btn(ui, self.contents)
+        status_bar_btn(ui, self.contents)
     }
 }
 
-impl Widget for PaddedBottomBarButton {
+impl Widget for PaddedStatusBarButton {
     fn ui(mut self, ui: &mut egui::Ui) -> Response {
         // Add padding between atoms
         let pad = ContentAtoms::Space(self.padding);
@@ -109,13 +110,13 @@ impl Widget for PaddedBottomBarButton {
             self.contents.insert(i, pad.clone());
         }
 
-        bottom_bar_btn(ui, self.contents)
+        status_bar_btn(ui, self.contents)
     }
 }
 
-fn bottom_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
+fn status_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
     // Define sizes
-    let inner_margin = Vec2::new(4., 3.);
+    let inner_margin = DEFAULT_MARGIN;
 
     // Extract atom sizes and allocate galleys for text
     let mut galleys = SmallVec::<[Arc<Galley>; 3]>::new();

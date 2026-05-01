@@ -1,4 +1,5 @@
 mod connection;
+pub use connection::ConnectionPopup;
 
 use egui::{Align2, Area, Frame, Id, Pos2, Ui, UiBuilder, Vec2, emath::easing, vec2};
 
@@ -31,7 +32,7 @@ impl<'a> Popup<'a> {
         self
     }
 
-    pub fn forze_sizing_pass(mut self) -> Self {
+    pub fn force_sizing_pass(mut self) -> Self {
         self.force_sizing_pass = true;
         self
     }

@@ -1,9 +1,5 @@
-use egui::{Rect, Response, Ui, UiBuilder, Vec2, Widget, emath::easing, lerp, vec2};
-use segs_assets::{
-    Font,
-    fonts::Figtree,
-    icons::{self, Icon},
-};
+use egui::{Response, Ui, UiBuilder, Vec2, Widget, emath::easing, vec2};
+use segs_assets::{Font, fonts::Figtree};
 
 use crate::{AnimationExt, style::CtxStyleExt};
 
@@ -72,12 +68,9 @@ impl<'a, V: PartialEq> VerticalSelectableLabel<'a, V> {
             let selector_pos = fixed_pos + vec2(10., offset_t);
 
             // Paint the selector icon at the calculated position
-            let icon_rect = Rect::from_center_size(selector_pos, Vec2::splat(10.));
-            icons::SquareRotated
-                .to_image()
-                .tint(ui.app_style().left_bar.icon_active_color)
-                .fit_to_exact_size(icon_rect.size())
-                .paint_at(ui, icon_rect);
+            let radius = 3.0;
+            let sel_color = ui.app_style().left_bar.icon_active_color;
+            ui.painter().circle_filled(selector_pos, radius, sel_color);
         }
 
         responses.into_iter().reduce(|a, b| a.union(b)).unwrap_or(ui.response())
@@ -107,10 +100,9 @@ impl<V: PartialEq> SelectableLabel<V> {
         let is_selected = *selector == variant;
 
         if ui.is_rect_visible(rect) {
-            let painer = ui.painter();
+            let painter = ui.painter();
 
             // Define positions for painted elements
-            let selector_pos = rect.left_top() + vec2(10., rect.height() / 2.);
             let text_start = rect.left_top() + vec2(20., 3.);
 
             // Style elements
@@ -140,7 +132,7 @@ impl<V: PartialEq> SelectableLabel<V> {
             }
             .sized(11.);
             let text_color = inactive_color.lerp_to_gamma(active_color, selection_t.max(hover_t));
-            let galley = painer.layout_no_wrap(text.to_string(), font_id, text_color);
+            let galley = painter.layout_no_wrap(text.to_string(), font_id, text_color);
 
             // Change cursor on hover
             response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -150,13 +142,8 @@ impl<V: PartialEq> SelectableLabel<V> {
                 *selector = variant;
             }
 
-            // Lerp colors and paint elements
-            let radius = lerp(2.0..=3.0, hover_t);
-            let color = inactive_color.lerp_to_gamma(active_color, hover_t);
-            painer.circle_filled(selector_pos, radius, color);
-
             // Paint text
-            painer.galley(text_start, galley, text_color);
+            painter.galley(text_start, galley, text_color);
         }
 
         (response, is_selected)

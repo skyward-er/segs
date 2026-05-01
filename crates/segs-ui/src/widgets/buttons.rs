@@ -1,15 +1,15 @@
-mod bottom_bar;
 mod checkbox;
 mod icon_btn;
 mod ribbon_toggle;
+mod status_bar;
 mod toggle;
 
-pub use bottom_bar::{BottomBarButton, PaddedBottomBarButton, UnpaddedBottomBarButton};
 pub use checkbox::Checkbox;
 use egui::{Response, Ui};
 pub use icon_btn::IconBtn;
 pub use ribbon_toggle::RibbonToggle;
 use segs_assets::icons::Icon;
+pub use status_bar::{PaddedStatusBarButton, StatusBarButton, UnpaddedStatusBarButton};
 pub use toggle::Toggle;
 
 pub fn checkbox(ui: &mut Ui, active: &mut bool) -> Response {
