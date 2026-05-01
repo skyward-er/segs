@@ -1,4 +1,5 @@
 mod args;
+mod csd;
 mod dataflow;
 mod ui;
 mod utils;
@@ -32,7 +33,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_titlebar_shown(false)
             .with_fullsize_content_view(true)
             .with_drag_and_drop(true)
-            .with_icon(app_icon),
+            .with_icon(app_icon)
+            .with_decorations(false) // Draw window frame ourselves
+            .with_transparent(true), // Needed for rounded corners
         ..Default::default()
     };
     eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc, args)))))
@@ -94,15 +97,22 @@ impl eframe::App for App {
         // for the frame
         let _guard = AppStyle::sync(ui);
 
-        // Show the status bar at the bottom
-        status_bar::show_inside(ui, self);
-        // Show the current view based on state
-        self.state.view.show_inside(ui);
+        csd::window_frame(ui, "Telemetry", |ui| {
+            // Show the status bar at the bottom
+            status_bar::show_inside(ui, self);
+
+            // Show the current view based on state
+            self.state.view.show_inside(ui);
+        });
 
         // Save the app state to memory at the end of the update loop
         ui.mem().insert_perm(Id::new("app_state"), self.state.clone());
         // Sync the persistent memory to disk to ensure the state is saved across
         // sessions
         ui.mem().sync_persistence().expect("Failed to sync persistent memory");
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array() // Make sure we don't paint anything behind the rounded corners
     }
 }
