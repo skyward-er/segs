@@ -3,6 +3,8 @@ mod dataflow;
 mod ui;
 mod utils;
 
+use std::sync::Arc;
+
 use eframe::Frame;
 use egui::{Context, Id, Ui, ViewportBuilder};
 use mimalloc::MiMalloc;
@@ -41,8 +43,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct App {
     state: AppState,
-    data_store: DataStore,
-    data_adapter: Option<Box<dyn DataAdapter>>,
+    data_store: Arc<DataStore>,
+    data_adapter: Arc<Option<Box<dyn DataAdapter>>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,8 +53,8 @@ struct AppState {
 }
 
 impl App {
-    fn new(_cc: &eframe::CreationContext<'_>, args: AppArgs) -> Self {
-        let ctx = &_cc.egui_ctx;
+    fn new(cc: &eframe::CreationContext<'_>, args: AppArgs) -> Self {
+        let ctx = &cc.egui_ctx;
         setup_style(ctx);
         install_fonts(ctx);
         install_icons(ctx);
@@ -73,6 +75,11 @@ impl App {
             adapter.prepare_data_store(&mut data_store);
         }
 
+        let data_adapter = Arc::new(data_adapter);
+        let data_store = Arc::new(data_store);
+
+        ctx.mem().insert_temp(Id::new("data_store"), data_store.clone());
+
         Self {
             state,
             data_store,
@@ -84,9 +91,9 @@ impl App {
 impl eframe::App for App {
     fn logic(&mut self, _ctx: &Context, _frame: &mut Frame) {
         // Process incoming data
-        if let Some(ref mut adapter) = self.data_adapter {
-            adapter.process_incoming(&mut self.data_store);
-        }
+        //if let Some(ref mut adapter) = self.data_adapter {
+        //    adapter.process_incoming(&mut self.data_store);
+        //}
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) {
@@ -95,7 +102,7 @@ impl eframe::App for App {
         let _guard = AppStyle::sync(ui);
 
         // Show the status bar at the bottom
-        status_bar::show_inside(ui, self);
+        status_bar::show_inside(ui);
         // Show the current view based on state
         self.state.view.show_inside(ui);
 

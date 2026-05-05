@@ -1,49 +1,40 @@
+use super::Modal;
+
 use std::{fmt::Display, net::Ipv4Addr, str::FromStr};
 
-use egui::{Align2, Frame, Id, Label, Pos2, Response, RichText, Ui, Vec2, vec2};
+use egui::{Frame, Id, Label, Response, RichText, Ui, Vec2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::{
     style::presets,
     widgets::{Separator, labels::VerticalSelectableLabel, text::ValueEdit},
 };
 
-use crate::ui::{components::value_edits, popups};
+use crate::ui::components::value_edits;
+
+pub const ADAPTER_CONFIG_MODAL_ID: &str = "adapter_config_modal";
+
+pub struct AdapterConfigModal<'a> {
+    source_toggled: &'a mut bool,
+}
+
+impl<'a> AdapterConfigModal<'a> {
+    pub fn new(source_toggled: &'a mut bool) -> Self {
+        Self { source_toggled }
+    }
+
+    pub fn show(self, ui: &mut Ui) {
+        Modal::new(self.source_toggled)
+            .id(Id::new(ADAPTER_CONFIG_MODAL_ID))
+            .show(ui, |ui| {
+                connection_ui(ui);
+            });
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SourceSelection {
     Ethernet,
     Serial,
-}
-
-pub struct ConnectionPopup<'a> {
-    source_toggled: &'a mut bool,
-    pivot_pos: Pos2,
-    pivot_align: Align2,
-}
-
-impl<'a> ConnectionPopup<'a> {
-    pub fn new(source_toggled: &'a mut bool, pivot_pos: Pos2, pivot_align: Align2) -> Self {
-        Self {
-            source_toggled,
-            pivot_pos,
-            pivot_align,
-        }
-    }
-
-    pub fn show(self, ui: &mut Ui) {
-        let Self {
-            source_toggled,
-            pivot_pos,
-            pivot_align,
-        } = self;
-
-        let id = Id::new("connection_popup");
-        let mut popup = popups::Popup::new(source_toggled, pivot_pos).id(id).pivot(pivot_align);
-        if ui.mem().remove_temp(Id::new("area_resize")).is_some_and(|b| b) {
-            popup = popup.force_sizing_pass()
-        }
-        popup.show(ui, connection_ui);
-    }
 }
 
 fn connection_ui(ui: &mut Ui) {
