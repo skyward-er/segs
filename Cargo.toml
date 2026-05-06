@@ -38,7 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dependencies.skyward_mavlink]
 git = "https://git.skywarder.eu/avn/swd/mavlink/mavlink-skyward-lib.git"
-rev = "d4956f997c5bd03e9d622f1fb7b30632138a1218"
+rev = "cde75a373a507118399b9267b3602cac8ea1a38f"
 features = ["reflection", "hydra", "serde"]
 
 [dependencies.mavlink-bindgen]
