@@ -5,7 +5,9 @@
 #[cfg(feature = "conrig")]
 mod cli;
 
+mod ccsds;
 mod communication;
+mod cosmos;
 mod error;
 mod mavlink;
 mod message_broker;
