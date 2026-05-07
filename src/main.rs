@@ -75,7 +75,11 @@ fn main() -> Result<(), eframe::Error> {
     tracing::info!("Starting {} at {:?}", APP_NAME, starting_time);
 
     #[cfg(not(feature = "conrig"))]
-    let config = AppConfig::default();
+    let config = AppConfig {
+        tlm_def_path: Some("cosmos/fsw_tlm.txt".into()),
+        cmd_def_path: Some("cosmos/fsw_cmd.txt".into()),
+        ..Default::default()
+    };
     #[cfg(feature = "conrig")]
     let config = Cli::parse().into();
 
