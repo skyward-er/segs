@@ -32,6 +32,14 @@ pub struct Cli {
     /// Path to the layout directory. If not specified, the default layout directory will be used.
     #[arg(long, value_name = "LAYOUT_DIR")]
     layout_dir: Option<PathBuf>,
+
+    /// Path to the COSMOS telemetry definition file.
+    #[arg(long, value_name = "FILE")]
+    tlm_def: Option<PathBuf>,
+
+    /// Path to the COSMOS command definition file.
+    #[arg(long, value_name = "FILE")]
+    cmd_def: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -177,6 +185,8 @@ impl From<Cli> for AppConfig {
         AppConfig {
             connection_config,
             layout_directory,
+            tlm_def_path: value.tlm_def,
+            cmd_def_path: value.cmd_def,
         }
     }
 }

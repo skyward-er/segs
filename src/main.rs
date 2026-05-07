@@ -2,10 +2,8 @@
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::panic)]
 
-#[cfg(feature = "conrig")]
-mod cli;
-
 mod ccsds;
+mod cli;
 mod communication;
 mod cosmos;
 mod error;
@@ -16,18 +14,13 @@ mod utils;
 
 use std::{fs::create_dir_all, sync::LazyLock, time::Instant};
 
-#[cfg(feature = "conrig")]
 use clap::Parser;
 use error::ErrInstrument;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-#[cfg(feature = "conrig")]
 use cli::Cli;
 use ui::App;
-
-#[cfg(not(feature = "conrig"))]
-use crate::ui::AppConfig;
 
 static APP_START_TIMESTAMP_ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
@@ -74,13 +67,6 @@ fn main() -> Result<(), eframe::Error> {
     let starting_time = &APP_START_TIMESTAMP_ORIGIN;
     tracing::info!("Starting {} at {:?}", APP_NAME, starting_time);
 
-    #[cfg(not(feature = "conrig"))]
-    let config = AppConfig {
-        tlm_def_path: Some("cosmos/fsw_tlm.txt".into()),
-        cmd_def_path: Some("cosmos/fsw_cmd.txt".into()),
-        ..Default::default()
-    };
-    #[cfg(feature = "conrig")]
     let config = Cli::parse().into();
 
     // CreationContext constains information useful to initilize our app, like storage.
