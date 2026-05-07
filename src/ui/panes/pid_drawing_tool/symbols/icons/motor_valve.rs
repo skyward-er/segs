@@ -2,9 +2,9 @@ use egui::{ImageSource, RichText, Theme, Ui, Window};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    ccsds::TelemetryPacket,
     error::ErrInstrument,
-    mavlink::reflection::MAVLINK_PROFILE,
-    mavlink::{MavMessage, Message, reflection::IndexedField},
+    mavlink::reflection::{IndexedField, all_fields},
     ui::cache::ChangeTracker,
 };
 
@@ -66,10 +66,7 @@ enum ThreeWayStates {
 
 impl MotorValve {
     pub fn default_two_way() -> Self {
-        Self {
-            variant: MotorValveVariant::TwoWay(TwoWayInternal::default()),
-            ..Default::default()
-        }
+        Self { variant: MotorValveVariant::TwoWay(TwoWayInternal::default()), ..Default::default() }
     }
 
     pub fn default_three_way() -> Self {
@@ -79,27 +76,20 @@ impl MotorValve {
         }
     }
 
-    pub fn update(&mut self, msg: &MavMessage, subscribed_msg_ids: &[u32]) {
-        // Reset field if msg_id has changed
-        if let Some(inner_field) = &self.subscribed_field {
-            if !subscribed_msg_ids.contains(&inner_field.msg_id()) {
-                self.subscribed_field = None;
-            }
-        }
-
+    pub fn update(&mut self, packet: &TelemetryPacket) {
         if let Some(field) = &self.subscribed_field {
-            if field.msg_id() == msg.message_id() {
-                let value = field.extract_as_u8(msg).log_unwrap();
+            if let Ok(value) = field.extract_as_u64(packet) {
+                let value = value as u8;
                 match &mut self.variant {
-                    MotorValveVariant::TwoWay(two_way_internal) => {
-                        two_way_internal.last_value = match value {
+                    MotorValveVariant::TwoWay(internal) => {
+                        internal.last_value = match value {
                             0 => Some(TwoWayStates::Closed),
                             1 => Some(TwoWayStates::Open),
                             _ => None,
                         };
                     }
-                    MotorValveVariant::ThreeWay(three_way_internal) => {
-                        three_way_internal.last_value = match (value, three_way_internal.invert) {
+                    MotorValveVariant::ThreeWay(internal) => {
+                        internal.last_value = match (value, internal.invert) {
                             (0, false) => Some(ThreeWayStates::ActiveLeft),
                             (1, false) => Some(ThreeWayStates::ActiveRight),
                             (0, true) => Some(ThreeWayStates::ActiveRight),
@@ -120,7 +110,7 @@ impl MotorValve {
         }
     }
 
-    pub fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_ids: &[u32]) {
+    pub fn subscriptions_ui(&mut self, ui: &mut Ui) {
         let change_tracker = ChangeTracker::record_initial_state(&self.subscribed_field);
         Window::new("Subscriptions")
             .id(ui.auto_id_with("subs_settings"))
@@ -129,14 +119,8 @@ impl MotorValve {
             .movable(true)
             .open(&mut self.is_subs_window_visible)
             .show(ui.ctx(), |ui| {
-                subscription_window(
-                    ui,
-                    mavlink_ids,
-                    &mut self.variant,
-                    &mut self.subscribed_field,
-                )
+                subscription_window(ui, &mut self.variant, &mut self.subscribed_field)
             });
-        // reset last_value if the subscribed field has changed
         if change_tracker.has_changed(&self.subscribed_field) {
             match &mut self.variant {
                 MotorValveVariant::TwoWay(internal) => internal.last_value = None,
@@ -181,7 +165,6 @@ impl MotorValve {
 
 fn subscription_window(
     ui: &mut Ui,
-    msg_ids: &[u32],
     variant: &mut MotorValveVariant,
     field: &mut Option<IndexedField>,
 ) {
@@ -190,54 +173,27 @@ fn subscription_window(
         ui.add_sized([250., 10.], egui::Separator::default());
     }
 
-    let mut current_msg_id = field.as_ref().map(|f| f.msg_id()).unwrap_or(msg_ids[0]);
+    // Show fields with states (state fields are most useful for valve subscriptions)
+    let fields: Vec<IndexedField> = all_fields()
+        .into_iter()
+        .filter(|f| f.field().has_states())
+        .collect();
 
-    // extract the msg name from the id to show it in the combo box
-    let msg_name = MAVLINK_PROFILE
-        .get_msg(current_msg_id)
-        .map(|m| m.name.clone())
-        .unwrap_or_default();
-
-    // show the first combo box with the message name selection
-    let msg_digest = ChangeTracker::record_initial_state(current_msg_id);
-    egui::ComboBox::from_label("Message Kind")
-        .selected_text(msg_name)
-        .show_ui(ui, |ui| {
-            for msg in MAVLINK_PROFILE
-                .get_sorted_msgs()
-                .into_iter()
-                .filter(|msg| msg_ids.contains(&msg.id))
-            {
-                ui.selectable_value(&mut current_msg_id, msg.id, &msg.name);
-            }
-        });
-    // reset field if the message is changed
-    if msg_digest.has_changed(current_msg_id) {
-        *field = None;
-    }
-
-    // Get all fields available for subscription
-    let fields = MAVLINK_PROFILE
-        .get_all_state_fields(current_msg_id)
-        .log_unwrap();
-
-    // If no fields available for subscription
     if fields.is_empty() {
         ui.label(
-            RichText::new("No fields available for subscription")
+            RichText::new("No state fields available (registry not loaded)")
                 .underline()
                 .strong(),
         );
         return;
-    };
+    }
 
-    // Otherwise, select the first field available
     let field = field.get_or_insert(fields[0].to_owned());
-    egui::ComboBox::from_label("field")
+    egui::ComboBox::from_label("Field")
         .selected_text(&field.field().name)
         .show_ui(ui, |ui| {
-            for msg in fields.iter() {
-                ui.selectable_value(field, msg.to_owned(), &msg.field().name);
+            for f in fields.iter() {
+                ui.selectable_value(field, f.to_owned(), &f.field().name);
             }
         });
 }

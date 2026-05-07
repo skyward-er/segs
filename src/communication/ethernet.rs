@@ -1,29 +1,23 @@
-//! Ethernet utilities module.
-//!
-//! Provides functionality to connect via Ethernet using UDP, allowing message
-//! transmission and reception over a network.
-
 use std::{
-    net::{IpAddr, Ipv4Addr},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    str::FromStr,
     time::Duration,
 };
 
-use skyward_mavlink::mavlink::{
-    self,
-    error::{MessageReadError, MessageWriteError},
-};
-use tracing::{debug, trace};
+use tracing::debug;
 
-use crate::mavlink::{MavFrame, MavMessage, MavlinkVersion, TimedMessage};
+use crate::mavlink::TimedMessage;
 
 use super::{
-    BoxedConnection, ConnectionError,
+    ConnectionError,
     sealed::{Connectable, MessageTransceiver},
 };
 
-pub const DEFAULT_ETHERNET_BROADCAST_IP: IpAddr = IpAddr::V4(Ipv4Addr::from_bits(0xFFFFFFFF));
+pub const DEFAULT_ETHERNET_BROADCAST_IP: IpAddr =
+    IpAddr::V4(Ipv4Addr::from_octets([10, 20, 72, 187]));
+pub const DEFAULT_RCV_ETHERNET_PORT: u16 = 8081;
+pub const DEFAULT_SEND_ETHERNET_PORT: u16 = 21002;
 
-/// Configuration for an Ethernet connection.
 #[derive(Debug, Clone)]
 pub struct EthernetConfiguration {
     pub ip_address: IpAddr,
@@ -34,47 +28,51 @@ pub struct EthernetConfiguration {
 impl Connectable for EthernetConfiguration {
     type Connected = EthernetTransceiver;
 
-    /// Binds to the specified UDP port to create a network connection.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let incoming_addr = format!("udpin:0.0.0.0:{}", self.receive_port);
-        let outgoing_addr = format!("udpcast:{}:{}", self.ip_address, self.send_port);
-        let mut incoming_conn: BoxedConnection = mavlink::connect(&incoming_addr)?;
-        let mut outgoing_conn: BoxedConnection = mavlink::connect(&outgoing_addr)?;
-        incoming_conn.set_protocol_version(MavlinkVersion::V1);
-        incoming_conn.set_read_timeout(Some(Duration::from_millis(100)))?;
-        outgoing_conn.set_protocol_version(MavlinkVersion::V1);
-        outgoing_conn.set_write_timeout(Some(Duration::from_millis(100)))?;
+        let recv_socket = UdpSocket::bind(format!("0.0.0.0:{}", self.receive_port))?;
+        recv_socket.set_read_timeout(Some(Duration::from_millis(100)))?;
+
+        let send_socket = UdpSocket::bind("0.0.0.0:0")?;
+        send_socket.set_broadcast(true)?;
+        send_socket.set_write_timeout(Some(Duration::from_millis(100)))?;
+
+        let send_addr = SocketAddr::new(self.ip_address, self.send_port);
+
         debug!("Receiving Ethernet set up on port {}", self.receive_port);
-        debug!("Sending Ethernet set up on port {}", self.send_port);
+        debug!(
+            "Sending Ethernet set up on {}:{}",
+            self.ip_address, self.send_port
+        );
+
         Ok(EthernetTransceiver {
-            incoming_conn,
-            outgoing_conn,
+            recv_socket,
+            send_socket,
+            send_addr,
         })
     }
 }
 
-/// Manages a connection over Ethernet.
 pub struct EthernetTransceiver {
-    incoming_conn: BoxedConnection,
-    outgoing_conn: BoxedConnection,
+    recv_socket: UdpSocket,
+    send_socket: UdpSocket,
+    send_addr: SocketAddr,
 }
 
 impl MessageTransceiver for EthernetTransceiver {
-    /// Waits for a message over Ethernet, blocking until a valid message arrives.
     #[profiling::function]
-    fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
-        let (_, msg) = self.incoming_conn.recv()?;
-        debug!("Received message: {:?}", &msg);
-        Ok(TimedMessage::just_received(msg))
+    fn wait_for_message(&self) -> Result<TimedMessage, std::io::Error> {
+        let mut buf = [0u8; 65535];
+        let n = self.recv_socket.recv(&mut buf)?;
+        debug!("Received {} bytes via Ethernet", n);
+        TimedMessage::from_ccsds_bytes(&buf[..n])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    /// Transmits a message using the UDP socket.
     #[profiling::function]
-    fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
-        let written = self.outgoing_conn.send_frame(&msg)?;
-        debug!("Sent message: {:?}", msg);
-        trace!("Sent {} bytes via Ethernet", written);
-        Ok(written)
+    fn transmit_message(&self, data: &[u8]) -> Result<(), std::io::Error> {
+        self.send_socket.send_to(data, self.send_addr)?;
+        debug!("Sent {} bytes via Ethernet", data.len());
+        Ok(())
     }
 }

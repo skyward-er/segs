@@ -7,7 +7,7 @@ use glam::Vec2;
 use motor_valve::MotorValve;
 use serde::{Deserialize, Serialize};
 
-use crate::{mavlink::MavMessage, ui::utils::glam_to_egui};
+use crate::{ccsds::TelemetryPacket, ui::utils::glam_to_egui};
 
 use super::SymbolBehavior;
 
@@ -153,9 +153,9 @@ impl Display for Icon {
 }
 
 impl SymbolBehavior for Icon {
-    fn update(&mut self, message: &MavMessage, subscribed_msg_ids: &[u32]) {
+    fn update(&mut self, packet: &TelemetryPacket) {
         if let Icon::MotorValve(state) = self {
-            state.update(message, subscribed_msg_ids)
+            state.update(packet)
         }
     }
 
@@ -173,9 +173,9 @@ impl SymbolBehavior for Icon {
             .paint_at(ui, image_rect);
     }
 
-    fn subscriptions_ui(&mut self, ui: &mut Ui, mavlink_ids: &[u32]) {
+    fn subscriptions_ui(&mut self, ui: &mut Ui) {
         if let Icon::MotorValve(state) = self {
-            state.subscriptions_ui(ui, mavlink_ids)
+            state.subscriptions_ui(ui)
         }
     }
 

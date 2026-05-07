@@ -3,16 +3,14 @@ mod default;
 mod messages_viewer;
 mod pid_drawing_tool;
 mod plot;
-mod valve_control;
 
 use egui::Ui;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use skyward_mavlink::mavlink::MavHeader;
 use strum_macros::{self, EnumIter, EnumMessage};
 
 use crate::{
-    mavlink::{MavMessage, TimedMessage},
+    mavlink::{CommandPacket, TimedMessage},
     utils::id::PaneId,
 };
 
@@ -34,26 +32,21 @@ pub trait PaneBehavior {
     /// Renders the UI of the pane.
     fn ui(&mut self, ui: &mut Ui) -> PaneResponse;
 
-    /// Updates the pane state. This method is called before `ui` to allow the
-    /// pane to update its state based on the messages received.
-    fn update(&mut self, _messages: &[&TimedMessage]) {}
+    /// Updates the pane with the latest telemetry message, if any.
+    fn update(&mut self, _message: Option<&TimedMessage>) {}
 
-    /// Returns the ID of the messages this pane is interested in, if any.
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(None.into_iter())
-    }
-
-    /// Checks whether the full message history should be sent to the pane.
-    fn should_send_message_history(&self) -> bool {
+    /// Returns true when the pane needs all historical messages replayed
+    /// (e.g. after plot settings change).
+    fn needs_full_history(&self) -> bool {
         false
     }
 
-    /// Drains the outgoing messages from the pane.
-    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
+    /// Drains outgoing commands from the pane.
+    fn drain_outgoing_commands(&mut self) -> Vec<CommandPacket> {
         Vec::new()
     }
 
-    /// Initializes the pane with the given pane ID. This is called when the pane is inserted into the layout.
+    /// Initializes the pane with the given pane ID.
     fn init(&mut self, _pane_id: PaneId) {}
 }
 
@@ -62,20 +55,16 @@ impl PaneBehavior for Pane {
         self.pane.ui(ui)
     }
 
-    fn update(&mut self, messages: &[&TimedMessage]) {
-        self.pane.update(messages)
+    fn update(&mut self, message: Option<&TimedMessage>) {
+        self.pane.update(message)
     }
 
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        self.pane.get_message_subscriptions()
+    fn needs_full_history(&self) -> bool {
+        self.pane.needs_full_history()
     }
 
-    fn should_send_message_history(&self) -> bool {
-        self.pane.should_send_message_history()
-    }
-
-    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
-        self.pane.drain_outgoing_messages()
+    fn drain_outgoing_commands(&mut self) -> Vec<CommandPacket> {
+        self.pane.drain_outgoing_commands()
     }
 
     fn init(&mut self, pane_id: PaneId) {
@@ -83,7 +72,6 @@ impl PaneBehavior for Pane {
     }
 }
 
-// An enum to represent the diffent kinds of widget available to the user.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, EnumMessage, EnumIter)]
 #[enum_dispatch]
 pub enum PaneKind {
@@ -100,9 +88,6 @@ pub enum PaneKind {
 
     #[strum(message = "Pid")]
     Pid(pid_drawing_tool::PidPane),
-
-    #[strum(message = "Valve Control")]
-    ValveControl(valve_control::ValveControlPane),
 }
 
 impl Default for PaneKind {

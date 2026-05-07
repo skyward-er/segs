@@ -3,10 +3,7 @@ mod source_window;
 
 use super::PaneBehavior;
 use crate::{
-    error::ErrInstrument,
-    mavlink::{MessageData, ROCKET_FLIGHT_TM_DATA, TimedMessage},
-    ui::app::PaneResponse,
-    utils::units::UnitOfMeasure,
+    error::ErrInstrument, mavlink::TimedMessage, ui::app::PaneResponse, utils::units::UnitOfMeasure,
 };
 use egui::{Color32, Ui, Vec2, Vec2b};
 use egui_plot::{AxisHints, Corner, HPlacement, Legend, Line, PlotPoint, log_grid_spacer};
@@ -23,7 +20,6 @@ use source_window::sources_window;
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Plot2DPane {
     settings: PlotSettings,
-    // UI settings
     #[serde(skip)]
     line_data: Vec<TimeAwarePlotPoints>,
     #[serde(skip)]
@@ -53,7 +49,6 @@ impl PaneBehavior for Plot2DPane {
             .iter()
             .map(|(field, _)| field.unit())
             .collect::<Vec<_>>();
-        // define y_unit as the common unit of the y_fields if they are all the same
         let y_unit = y_units.iter().fold(y_units.first(), |acc, unit| {
             if let Some(acc) = acc {
                 if acc == unit {
@@ -70,8 +65,6 @@ impl PaneBehavior for Plot2DPane {
                     let scaling_factor_to_nanos = time_unit.scale() * 1e9;
                     let r_span_in_nanos = (r.end() - r.start()).abs() * scaling_factor_to_nanos;
                     let m_in_nanos = m.value * scaling_factor_to_nanos;
-                    // all the following numbers are arbitrary
-                    // they are chosen based on common sense
                     if r_span_in_nanos < 4e3 {
                         format!("{m_in_nanos:.0}ns")
                     } else if r_span_in_nanos < 4e6 {
@@ -121,15 +114,12 @@ impl PaneBehavior for Plot2DPane {
         };
 
         let mut plot = egui_plot::Plot::new("plot")
-            .x_grid_spacer(log_grid_spacer(4)) // 4 was an arbitrary choice
+            .x_grid_spacer(log_grid_spacer(4))
             .auto_bounds(Vec2b::TRUE)
-            .set_margin_fraction(Vec2::splat(0.))
+            .set_margin_fraction(egui::Vec2::new(0.0, 0.05))
             .legend(
                 Legend::default()
                     .position(Corner::LeftTop)
-                    // force to disable the hiding of the lines due to labels
-                    // changing and egui_plot thinking of them as different plot
-                    // lines
                     .hidden_items(None),
             )
             .label_formatter(cursor_formatter);
@@ -181,9 +171,12 @@ impl PaneBehavior for Plot2DPane {
     }
 
     #[profiling::function]
-    fn update(&mut self, messages: &[&TimedMessage]) {
+    fn update(&mut self, message: Option<&TimedMessage>) {
+        let Some(msg) = message else { return };
+
         if !self.state_valid {
             self.line_data.clear();
+            self.state_valid = true;
         }
 
         let PlotSettings {
@@ -193,83 +186,79 @@ impl PaneBehavior for Plot2DPane {
             ..
         } = &self.settings;
 
-        // iter on filtered messages based on lifespan set
-        for msg in messages
-            .iter()
-            .filter(|msg| points_lifespan > &msg.time.elapsed())
-        {
-            let x: f64 = x_field.extract_from_message(msg).log_unwrap();
-            let ys: Vec<f64> = y_fields
-                .iter()
-                .map(|(field, _)| field.extract_from_message(msg).log_unwrap())
-                .collect();
+        // Skip if this message is older than the lifespan
+        if *points_lifespan <= msg.time.elapsed() {
+            return;
+        }
 
-            if self.line_data.len() < ys.len() {
-                self.line_data.resize(ys.len(), TimeAwarePlotPoints::new());
+        let x = match x_field.extract_from_message(msg) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Plot x extraction error: {e}");
+                return;
             }
+        };
 
-            for (points, y) in zip(&mut self.line_data, ys) {
+        let ys: Vec<Option<f64>> = y_fields
+            .iter()
+            .map(|(field, _)| match field.extract_from_message(msg) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    tracing::warn!("Plot y extraction error: {e}");
+                    None
+                }
+            })
+            .collect();
+
+        if self.line_data.len() < ys.len() {
+            self.line_data.resize(ys.len(), TimeAwarePlotPoints::new());
+        }
+
+        for (points, y) in zip(&mut self.line_data, ys) {
+            if let Some(y) = y {
                 points.push(msg.time, PlotPoint::new(x, y));
             }
         }
 
-        // clear points older than lifespan set
+        // Clear points older than lifespan
         for line in &mut self.line_data {
             line.clear_older_than(*points_lifespan);
         }
-
-        self.state_valid = true;
     }
 
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(Some(self.settings.plot_message_id).into_iter())
-    }
-
-    fn should_send_message_history(&self) -> bool {
+    fn needs_full_history(&self) -> bool {
         !self.state_valid
     }
 }
 
 fn show_menu(ui: &mut Ui, settings_visible: &mut bool, settings: &mut PlotSettings) {
-    ui.set_max_width(200.0); // To make sure we wrap long text
-
+    ui.set_max_width(200.0);
     if ui.button("Source Data Settings…").clicked() {
         *settings_visible = true;
         ui.close_menu();
     }
-
     ui.checkbox(&mut settings.axes_visible, "Show Axes");
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct PlotSettings {
-    /// The message id to plot
-    pub(super) plot_message_id: u32,
-    /// The field to plot on the x-axis
+pub(super) struct PlotSettings {
     pub(super) x_field: XPlotField,
-    /// The fields to plot, with their respective line settings
     pub(super) y_fields: Vec<(YPlotField, LineSettings)>,
-    /// Whether to show the axes of the plot
     pub(super) axes_visible: bool,
-    /// Points will be shown for this duration before being removed
     pub(super) points_lifespan: Duration,
 }
 
 impl PlotSettings {
-    fn add_field(&mut self, field: YPlotField) {
-        let line_settings = LineSettings::default();
-        self.y_fields.push((field, line_settings));
+    pub(super) fn add_field(&mut self, field: YPlotField) {
+        self.y_fields.push((field, LineSettings::default()));
     }
 
-    fn clear_fields(&mut self) {
+    pub(super) fn clear_fields(&mut self) {
         self.x_field = XPlotField::MsgReceiptTimestamp;
         self.y_fields.clear();
     }
 
-    /// Returns a digest of the data settings, used to check if the settings
-    /// have changed IMPORTANT: To trigger a redraw, hash the settings that need
-    /// to redraw the plot here
-    fn data_digest(&self) -> u64 {
+    pub(super) fn data_digest(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.x_field.hash(&mut hasher);
         for (field, _) in &self.y_fields {
@@ -282,13 +271,9 @@ impl PlotSettings {
 
 impl Default for PlotSettings {
     fn default() -> Self {
-        let msg_id = ROCKET_FLIGHT_TM_DATA::ID;
-        let x_field = XPlotField::MsgReceiptTimestamp;
-        let y_fields = vec![];
         Self {
-            plot_message_id: msg_id,
-            x_field,
-            y_fields,
+            x_field: XPlotField::MsgReceiptTimestamp,
+            y_fields: vec![],
             axes_visible: true,
             points_lifespan: Duration::from_secs(600),
         }

@@ -56,13 +56,5 @@ impl PaneBehavior for DefaultPane {
         response
     }
 
-    fn update(&mut self, _messages: &[&TimedMessage]) {}
-
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(None.into_iter())
-    }
-
-    fn should_send_message_history(&self) -> bool {
-        false
-    }
+    fn update(&mut self, _message: Option<&TimedMessage>) {}
 }

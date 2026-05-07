@@ -1,31 +1,17 @@
-//! Serial port utilities module.
-//!
-//! Provides functions for listing USB serial ports, finding a STM32 port,
-//! and handling serial connections including message transmission and reception.
-
-use std::time::Duration;
+use std::{io::Read, sync::Mutex, time::Duration};
 
 use serialport::{SerialPortInfo, SerialPortType};
-use skyward_mavlink::mavlink::{
-    self,
-    error::{MessageReadError, MessageWriteError},
-};
-use tracing::{debug, trace};
+use tracing::debug;
 
-use crate::mavlink::{MavFrame, MavMessage, MavlinkVersion, TimedMessage};
+use crate::mavlink::TimedMessage;
 
 use super::{
-    BoxedConnection, ConnectionError,
+    ConnectionError,
     sealed::{Connectable, MessageTransceiver},
 };
 
 pub const DEFAULT_BAUD_RATE: u32 = 115200;
 
-/// Returns a list of all USB serial ports available on the system.
-///
-/// # Returns
-/// * `Ok(Vec<SerialPortInfo>)` if ports are found or an error otherwise.
-#[profiling::function]
 pub fn list_all_usb_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
     let ports = serialport::available_ports()?;
     Ok(ports
@@ -34,14 +20,8 @@ pub fn list_all_usb_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
         .collect())
 }
 
-/// Finds the first USB serial port whose product name contains "STM32" or "ST-LINK".
-///
-/// # Returns
-/// * `Ok(Some(SerialPortInfo))` if a matching port is found, `Ok(None)` otherwise.
-#[profiling::function]
 pub fn find_first_stm32_port() -> Result<Option<SerialPortInfo>, serialport::Error> {
-    let ports = list_all_usb_ports()?;
-    for port in ports {
+    for port in list_all_usb_ports()? {
         if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
             if let Some(p) = &info.product {
                 if p.contains("STM32") || p.contains("ST-LINK") {
@@ -60,26 +40,12 @@ pub mod cached {
 
     use super::*;
 
-    /// Returns a cached list of all available USB ports.
-    ///
-    /// # Arguments
-    /// * `ctx` - The egui context used for caching.
-    ///
-    /// # Returns
-    /// * A Result containing a vector of `SerialPortInfo` or a `serialport::Error`.
     pub fn cached_list_all_usb_ports(
         ctx: &Context,
     ) -> Result<Vec<SerialPortInfo>, serialport::Error> {
         ctx.call_cached_short(&"list_usb_ports", list_all_usb_ports)
     }
 
-    /// Returns the first cached STM32 port found, if any.
-    ///
-    /// # Arguments
-    /// * `ctx` - The egui context used for caching.
-    ///
-    /// # Returns
-    /// * A Result containing an Option of `SerialPortInfo` or a `serialport::Error`.
     pub fn cached_first_stm32_port(
         ctx: &Context,
     ) -> Result<Option<SerialPortInfo>, serialport::Error> {
@@ -87,7 +53,6 @@ pub mod cached {
     }
 }
 
-/// Configuration for a serial connection.
 #[derive(Debug, Clone)]
 pub struct SerialConfiguration {
     pub port_name: String,
@@ -97,43 +62,52 @@ pub struct SerialConfiguration {
 impl Connectable for SerialConfiguration {
     type Connected = SerialTransceiver;
 
-    /// Connects using the serial port configuration.
     #[profiling::function]
     fn connect(&self) -> Result<Self::Connected, ConnectionError> {
-        let serial_edpoint = format!("serial:{}:{}", self.port_name, self.baud_rate);
-        let mut mav_connection: BoxedConnection = mavlink::connect(&serial_edpoint)?;
-        mav_connection.set_protocol_version(MavlinkVersion::V1);
-        // these two are redundant right now
-        mav_connection.set_read_timeout(Some(Duration::from_millis(100)))?;
-        mav_connection.set_write_timeout(Some(Duration::from_millis(100)))?;
+        let port = serialport::new(&self.port_name, self.baud_rate)
+            .timeout(Duration::from_millis(100))
+            .open()
+            .map_err(|e| ConnectionError::WrongConfiguration(e.to_string()))?;
         debug!(
-            "Connected to serial port {} with baud rate {}",
+            "Connected to serial port {} at {} baud",
             self.port_name, self.baud_rate
         );
-        Ok(SerialTransceiver { mav_connection })
+        Ok(SerialTransceiver { port: Mutex::new(port) })
     }
 }
 
-/// Manages a connection to a serial port.
 pub struct SerialTransceiver {
-    mav_connection: BoxedConnection,
+    port: Mutex<Box<dyn serialport::SerialPort>>,
 }
 
 impl MessageTransceiver for SerialTransceiver {
-    /// Blocks until a valid message is received from the serial port.
     #[profiling::function]
-    fn wait_for_message(&self) -> Result<TimedMessage, MessageReadError> {
-        let (_, msg) = self.mav_connection.recv()?;
-        debug!("Received message: {:?}", &msg);
-        Ok(TimedMessage::just_received(msg))
+    fn wait_for_message(&self) -> Result<TimedMessage, std::io::Error> {
+        let mut port = self.port.lock().unwrap();
+        let mut header_buf = [0u8; 6];
+        port.read_exact(&mut header_buf)?;
+
+        let header = crate::ccsds::CcsdsHeader::decode(&header_buf)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+        let payload_len = header.data_field_len();
+
+        let mut payload = vec![0u8; payload_len];
+        port.read_exact(&mut payload)?;
+
+        let mut full = header_buf.to_vec();
+        full.extend_from_slice(&payload);
+
+        debug!("Received {} bytes via serial", full.len());
+        TimedMessage::from_ccsds_bytes(&full)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    /// Transmits a message via the serial connection.
     #[profiling::function]
-    fn transmit_message(&self, msg: MavFrame<MavMessage>) -> Result<usize, MessageWriteError> {
-        let written = self.mav_connection.send_frame(&msg)?;
-        debug!("Sent message: {:?}", msg);
-        trace!("Sent {} bytes via serial", written);
-        Ok(written)
+    fn transmit_message(&self, data: &[u8]) -> Result<(), std::io::Error> {
+        use std::io::Write;
+        let mut port = self.port.lock().unwrap();
+        port.write_all(data)?;
+        debug!("Sent {} bytes via serial", data.len());
+        Ok(())
     }
 }

@@ -5,14 +5,15 @@ use tracing::{error, warn};
 use crate::{
     communication::{
         ConnectionError, EthernetConfiguration, SerialConfiguration,
-        ethernet::DEFAULT_ETHERNET_BROADCAST_IP,
+        ethernet::{
+            DEFAULT_ETHERNET_BROADCAST_IP, DEFAULT_RCV_ETHERNET_PORT, DEFAULT_SEND_ETHERNET_PORT,
+        },
         serial::{
             DEFAULT_BAUD_RATE,
             cached::{cached_first_stm32_port, cached_list_all_usb_ports},
         },
     },
     error::ErrInstrument,
-    mavlink::{DEFAULT_RCV_ETHERNET_PORT, DEFAULT_SEND_ETHERNET_PORT},
     message_broker::{ConnectionConfig, MessageBroker},
 };
 

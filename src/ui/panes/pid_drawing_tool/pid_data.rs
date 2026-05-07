@@ -9,7 +9,6 @@ use super::{connections::Connection, elements::Element};
 pub struct PidData {
     pub elements: HashMap<u32, Element>,
     pub connections: Vec<Connection>,
-    pub message_subscription_ids: Vec<u32>,
 }
 
 impl PidData {

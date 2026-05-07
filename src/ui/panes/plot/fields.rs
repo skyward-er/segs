@@ -16,7 +16,7 @@ impl XPlotField {
     pub fn unit(&self) -> UnitOfMeasure {
         match self {
             XPlotField::MsgReceiptTimestamp => UnitOfMeasure::Time(TimeUnits::Millisecond),
-            XPlotField::Field(field) => UnitOfMeasure::from(field.field().unit.as_ref()),
+            XPlotField::Field(field) => UnitOfMeasure::from(field.field().units.as_ref()),
         }
     }
 
@@ -32,7 +32,7 @@ impl XPlotField {
             XPlotField::MsgReceiptTimestamp => {
                 Ok((message.time - *APP_START_TIMESTAMP_ORIGIN).as_millis() as f64)
             }
-            XPlotField::Field(field) => field.extract_as_f64(&message.message),
+            XPlotField::Field(field) => field.extract_as_f64(&message.packet),
         }
     }
 }
@@ -51,7 +51,7 @@ pub enum YPlotField {
 impl YPlotField {
     pub fn unit(&self) -> UnitOfMeasure {
         match self {
-            YPlotField::Field(field) => UnitOfMeasure::from(field.field().unit.as_ref()),
+            YPlotField::Field(field) => UnitOfMeasure::from(field.field().units.as_ref()),
         }
     }
 
@@ -63,7 +63,7 @@ impl YPlotField {
 
     pub fn extract_from_message(&self, message: &TimedMessage) -> Result<f64, String> {
         match self {
-            YPlotField::Field(field) => field.extract_as_f64(&message.message),
+            YPlotField::Field(field) => field.extract_as_f64(&message.packet),
         }
     }
 }

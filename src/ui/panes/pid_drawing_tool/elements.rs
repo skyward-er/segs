@@ -4,7 +4,7 @@ use egui::{Theme, Ui};
 use glam::{Mat2, Vec2};
 use serde::{Deserialize, Serialize};
 
-use crate::mavlink::MavMessage;
+use crate::ccsds::TelemetryPacket;
 
 use super::{
     grid::GridInfo,
@@ -118,15 +118,15 @@ impl Element {
         self.position + Mat2::from_angle(self.rotation) * self.size() * 0.5
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, grid: &GridInfo, theme: Theme, msgs: &[u32]) {
+    pub fn ui(&mut self, ui: &mut Ui, grid: &GridInfo, theme: Theme) {
         let pos = grid.grid_to_screen(self.position);
         let size = grid.size();
         self.symbol.paint(ui, theme, pos, size, self.rotation);
-        self.symbol.subscriptions_ui(ui, msgs);
+        self.symbol.subscriptions_ui(ui);
     }
 
-    pub fn update(&mut self, message: &MavMessage, subscribed_msg_ids: &[u32]) {
-        self.symbol.update(message, subscribed_msg_ids);
+    pub fn update(&mut self, packet: &TelemetryPacket) {
+        self.symbol.update(packet);
     }
 
     pub fn reset_subscriptions(&mut self) {

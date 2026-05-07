@@ -1,15 +1,9 @@
-use egui::{Button, DragValue, RichText, Sense, Ui};
-use jiff::{Unit, Zoned};
-use mavlink_bindgen::parser::MavType;
+use egui::{Button, RichText, Sense, Ui};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
-    error::ErrInstrument,
-    mavlink::{
-        MavHeader, MavMessage, Message, TimedMessage,
-        reflection::{FieldLike, FieldLookup, MAVLINK_PROFILE, MapConvertible, MessageMap},
-    },
+    mavlink::{CommandPacket, MAVLINK_PROFILE, TimedMessage},
     ui::app::PaneResponse,
 };
 
@@ -17,27 +11,27 @@ use super::PaneBehavior;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommandPane {
-    message: Option<MessageMap>,
+    /// Button label shown to the user.
     text: String,
     text_size: f32,
-    system_id: u8,
-    show_only_tc: bool,
+    /// Name of the selected command, if any.
+    selected_command: Option<String>,
+    /// Current parameter values (one per non-hidden param in the command def).
+    param_values: Vec<u64>,
 
     #[serde(skip)]
     settings_visible: bool,
-    // TODO handle message responses
     #[serde(skip)]
-    commands_to_send: Vec<(MavHeader, MavMessage)>,
+    commands_to_send: Vec<CommandPacket>,
 }
 
 impl Default for CommandPane {
     fn default() -> Self {
         Self {
-            message: None,
-            text: String::from("Customize"),
+            text: "Command".to_string(),
             text_size: 16.0,
-            system_id: 1, // Default system ID
-            show_only_tc: true,
+            selected_command: None,
+            param_values: Vec::new(),
             settings_visible: false,
             commands_to_send: Vec::new(),
         }
@@ -46,10 +40,10 @@ impl Default for CommandPane {
 
 impl PartialEq for CommandPane {
     fn eq(&self, other: &Self) -> bool {
-        self.message == other.message
-            && self.text == other.text
+        self.text == other.text
             && self.text_size == other.text_size
-            && self.show_only_tc == other.show_only_tc
+            && self.selected_command == other.selected_command
+            && self.param_values == other.param_values
     }
 }
 
@@ -63,39 +57,24 @@ impl PaneBehavior for CommandPane {
                 let btn_text = RichText::new(&self.text).size(self.text_size).strong();
                 let btn = Button::new(btn_text).sense(egui::Sense::click());
 
-                // Clever way to add padding to the button
                 ui.allocate_rect(ui.max_rect(), Sense::click());
                 let btn_rect = ui.max_rect().shrink(2.0);
                 let btn_res = ui.put(btn_rect, btn);
 
-                // open the menu on right click on button
                 btn_res.context_menu(|ui| command_menu(ui, self));
+
                 if btn_res.clicked() {
-                    info!("Command {} clicked", self.text);
-                    // send the message
-                    if let Some(message) = self.message.as_ref() {
-                        info!(
-                            "Sending {} message",
-                            MAVLINK_PROFILE
-                                .get_msg(message.message_id())
-                                .log_unwrap()
-                                .name
-                        );
-                        let mut map = message.clone();
-                        if let Some(tm) = map.get_mut_field("timestamp") {
-                            // set the timestamp to the current time
-                            *tm = Zoned::now()
-                                .round(Unit::Nanosecond)
-                                .log_unwrap()
-                                .timestamp()
-                                .as_nanosecond() as u64;
+                    if let Some(ref name) = self.selected_command.clone() {
+                        if let Some(registry) = MAVLINK_PROFILE.get() {
+                            if let Some(def) = registry.get_command_by_name(name) {
+                                info!("Sending command {}", name);
+                                let cmd = CommandPacket {
+                                    command_id: def.command_id,
+                                    param_values: self.param_values.clone(),
+                                };
+                                self.commands_to_send.push(cmd);
+                            }
                         }
-                        let header = MavHeader {
-                            system_id: self.system_id,
-                            ..Default::default()
-                        };
-                        let msg = MavMessage::from_map(map).log_unwrap();
-                        self.commands_to_send.push((header, msg));
                     }
                 }
             })
@@ -103,7 +82,7 @@ impl PaneBehavior for CommandPane {
 
         if parent.interact(egui::Sense::click_and_drag()).dragged() {
             response.set_drag_started();
-        };
+        }
 
         let mut window_visible = self.settings_visible;
         egui::Window::new("Command Settings")
@@ -118,13 +97,9 @@ impl PaneBehavior for CommandPane {
         response
     }
 
-    fn update(&mut self, _messages: &[&TimedMessage]) {}
+    fn update(&mut self, _message: Option<&TimedMessage>) {}
 
-    fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        Box::new(None.into_iter())
-    }
-
-    fn drain_outgoing_messages(&mut self) -> Vec<(MavHeader, MavMessage)> {
+    fn drain_outgoing_commands(&mut self) -> Vec<CommandPacket> {
         self.commands_to_send.drain(..).collect()
     }
 }
@@ -137,9 +112,10 @@ fn command_menu(ui: &mut Ui, pane: &mut CommandPane) {
 }
 
 fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
-    ui.set_max_width(200.0);
+    ui.set_min_width(220.0);
+
     ui.horizontal(|ui| {
-        ui.label("Text:");
+        ui.label("Label:");
         ui.text_edit_singleline(&mut pane.text);
     });
     ui.horizontal(|ui| {
@@ -149,158 +125,100 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
 
     ui.separator();
 
-    // add a label for the system ID
-    ui.horizontal(|ui| {
-        let label = ui.label("System ID:");
-        // add a drag value for the system ID
-        ui.add(DragValue::new(&mut pane.system_id).range(1..=255))
-            .labelled_by(label.id);
-    });
+    let Some(registry) = MAVLINK_PROFILE.get() else {
+        ui.label("Registry not loaded.");
+        return;
+    };
 
-    // add a checkbox for filtering sendable messages
-    ui.checkbox(&mut pane.show_only_tc, "Show only TC messages");
+    // Command selector dropdown
+    let selected_text = pane
+        .selected_command
+        .as_deref()
+        .unwrap_or("Select a command");
+    let prev_cmd = pane.selected_command.clone();
 
-    // Create a combo box for selecting the message kind
-    let mut message_id = pane.message.as_ref().map(|m| m.message_id());
-    let selected_text = message_id
-        .and_then(|id| MAVLINK_PROFILE.get_msg(id))
-        .map(|m| m.name.clone())
-        .unwrap_or("Select a Message".to_string());
-    egui::ComboBox::from_id_salt(ui.id().with("message_selector"))
+    egui::ComboBox::from_id_salt(ui.id().with("command_selector"))
         .selected_text(selected_text)
         .show_ui(ui, |ui| {
-            let mut msgs = MAVLINK_PROFILE.get_sorted_msgs();
-            if pane.show_only_tc {
-                msgs.retain(|m| m.name.ends_with("_TC"));
-            }
-            for msg in msgs {
-                ui.selectable_value(&mut message_id, Some(msg.id), &msg.name);
+            for cmd in &registry.commands {
+                ui.selectable_value(
+                    &mut pane.selected_command,
+                    Some(cmd.name.clone()),
+                    &cmd.name,
+                );
             }
         });
 
-    // If the message id is changed, update the message
-    if pane
-        .message
-        .as_ref()
-        .is_none_or(|m| Some(m.message_id()) != message_id)
-    {
-        if let Some(id) = message_id {
-            pane.message = Some(
-                MavMessage::default_message_from_id(id)
-                    .log_unwrap()
-                    .as_map(),
-            );
+    // Reset param_values when command changes
+    if pane.selected_command != prev_cmd {
+        if let Some(ref name) = pane.selected_command {
+            if let Some(def) = registry.get_command_by_name(name) {
+                pane.param_values = def.default_param_values();
+            }
         } else {
-            pane.message = None;
+            pane.param_values.clear();
         }
     }
 
-    // For each field in the message, show a text box with the field name and value,
-    // and update the MessageMap based on the content of these text fields.
-    if let Some(message_map) = pane.message.as_mut() {
-        let mut settable_fields = (0..message_map.field_map().len())
-            .map(|f| {
-                f.to_mav_field(message_map.message_id(), &MAVLINK_PROFILE)
-                    .log_unwrap()
-            })
-            .collect::<Vec<_>>();
-
-        // filter out the fields that are not settable
-        settable_fields.retain(|f| {
-            // skip the timestamp field
-            f.field().name.to_lowercase() != "timestamp"
-        });
-
-        if !settable_fields.is_empty() {
-            ui.group(|ui| {
-                for field in settable_fields {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("{}:", &field.field().name.to_uppercase()));
-
-                        // show the combo box for enum types
-                        if let Some(enum_type) = &field.field().enumtype {
-                            let enum_info = MAVLINK_PROFILE.get_enum(enum_type).log_unwrap();
-                            // TODO handle enum advanced options
-                            macro_rules! variant_selector_for {
-                                ($kind:ty) => {{
-                                    let variant_ix: &mut $kind =
-                                        message_map.get_mut_field(field).log_unwrap();
-                                    let selected_text =
-                                        enum_info.entries[*variant_ix as usize].name.clone();
-                                    egui::ComboBox::from_id_salt(ui.id().with("field_selector"))
-                                        .selected_text(selected_text)
-                                        .show_ui(ui, |ui| {
-                                            for (index, variant) in
-                                                enum_info.entries.iter().enumerate()
+    // Show parameter editors
+    if let Some(ref name) = pane.selected_command.clone() {
+        if let Some(def) = registry.get_command_by_name(name) {
+            if !def.params.is_empty() {
+                ui.separator();
+                ui.label("Parameters:");
+                ui.group(|ui| {
+                    for (i, param) in def.params.iter().enumerate() {
+                        if i >= pane.param_values.len() {
+                            break;
+                        }
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{}:", param.name.to_uppercase()));
+                            if !param.states.is_empty() {
+                                // Enum-like parameter: show a combo box with state names
+                                let cur_val = pane.param_values[i];
+                                let cur_label = param
+                                    .states
+                                    .iter()
+                                    .find(|s| {
+                                        matches!(
+                                            &s.value,
+                                            crate::cosmos::StateValue::Exact(v) if *v == cur_val
+                                        )
+                                    })
+                                    .map(|s| s.name.as_str())
+                                    .unwrap_or("?");
+                                egui::ComboBox::from_id_salt(ui.id().with(i))
+                                    .selected_text(cur_label)
+                                    .show_ui(ui, |ui| {
+                                        for state in &param.states {
+                                            if let crate::cosmos::StateValue::Exact(v) =
+                                                &state.value
                                             {
                                                 ui.selectable_value(
-                                                    variant_ix,
-                                                    index as $kind,
-                                                    &variant.name,
+                                                    &mut pane.param_values[i],
+                                                    *v,
+                                                    &state.name,
                                                 );
                                             }
-                                        });
-                                }};
+                                        }
+                                    });
+                            } else {
+                                // Numeric parameter: drag value
+                                let max_val = match param.bit_size {
+                                    8 => u8::MAX as u64,
+                                    16 => u16::MAX as u64,
+                                    32 => u32::MAX as u64,
+                                    _ => u64::MAX,
+                                };
+                                ui.add(
+                                    egui::DragValue::new(&mut pane.param_values[i])
+                                        .range(0..=max_val),
+                                );
                             }
-                            match field.field().mavtype {
-                                MavType::UInt8 => variant_selector_for!(u8),
-                                MavType::UInt16 => variant_selector_for!(u16),
-                                MavType::UInt32 => variant_selector_for!(u32),
-                                MavType::UInt64 => variant_selector_for!(u64),
-                                _ => {
-                                    // TODO handle other enum types
-                                    warn!(
-                                        "Enum type {} is not supported for field {}",
-                                        enum_type,
-                                        field.field().name
-                                    );
-                                }
-                            }
-                        } else {
-                            // show the drag value for numeric types and text box for char types
-                            macro_rules! drag_value_with_range {
-                                ($_type:ty, $min:expr, $max:expr) => {{
-                                    let value: &mut $_type =
-                                        message_map.get_mut_field(field).log_unwrap();
-                                    ui.add(egui::DragValue::new(value).range($min..=$max));
-                                }};
-                            }
-
-                            match field.field().mavtype {
-                                MavType::UInt8MavlinkVersion | MavType::UInt8 => {
-                                    drag_value_with_range!(u8, 0, u8::MAX)
-                                }
-                                MavType::UInt16 => drag_value_with_range!(u16, 0, u16::MAX),
-                                MavType::UInt32 => drag_value_with_range!(u32, 0, u32::MAX),
-                                MavType::UInt64 => drag_value_with_range!(u64, 0, u64::MAX),
-                                MavType::Int8 => drag_value_with_range!(i8, i8::MIN, i8::MAX),
-                                MavType::Int16 => drag_value_with_range!(i16, i16::MIN, i16::MAX),
-                                MavType::Int32 => drag_value_with_range!(i32, i32::MIN, i32::MAX),
-                                MavType::Int64 => drag_value_with_range!(i64, i64::MIN, i64::MAX),
-                                MavType::Float => drag_value_with_range!(f32, f32::MIN, f32::MAX),
-                                MavType::Double => drag_value_with_range!(f64, f64::MIN, f64::MAX),
-                                MavType::Char => {
-                                    let value: &mut char =
-                                        message_map.get_mut_field(field).log_unwrap();
-                                    let mut buffer = value.to_string();
-                                    ui.add(
-                                        egui::TextEdit::singleline(&mut buffer)
-                                            .hint_text("char")
-                                            .char_limit(1),
-                                    );
-                                    if let Some(c) = buffer.chars().next() {
-                                        *value = c;
-                                    } else {
-                                        warn!("Invalid char input: {}", buffer);
-                                        // TODO handle invalid char input (USER ERROR)
-                                    }
-                                }
-                                MavType::Array(_, _) => warn!("Array types are not supported yet"), // TODO handle array types
-                            }
-                        }
-                    });
-                }
-            });
+                        });
+                    }
+                });
+            }
         }
     }
 }

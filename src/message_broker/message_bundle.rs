@@ -1,43 +1,30 @@
+use std::collections::HashMap;
+
 use crate::mavlink::TimedMessage;
 
-/// A bundle of messages, indexed by their ID.
-/// Allows for efficient storage and retrieval of messages by ID.
+/// Holds the most-recent telemetry packet **per APID** received during a single UI frame.
 ///
-/// # Note
-///
-/// This structure performed best when reusing the same instance for multiple
-/// iterations, instead of creating a new instance every time. Use the [`reset`]
-/// method to clear the content of the bundle and prepare it for reuse.
+/// Cleared at the end of each frame via [`reset`].
 #[derive(Default)]
 pub struct MessageBundle {
-    storage: Vec<TimedMessage>,
-    count: u32,
+    latest: HashMap<u16, TimedMessage>,
 }
 
 impl MessageBundle {
-    /// Returns all messages of the given ID contained in the bundle.
-    pub fn get(&self, ids: &[u32]) -> Vec<&TimedMessage> {
-        self.storage
-            .iter()
-            .filter(|msg| ids.contains(&msg.id()))
-            .collect()
-    }
-
-    /// Inserts a new message into the bundle.
     pub fn insert(&mut self, message: TimedMessage) {
-        self.storage.push(message);
-        self.count += 1;
+        self.latest.insert(message.packet.apid, message);
     }
 
-    /// Returns the number of messages in the bundle.
-    pub fn count(&self) -> u32 {
-        self.count
+    pub fn has_new(&self) -> bool {
+        !self.latest.is_empty()
     }
 
-    /// Resets the content of the bundle, preparing it to be efficiently reused.
-    /// Effectively, it clears the content of the bundle.
+    /// Iterate over the latest message for each APID.
+    pub fn iter_latest(&self) -> impl Iterator<Item = &TimedMessage> {
+        self.latest.values()
+    }
+
     pub fn reset(&mut self) {
-        self.storage.clear();
-        self.count = 0;
+        self.latest.clear();
     }
 }
