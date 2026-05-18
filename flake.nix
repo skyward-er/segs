@@ -29,6 +29,10 @@
         default = mkShell rec {
           buildInputs = [
             # Rust
+            (rust-bin.stable.latest.default.override {
+              targets = [ "wasm32-unknown-unknown" ];
+            })
+            trunk
             just
 
             # misc. libraries

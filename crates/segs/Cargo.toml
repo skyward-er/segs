@@ -13,7 +13,6 @@ directories = "6.0.0"
 eframe.workspace = true
 egui.workspace = true
 enum_dispatch = "0.3.13"
-mimalloc = { version = "0.1.48", features = ["v3"] }
 segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"
 segs-plot.path = "../segs-plot"
@@ -22,3 +21,11 @@ segs-mavlink.path = "../segs-mavlink"
 serde = { workspace = true, features = ["derive"] }
 smallvec = "1.15.1"
 argh = "0.1.19"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+mimalloc = { version = "0.1.48", features = ["v3"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+log = "0.4"
+wasm-bindgen-futures = "0.4.50"
+web-sys = "0.3.70"

@@ -12,6 +12,9 @@ default:
 run:
     cargo run --bin segs
 
+serve:
+    trunk serve
+
 format:
     cargo +nightly fmt
 

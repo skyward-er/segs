@@ -39,6 +39,7 @@ pub fn install_icons(ctx: &egui::Context) {
 }
 
 /// Load the application icon.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(sources::icons::SEGS_1024X1024).expect("Failed to load icon data")
 }

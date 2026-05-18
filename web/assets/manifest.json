@@ -1,0 +1,22 @@
+{
+    "name": "Skyward Enhanced Ground Station",
+    "short_name": "segs",
+    "icons": [
+        {
+            "src": "./logo_256.png",
+            "sizes": "256x256",
+            "type": "image/png"
+        },
+        {
+            "src": "./logo_1024.png",
+            "sizes": "1024x1024",
+            "type": "image/png"
+        }
+    ],
+    "lang": "en-US",
+    "id": "/index.html",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "white",
+    "theme_color": "white"
+}
