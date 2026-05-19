@@ -16,8 +16,8 @@ if (assets_dir := os.environ.get("ASSETS_DIR")) is None:
 sources_path = Path(sources_path)
 assets_dir = Path(assets_dir)
 
-start_marker = "// ~~~\u00a0START AUTOMATICALLY GENERATED CODE ~~~"
-end_marker = "// ~~~\u00a0END AUTOMATICALLY GENERATED CODE ~~~"
+start_marker = "// ~~~ START AUTOMATICALLY GENERATED CODE ~~~"
+end_marker = "// ~~~ END AUTOMATICALLY GENERATED CODE ~~~"
 
 
 def snake_case(value: str) -> str:

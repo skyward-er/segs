@@ -31,7 +31,7 @@ macro_rules! include_svg {
     };
 }
 
-// ~~~ START AUTOMATICALLY GENERATED CODE ~~~
+// ~~~ START AUTOMATICALLY GENERATED CODE ~~~
 #[rustfmt::skip]
 pub mod fonts {
     pub static FIGTREE_BLACK: &[u8] = include_asset!("fonts", "Figtree-Black.ttf");
@@ -129,4 +129,4 @@ pub mod svgs {
     pub static WINDOW_OUTLINE: egui::ImageSource = include_svg!("svgs", "window_outline.svg");
     pub static WINDOW_SOLID: egui::ImageSource = include_svg!("svgs", "window_solid.svg");
 }
-// ~~~ END AUTOMATICALLY GENERATED CODE ~~~
+// ~~~ END AUTOMATICALLY GENERATED CODE ~~~
