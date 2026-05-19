@@ -38,6 +38,7 @@ mod tools;
 mod usb;
 mod warning;
 mod window;
+mod x;
 
 pub use add_file::AddFile;
 pub use add_folder::AddFolder;
@@ -80,6 +81,7 @@ pub use tools::Tools;
 pub use usb::Usb;
 pub use warning::Warning;
 pub use window::Window;
+pub use x::X;
 
 /// Icon representation. An icon can be converted to an egui Image and has a
 /// svg source representation.

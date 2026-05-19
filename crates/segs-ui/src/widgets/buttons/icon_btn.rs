@@ -1,8 +1,6 @@
 use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget};
 use segs_assets::icons::Icon;
 
-use crate::style::CtxStyleExt;
-
 pub struct IconBtn<'a> {
     variant: Variant<'a>,
 }
@@ -58,28 +56,25 @@ impl<'a> Widget for IconBtn<'a> {
 }
 
 fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
-    let toggle_size = Vec2::new(25., 25.);
+    let toggle_size = Vec2::new(24., 24.);
     let (rect, response) = ui.allocate_exact_size(toggle_size, Sense::click());
-    let id = response.id;
-
-    // Animation factors
-    let hover_t = ui.ctx().animate_bool(id.with("anim_hover"), response.hovered());
-    let active_t = ui
-        .ctx()
-        .animate_bool(id.with("anim_active"), response.is_pointer_button_down_on());
 
     // Paint the button
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let scale = 1. + (hover_t * 0.1) - (active_t * 0.15);
-        let animated_rect = rect.expand2(rect.shrink(1.).size() * (scale - 1.0) * 0.5);
-
-        if hover_t > 0. {
-            let shadow_color = ui.app_style().shadow_fill.gamma_multiply(hover_t);
-            painter.rect_filled(animated_rect.shrink(1.), 5., shadow_color);
+        let rounded = 6.;
+        let is_active = response.is_pointer_button_down_on();
+        let is_hovered = response.hovered();
+        if is_hovered || is_active {
+            let bg_color = if is_active {
+                ui.visuals().widgets.active.bg_fill
+            } else {
+                ui.visuals().widgets.hovered.bg_fill
+            };
+            painter.rect_filled(rect.shrink(1.), rounded, bg_color);
         }
 
-        let icon_rect = animated_rect.shrink(2.);
+        let icon_rect = rect.shrink(3.);
         let icon_color = ui.visuals().text_color();
         icon.to_image()
             .tint(icon_color)

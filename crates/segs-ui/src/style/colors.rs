@@ -95,7 +95,7 @@ pub const SHADOW_STRONG_ON_BACKGROUND_DARK: Color32 = SHADOW_MEDIUM_ON_BACKGROUN
 pub const SHADOW_STRONG_ON_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(217, 217, 217);
 // ----- Popup shadow color ----------------------------------------------------
 pub const POPUP_SHADOW_DARK: Color32 = Color32::from_rgb(21, 22, 25);
-pub const POPUP_SHADOW_LIGHT: Color32 = Color32::from_rgb(232, 232, 232);
+pub const POPUP_SHADOW_LIGHT: Color32 = Color32::from_rgb(84, 88, 100);
 
 // -----------------------------------------------------------------------------
 // Theme Colors (e.g. for accents, highlights, confirmation states)

@@ -66,8 +66,8 @@ pub mod svgs {
     pub static ARCHIVE_OUTLINE: egui::ImageSource = include_svg!("svgs", "archive_outline.svg");
     pub static ARCHIVE_SOLID: egui::ImageSource = include_svg!("svgs", "archive_solid.svg");
     pub static ARROW_DOWN: egui::ImageSource = include_svg!("svgs", "arrow_down.svg");
-    pub static ARROW_UP: egui::ImageSource = include_svg!("svgs", "arrow_up.svg");
     pub static ARROW_NARROW_RIGHT: egui::ImageSource = include_svg!("svgs", "arrow_narrow_right.svg");
+    pub static ARROW_UP: egui::ImageSource = include_svg!("svgs", "arrow_up.svg");
     pub static BELL_OUTLINE: egui::ImageSource = include_svg!("svgs", "bell_outline.svg");
     pub static BELL_SOLID: egui::ImageSource = include_svg!("svgs", "bell_solid.svg");
     pub static BOTTOM_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "bottom_panel_outline.svg");
@@ -128,5 +128,6 @@ pub mod svgs {
     pub static USB: egui::ImageSource = include_svg!("svgs", "usb.svg");
     pub static WINDOW_OUTLINE: egui::ImageSource = include_svg!("svgs", "window_outline.svg");
     pub static WINDOW_SOLID: egui::ImageSource = include_svg!("svgs", "window_solid.svg");
+    pub static X: egui::ImageSource = include_svg!("svgs", "x.svg");
 }
 // ~~~ END AUTOMATICALLY GENERATED CODE ~~~
