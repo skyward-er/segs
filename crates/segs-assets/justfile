@@ -12,7 +12,7 @@ export ASSETS_DIR := join(source_directory(), "assets")
 update-sources: minimize-svgs generate-sources
 
 generate-sources:
-    uv run --script scripts/generate_sources.py
+    python scripts/generate_sources.py
 
 minimize-svgs:
     bunx svgo {{ASSETS_DIR}}/svgs/*
