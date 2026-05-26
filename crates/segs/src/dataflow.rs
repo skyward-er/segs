@@ -6,13 +6,14 @@ pub mod mavlink_adapter;
 pub mod transport;
 
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
+use nohash::NoHashHasher;
+
+/// An opaque handler that uniquely represents a data stream.
+/// Adapters are responsible for generating a uniform key space based on the data source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DataKey {
-    pub source_id: u32,
-    pub message_id: u32,
-    pub field_hash: u32, // Hash to detect changes in the field structure of a message
-}
+pub struct DataKey(u64);
 
 #[derive(Debug, Clone, Copy)]
 pub struct DataPoint<T> {
@@ -33,12 +34,12 @@ pub enum DataValue {
     String(String),
 }
 
-/// Raw message type stored as key-value pairs for maximum flexibility of representation.
-pub type RawMessage = HashMap<u32, DataValue>;
+/// Command type stored as key-value pairs for maximum flexibility of representation.
+pub type Command = HashMap<DataKey, DataValue>;
 
 pub struct CommandSequence {
-    request: RawMessage,
-    response: Vec<RawMessage>,
+    request: Command,
+    response: Vec<Command>,
 }
 
 /// Central data store that holds all processed data streams, raw messages, and command sequences.
@@ -47,13 +48,15 @@ pub struct CommandSequence {
 /// UI will read from this store to display information to the user.
 #[derive(Default)]
 pub struct DataStore {
-    pub streams: HashMap<DataKey, DataStream>,
-    pub raw_store: Vec<RawMessage>,
+    pub streams: HashMap<DataKey, DataStream, BuildHasherDefault<NoHashHasher<u64>>>,
     pub commands: Vec<CommandSequence>,
 }
 
 impl DataStore {
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            streams: HashMap::with_hasher(BuildHasherDefault::default()),
+            ..Default::default()
+        }
     }
 }

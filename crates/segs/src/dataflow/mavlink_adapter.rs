@@ -1,10 +1,13 @@
+use std::collections::hash_map::DefaultHasher;
+use std::collections::hash_map::Entry;
 use std::error::Error;
+use std::hash::{Hash, Hasher};
 use std::iter::zip;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, mpsc::Receiver};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavProfile, MsgField};
@@ -79,9 +82,6 @@ impl DataAdapter for MavlinkAdapter {
     }
 
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool {
-        // Limit processing time to avoid UI lag
-        const MAX_PROCESSING_TIME: Duration = Duration::from_millis(5);
-        let start_time = Instant::now();
         let mut i = 0;
 
         for MavFrame { header, message, .. } in self.incoming.try_iter() {
@@ -94,26 +94,14 @@ impl DataAdapter for MavlinkAdapter {
             };
 
             for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
-                let stream_key = DataKey {
-                    source_id: header.system_id as u32,
-                    message_id: message.id,
-                    field_hash: i as u32,
-                };
+                let stream_key = compute_stream_key(header.system_id, message.id, i as u32, &field_info.name);
 
                 // TODO: need a way to distinguish between stream and command
-                match data_store.streams.get_mut(&stream_key) {
-                    Some(stream) => {
-                        if !insert_field_to_stream(field, stream, timestamp) {
-                            eprintln!(
-                                "Type mismatch for field {} in message ID {}",
-                                field_info.name, message.id
-                            );
-                        }
-                    }
-
-                    None => {
+                let stream = match data_store.streams.entry(stream_key) {
+                    Entry::Occupied(e) => e.into_mut(),
+                    Entry::Vacant(e) => {
                         // Create the new stream since it doesn't exist yet
-                        let mut stream = match field {
+                        let new_stream = match field {
                             MsgField::Int8(_)
                             | MsgField::Int16(_)
                             | MsgField::Int32(_)
@@ -132,24 +120,19 @@ impl DataAdapter for MavlinkAdapter {
                                 continue;
                             }
                         };
-
-                        // Insert as usual
-                        if !insert_field_to_stream(field, &mut stream, timestamp) {
-                            eprintln!(
-                                "Type mismatch for field {} in message ID {}",
-                                field_info.name, message.id
-                            );
-                        }
-
-                        data_store.streams.insert(stream_key, stream);
+                        e.insert(new_stream)
                     }
+                };
+
+                if !insert_field_to_stream(field, stream, timestamp) {
+                    eprintln!(
+                        "Type mismatch for field {} in message ID {}",
+                        field_info.name, message.id
+                    );
                 }
             }
 
             i += 1;
-            if Instant::now().duration_since(start_time) > MAX_PROCESSING_TIME {
-                break; // Stop processing if we've exceeded the time limit
-            }
         }
 
         if i <= 0 {
@@ -238,4 +221,14 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
         _ => return false,
     }
     true
+}
+
+fn compute_stream_key(source_id: u8, message_id: u32, field_id: u32, field_name: &str) -> DataKey {
+    let mut hasher = DefaultHasher::new();
+    source_id.hash(&mut hasher);
+    message_id.hash(&mut hasher);
+    field_id.hash(&mut hasher);
+    field_name.hash(&mut hasher);
+
+    DataKey(hasher.finish())
 }
