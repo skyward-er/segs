@@ -202,8 +202,10 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
                 let (rect_second, _) = ui.allocate_exact_size(max_size + extra_pad, Sense::empty());
 
                 // Show children UIs.
-                let mut panel_ui = PanelUI::new(align, sides, ui, None, rect_second);
-                add_contents(&mut panel_ui);
+                ui.scope_builder(UiBuilder::new().id_salt("_collapsed"), |ui| {
+                    let mut panel_ui = PanelUI::new(align, sides, ui, None, rect_second);
+                    add_contents(&mut panel_ui)
+                });
 
                 InnerResponse::new(tstate, ui.response())
             } else {
@@ -218,8 +220,10 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
                 let (rect_second, _) = ui.allocate_exact_size(side_second_size, Sense::empty());
 
                 // Show children UIs.
-                let mut panel_ui = PanelUI::new(align, sides, ui, Some(rect_first), rect_second);
-                add_contents(&mut panel_ui);
+                ui.scope_builder(UiBuilder::new().id_salt("_contents"), |ui| {
+                    let mut panel_ui = PanelUI::new(align, sides, ui, Some(rect_first), rect_second);
+                    add_contents(&mut panel_ui);
+                });
 
                 // Handle the separator UI to paint it on top.
                 Separator {

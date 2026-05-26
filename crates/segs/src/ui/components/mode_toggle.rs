@@ -91,13 +91,13 @@ impl ModeToggle<'_> {
 
         let rect = rect.shrink2(vec2(0., 2.));
         if show_config_t > 0.0 {
-            ui.scope(|ui| {
+            ui.scope_builder(UiBuilder::new().id_salt("_config"), |ui| {
                 ui.set_opacity(show_config_t);
                 non_hovered(ui, rect, hover_t);
             });
         }
         if show_move_to_op_hint_t > 0.0 {
-            ui.scope(|ui| {
+            ui.scope_builder(UiBuilder::new().id_salt("_op_hint"), |ui| {
                 ui.set_opacity(show_move_to_op_hint_t);
                 hovered(ui, rect, hover_t);
             });
