@@ -1,0 +1,89 @@
+image: registry.skywarder.eu/avn/swd/docker/segs-ci:latest
+
+stages:
+  - lint
+  - build
+
+variables:
+
+  RUSTC_WRAPPER: "sccache"
+  SCCACHE_DIR: $CI_PROJECT_DIR/.sccache
+  #Limit cache size
+  SCCACHE_CACHE_SIZE: "2G"
+
+cache:
+  key: $CI_COMMIT_REF_SLUG
+  paths:
+    - .cargo/registry/
+    - .cargo/git/
+    - target/
+    - .sccache/
+
+    
+lint_and_check:
+  stage: lint
+  before_script:
+    - sccache --start-server
+  after_script:
+      - sccache --show-stats
+  script:
+
+    - cargo fmt --all -- --check
+    #-- -D treats all warnings as errors
+    - cargo clippy --all-targets --all-features -- -D warnings
+    - cargo audit
+    - cargo machete
+
+.build:
+  stage: build
+  variables:
+    CFLAGS: "-Wno-error=date-time"
+  before_script:
+    - sccache --start-server
+  after_script:
+    - sccache --show-stats
+
+build:linux_x86_64:
+  extends: .build
+  script:
+    - cargo zigbuild --release --target x86_64-unknown-linux-musl
+  artifacts:
+    name: "linux-x86_64-binary"
+    paths:
+      - target/x86_64-unknown-linux-musl/release/segs
+
+build:linux_aarch64:
+  extends: .build
+  script:
+    - cargo zigbuild --release --target aarch64-unknown-linux-musl
+  artifacts:
+    name: "linux-aarch64-binary"
+    paths:
+      - target/aarch64-unknown-linux-musl/release/segs
+
+build:windows_x86_64:
+  extends: .build
+  script:
+    - cargo zigbuild --release --target x86_64-pc-windows-gnu
+  artifacts:
+    name: "windows-x86_64-binary"
+    paths:
+      - target/x86_64-pc-windows-gnu/release/segs.exe
+
+build:macos_x86_64:
+  extends: .build
+  script:
+    - cargo zigbuild --release --target x86_64-apple-darwin
+  artifacts:
+    name: "macos-x86_64-binary"
+    paths:
+      - target/x86_64-apple-darwin/release/segs
+
+build:macos_aarch64:
+  extends: .build
+  script:
+    - cargo zigbuild --release --target aarch64-apple-darwin
+  artifacts:
+    name: "macos-aarch64-binary"
+    paths:
+      - target/aarch64-apple-darwin/release/segs
