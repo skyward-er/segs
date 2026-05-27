@@ -1,8 +1,11 @@
-use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget};
+use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
+
+const DEFAULT_ICON_SIZE: Vec2 = vec2(24., 24.);
 
 pub struct IconBtn<'a> {
     variant: Variant<'a>,
+    size: Vec2,
 }
 
 enum Variant<'a> {
@@ -20,7 +23,7 @@ enum Variant<'a> {
 impl<'a> IconBtn<'a> {
     pub fn new(icon: impl Icon + 'static) -> Self {
         Self {
-            variant: Variant::Inactive { icon: Box::new(icon) },
+            variant: Variant::Inactive { icon: Box::new(icon) }, size: DEFAULT_ICON_SIZE
         }
     }
 
@@ -31,21 +34,27 @@ impl<'a> IconBtn<'a> {
                 active_icon: Box::new(active_icon),
                 active: flag,
             },
+            size: DEFAULT_ICON_SIZE,
         }
+    }
+
+    pub fn with_size(mut self, size: Vec2) -> Self {
+        self.size = size;
+        self
     }
 }
 
 impl<'a> Widget for IconBtn<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         match self.variant {
-            Variant::Inactive { icon } => icon_toggle(ui, icon),
+            Variant::Inactive { icon } => icon_toggle(ui, icon, self.size),
             Variant::Active {
                 inactive_icon,
                 active_icon,
                 active,
             } => {
                 let icon = if *active { active_icon } else { inactive_icon };
-                let response = icon_toggle(ui, icon);
+                let response = icon_toggle(ui, icon, self.size);
                 if response.clicked() {
                     *active = !*active;
                 }
@@ -55,9 +64,8 @@ impl<'a> Widget for IconBtn<'a> {
     }
 }
 
-fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>) -> Response {
-    let toggle_size = Vec2::new(24., 24.);
-    let (rect, response) = ui.allocate_exact_size(toggle_size, Sense::click());
+fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, size: Vec2) -> Response {
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     // Paint the button
     if ui.is_rect_visible(rect) {

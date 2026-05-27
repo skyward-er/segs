@@ -46,7 +46,7 @@ impl<'a> ConnectionPopup<'a> {
     }
 }
 
-fn connection_ui(ui: &mut Ui) {
+pub fn connection_ui(ui: &mut Ui) {
     let id = ui.id().with("_source_selector");
     let mut selector = ui.mem().get_temp_or_default(id);
 

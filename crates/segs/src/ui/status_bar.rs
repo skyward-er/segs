@@ -1,4 +1,4 @@
-use egui::{Align, CursorIcon, Frame, Layout, Panel, Ui, Vec2};
+use egui::{Align, CursorIcon, Frame, Id, Layout, Panel, Ui, Vec2};
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton};
@@ -37,11 +37,18 @@ fn show_left_side(_app: &App, ui: &mut egui::Ui) {
     if res.clicked() {
         source_selection = !source_selection;
     }
-    ui.mem().insert_temp(source_id, source_selection);
 
     if source_selection {
-        popups::ConnectionPopup::new(&mut source_selection, res.rect.left_top(), egui::Align2::LEFT_BOTTOM).show(ui);
+        if segs_ui::containers::Modal::new(Id::new("source_modal"), "Source Settings")
+            .show(ui, |ui| {
+                ui.label("Content goes here");
+            })
+            .should_close()
+        {
+            source_selection = false;
+        }
     }
+    ui.mem().insert_temp(source_id, source_selection);
 }
 
 fn show_right_side(_app: &App, ui: &mut egui::Ui) {
