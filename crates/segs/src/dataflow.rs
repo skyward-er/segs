@@ -3,22 +3,39 @@
 pub mod adapter;
 pub mod mapping;
 pub mod mavlink_adapter;
+pub mod protocol;
 pub mod transport;
 
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
-
-use nohash::NoHashHasher;
 
 /// An opaque handler that uniquely represents a data stream.
 /// Adapters are responsible for generating a uniform key space based on the data source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DataKey(u64);
 
+/// An opaque handler that uniquely represents a source of data, such as a specific system or component.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SourceKey(u32);
+
+/// An opaque handler that uniquely represents a data stream coming from a specific source.
+/// This is the key that will be used to store and retrieve data in the central [`DataStore`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StreamKey {
+    source_key: SourceKey,
+    data_key: DataKey,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DataPoint<T> {
     pub timestamp: f64,
     pub value: T,
+}
+
+#[derive(Debug)]
+pub enum DataType {
+    F64,
+    I64,
+    String,
 }
 
 pub enum DataStream {
@@ -38,6 +55,7 @@ pub enum DataValue {
 pub type Command = HashMap<DataKey, DataValue>;
 
 pub struct CommandSequence {
+    source: SourceKey,
     request: Command,
     response: Vec<Command>,
 }
@@ -48,15 +66,12 @@ pub struct CommandSequence {
 /// UI will read from this store to display information to the user.
 #[derive(Default)]
 pub struct DataStore {
-    pub streams: HashMap<DataKey, DataStream, BuildHasherDefault<NoHashHasher<u64>>>,
+    pub streams: HashMap<StreamKey, DataStream>,
     pub commands: Vec<CommandSequence>,
 }
 
 impl DataStore {
     pub fn new() -> Self {
-        Self {
-            streams: HashMap::with_hasher(BuildHasherDefault::default()),
-            ..Default::default()
-        }
+        Default::default()
     }
 }

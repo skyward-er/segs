@@ -3,6 +3,7 @@ use argh::FromArgValue;
 use crate::dataflow::{
     DataStore,
     mapping::{DataMapping, MappingDescriptor},
+    protocol::ProtocolDescriptor,
     transport::DataTransport,
 };
 
@@ -29,6 +30,12 @@ pub trait DataAdapter {
     fn get_mapping_sources() -> Vec<MappingDescriptor>
     where
         Self: Sized;
+
+    /// Describe the data protocol that this adapter implements.
+    /// The returned structure shall reflect the hierarchical organization of the data as defined by the adapter.
+    /// Every leaf node in the structure maps to a data stream via [`DataKey`]. The [`DataKey`] contained in this
+    /// descriptor can be used to subscribe to that stream in the central data store for a specific source.
+    fn describe_protocol(&self) -> ProtocolDescriptor;
 
     /// Prepare the data store with any necessary initial structure or metadata before processing begins.
     fn prepare_data_store(&self, _data_store: &mut DataStore) {

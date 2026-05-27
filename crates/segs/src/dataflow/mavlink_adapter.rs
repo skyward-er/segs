@@ -9,13 +9,20 @@ use std::sync::{mpsc, mpsc::Receiver};
 use std::thread;
 use std::time::Instant;
 
+use segs_mavlink::MavType;
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavProfile, MsgField};
 
+use crate::dataflow::DataKey;
+use crate::dataflow::DataType;
+use crate::dataflow::SourceKey;
 use crate::dataflow::adapter::DataAdapter;
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
+use crate::dataflow::protocol::FieldDescriptor;
+use crate::dataflow::protocol::ProtocolDescriptor;
+use crate::dataflow::protocol::SourceDescriptor;
 use crate::dataflow::transport::DataTransport;
-use crate::dataflow::{DataKey, DataPoint, DataStore, DataStream};
+use crate::dataflow::{DataPoint, DataStore, DataStream, StreamKey};
 
 /// Adapter implementation for MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -81,6 +88,50 @@ impl DataAdapter for MavlinkAdapter {
         })
     }
 
+    fn describe_protocol(&self) -> ProtocolDescriptor {
+        let messages = self
+            .profile
+            .messages
+            .values()
+            .map(|message| {
+                let fields = message
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, field)| FieldDescriptor::Field {
+                        name: field.name.clone(),
+                        data_key: compute_data_key(message.id, i as u32, &field.name),
+                        field_type: mavtype_to_datatype(field.mavtype.clone()),
+                    })
+                    .collect();
+
+                FieldDescriptor::Structure {
+                    name: message.name.clone(),
+                    fields,
+                }
+            })
+            .collect();
+
+        let sources = self
+            .profile
+            .enums
+            .iter()
+            .find(|(name, _)| *name == "Sysids") // Weird capitalization by mavlink parser
+            .map(|(_, mavenum)| {
+                mavenum
+                    .entries
+                    .iter()
+                    .map(|entry| SourceDescriptor {
+                        name: entry.name.clone(),
+                        key: SourceKey(entry.value.expect("Found SysID enum member without explicit value") as u32),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        ProtocolDescriptor { messages, sources }
+    }
+
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool {
         let mut i = 0;
 
@@ -94,7 +145,10 @@ impl DataAdapter for MavlinkAdapter {
             };
 
             for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
-                let stream_key = compute_stream_key(header.system_id, message.id, i as u32, &field_info.name);
+                let stream_key = StreamKey {
+                    source_key: SourceKey(header.system_id as u32),
+                    data_key: compute_data_key(message.id, i as u32, &field_info.name),
+                };
 
                 // TODO: need a way to distinguish between stream and command
                 let stream = match data_store.streams.entry(stream_key) {
@@ -135,12 +189,7 @@ impl DataAdapter for MavlinkAdapter {
             i += 1;
         }
 
-        if i <= 0 {
-            return false;
-        }
-
-        println!("Processed {} messages", i);
-        return true;
+        i > 0
     }
 }
 
@@ -223,9 +272,25 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
     true
 }
 
-fn compute_stream_key(source_id: u8, message_id: u32, field_id: u32, field_name: &str) -> DataKey {
+fn mavtype_to_datatype(mav: MavType) -> DataType {
+    match mav {
+        MavType::Char
+        | MavType::UInt8
+        | MavType::UInt16
+        | MavType::UInt32
+        | MavType::UInt64
+        | MavType::Int8
+        | MavType::Int16
+        | MavType::Int32
+        | MavType::Int64 => DataType::I64,
+        MavType::Float | MavType::Double => DataType::F64,
+        MavType::CharArray(_) => DataType::String,
+        _ => unimplemented!("Non-primitive MavTypes are not supported"),
+    }
+}
+
+fn compute_data_key(message_id: u32, field_id: u32, field_name: &str) -> DataKey {
     let mut hasher = DefaultHasher::new();
-    source_id.hash(&mut hasher);
     message_id.hash(&mut hasher);
     field_id.hash(&mut hasher);
     field_name.hash(&mut hasher);
