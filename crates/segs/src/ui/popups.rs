@@ -1,5 +1,4 @@
-pub mod connection;
-pub use connection::ConnectionPopup;
+#![allow(unused)]
 
 use egui::{Align2, Area, Frame, Id, Pos2, Ui, UiBuilder, Vec2, emath::easing, vec2};
 
