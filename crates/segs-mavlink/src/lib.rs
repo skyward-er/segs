@@ -7,8 +7,8 @@ use std::path::Path;
 
 use bytes::{Buf, BufMut, Bytes};
 pub use mavlink_bindgen::parser::{MavEnum as EnumInfo, MavMessage as MessageInfo, MavProfile as ProfileInfo, MavType};
-pub use mavlink_core::MavlinkVersion;
 use mavlink_core::{MavHeader, error::ParserError, utils::remove_trailing_zeroes};
+pub use mavlink_core::{MavlinkVersion, error::MessageReadError};
 
 use crate::core::MAVLinkMessageRaw;
 use crate::error::ProfileParseError;

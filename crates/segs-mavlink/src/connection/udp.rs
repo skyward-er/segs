@@ -6,6 +6,7 @@ use std::{
     io::{self, Read},
     net::{SocketAddrV4, UdpSocket},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use mavlink_core::{
@@ -61,6 +62,7 @@ impl UdpConnection {
     ) -> io::Result<Self> {
         let socket = UdpSocket::bind(listen_address)?;
         socket.set_broadcast(true)?;
+        socket.set_read_timeout(Some(Duration::from_secs(1)))?;
         Ok(Self {
             reader: Mutex::new(PeekReader::new(UdpRead {
                 socket: socket.try_clone()?,

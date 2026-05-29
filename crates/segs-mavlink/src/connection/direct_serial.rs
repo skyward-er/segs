@@ -4,6 +4,7 @@ use core::ops::DerefMut;
 use std::{
     io::{self, BufReader},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use mavlink_core::{
@@ -35,6 +36,7 @@ impl SerialConnection {
             .parity(Parity::None)
             .stop_bits(StopBits::One)
             .flow_control(FlowControl::None)
+            .timeout(Duration::from_secs(1))
             .open()?;
         let write_port = read_port.try_clone()?;
 

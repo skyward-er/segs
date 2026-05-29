@@ -1,28 +1,21 @@
-use std::collections::hash_map::DefaultHasher;
-use std::collections::hash_map::Entry;
+use std::collections::hash_map::{DefaultHasher, Entry};
 use std::error::Error;
 use std::hash::{Hash, Hasher};
+use std::io::ErrorKind::{Interrupted, TimedOut, WouldBlock};
 use std::iter::zip;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, mpsc::Receiver};
+use std::sync::{Arc, mpsc, mpsc::Receiver};
 use std::thread;
 use std::time::Instant;
 
-use segs_mavlink::MavType;
 use segs_mavlink::connection::{Connection, MavConnection};
-use segs_mavlink::{MavFrame, MavProfile, MsgField};
+use segs_mavlink::{MavFrame, MavProfile, MavType, MessageReadError, MsgField};
 
-use crate::dataflow::DataKey;
-use crate::dataflow::DataType;
-use crate::dataflow::SourceKey;
 use crate::dataflow::adapter::DataAdapter;
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
-use crate::dataflow::protocol::FieldDescriptor;
-use crate::dataflow::protocol::ProtocolDescriptor;
-use crate::dataflow::protocol::SourceDescriptor;
+use crate::dataflow::protocol::{FieldDescriptor, ProtocolDescriptor, SourceDescriptor};
 use crate::dataflow::transport::DataTransport;
-use crate::dataflow::{DataPoint, DataStore, DataStream, StreamKey};
+use crate::dataflow::{DataKey, DataPoint, DataStore, DataStream, DataType, SourceKey, StreamKey};
 
 /// Adapter implementation for MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -73,8 +66,12 @@ impl DataAdapter for MavlinkAdapter {
                             break; // Receiver has been dropped, exit the thread
                         };
                     }
-                    Err(e) => {
-                        eprintln!("Error receiving MAVLink frame: {:?}", e);
+                    Err(MessageReadError::Io(e)) => match e.kind() {
+                        WouldBlock | TimedOut | Interrupted => continue, // retry
+                        _ => eprintln!("Failed to read MAVLink message: {e}"),
+                    },
+                    Err(MessageReadError::Parse(e)) => {
+                        eprintln!("Failed to parse MAVLink message: {e}");
                     }
                 }
             }
