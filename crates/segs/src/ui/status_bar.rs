@@ -1,9 +1,14 @@
+use std::sync::Arc;
+
 use egui::{Align, CursorIcon, Frame, Layout, Panel, Ui, Vec2};
-use segs_assets::icons;
+
+use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
 use segs_ui::widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton};
 
-use crate::{App, ui::modals::SourceModal};
+use crate::App;
+use crate::dataflow::transport::DataTransport::{Ethernet, Serial};
+use crate::ui::modals::SourceModal;
 
 /// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
 /// the current state of the application.
@@ -24,14 +29,26 @@ fn show_left_side(ui: &mut Ui, app: &mut App) {
     let source_id = ui.id().with("status_bar_source");
     let mut source_selection: bool = ui.mem().get_temp_or_default(source_id);
 
-    let icon = if source_selection {
-        icons::Antenna::solid()
+    let adapter_status = app.data_adapter.as_ref().and_then(|a| Some(a.status()));
+
+    let text = if adapter_status.is_some() {
+        "Connected"
     } else {
-        icons::Antenna::outline()
+        "Disconnected"
     };
+
+    let icon: Arc<dyn Icon> = if let Some(s) = adapter_status {
+        match s.transport {
+            Ethernet { .. } => Arc::new(icons::Ethernet::default()),
+            Serial { .. } => Arc::new(icons::Usb::default()),
+        }
+    } else {
+        Arc::new(icons::PlugConnectedX::default())
+    };
+
     let btn = UnpaddedStatusBarButton::default()
-        .add_icon(icon)
-        .add_text("Sources")
+        .add_icon_dyn(icon)
+        .add_text(text)
         .padded();
     let res = ui.add(btn).on_hover_cursor(CursorIcon::PointingHand);
     if res.clicked() {

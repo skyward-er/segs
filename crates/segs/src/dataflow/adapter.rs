@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use argh::FromArgValue;
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +52,34 @@ pub trait DataAdapter {
     ///
     /// Returns true if new data was processed, false otherwise.
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool;
+
+    fn status(&self) -> Status;
+}
+
+pub struct Status {
+    pub transport: DataTransport,
+    pub mapping: DataMapping,
+    pub rx: Stats,
+    pub tx: Stats,
+}
+
+pub struct Stats {
+    pub last_time: Instant,
+    pub rate: f32,
+    pub count: u32,
+    pub errors: u32,
+}
+
+// TODO: stub implementation, remove once properly implemented with real data in mavlink adapter
+impl Default for Stats {
+    fn default() -> Self {
+        Self {
+            last_time: Instant::now(),
+            rate: 0.,
+            count: 0,
+            errors: 0,
+        }
+    }
 }
 
 pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {

@@ -11,7 +11,7 @@ use std::time::Instant;
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavProfile, MavType, MessageReadError, MsgField};
 
-use crate::dataflow::adapter::DataAdapter;
+use crate::dataflow::adapter::{DataAdapter, Status};
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
 use crate::dataflow::protocol::{FieldDescriptor, ProtocolDescriptor, SourceDescriptor};
 use crate::dataflow::transport::DataTransport;
@@ -20,6 +20,8 @@ use crate::dataflow::{DataKey, DataPoint, DataStore, DataStream, DataType, Sourc
 /// Adapter implementation for MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
 pub struct MavlinkAdapter {
+    transport: DataTransport,
+    mapping: DataMapping,
     stop_flag: Arc<AtomicBool>,
     incoming: Receiver<MavFrame>,
     profile: Arc<MavProfile>,
@@ -38,7 +40,7 @@ impl DataAdapter for MavlinkAdapter {
     }
 
     fn new(transport: DataTransport, mapping: DataMapping) -> Result<Self, Box<dyn Error>> {
-        let profile = match mapping {
+        let profile = match &mapping {
             DataMapping::LocalFile(path) => {
                 let mav_profile = segs_mavlink::parse_profile(&path)?;
                 Arc::new(segs_mavlink::MavProfile::from_profile_info(&mav_profile))
@@ -50,12 +52,12 @@ impl DataAdapter for MavlinkAdapter {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let thread_stop_flag = stop_flag.clone();
 
-        let connection = match transport {
+        let connection = match &transport {
             DataTransport::Ethernet {
                 recv_socket,
                 send_socket,
-            } => Connection::udp(recv_socket, send_socket, profile.clone())?,
-            DataTransport::Serial { tty, baud_rate } => Connection::serial(tty, baud_rate, profile.clone())?,
+            } => Connection::udp(recv_socket, send_socket.clone(), profile.clone())?,
+            DataTransport::Serial { tty, baud_rate } => Connection::serial(tty.clone(), *baud_rate, profile.clone())?,
         };
 
         thread::spawn(move || {
@@ -78,6 +80,8 @@ impl DataAdapter for MavlinkAdapter {
         });
 
         Ok(Self {
+            transport,
+            mapping,
             stop_flag,
             incoming: rx,
             profile,
@@ -187,6 +191,15 @@ impl DataAdapter for MavlinkAdapter {
         }
 
         i > 0
+    }
+
+    fn status(&self) -> Status {
+        Status {
+            transport: self.transport.clone(),
+            mapping: self.mapping.clone(),
+            rx: Default::default(),
+            tx: Default::default(),
+        }
     }
 }
 

@@ -56,7 +56,7 @@ pub struct UdpConnection {
 
 impl UdpConnection {
     pub(crate) fn new(
-        listen_address: SocketAddrV4,
+        listen_address: &SocketAddrV4,
         send_address: SocketAddrV4,
         profile: Arc<MavProfile>,
     ) -> io::Result<Self> {

@@ -11,6 +11,14 @@ const DEFAULT_MARGIN: Vec2 = Vec2::new(6., 3.);
 
 #[allow(private_bounds)]
 pub trait StatusBarButton: StatusBarButtonImpl + Sized {
+    fn add_icon_dyn(mut self, icon: Arc<dyn Icon>) -> Self {
+        self.contents().push(ContentAtoms::Image {
+            size: icon.fit_size(Vec2::splat(15.)),
+            image: icon,
+        });
+        self
+    }
+
     fn add_icon(mut self, icon: impl Icon + 'static) -> Self {
         self.contents().push(ContentAtoms::Image {
             size: icon.fit_size(Vec2::splat(15.)),

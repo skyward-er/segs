@@ -43,8 +43,8 @@ enum ConnectionInner {
 }
 
 impl Connection {
-    pub fn udp(
-        listen_addr: impl Into<SocketAddrV4>,
+    pub fn udp<'a>(
+        listen_addr: impl Into<&'a SocketAddrV4>,
         send_addr: impl Into<SocketAddrV4>,
         profile: Arc<MavProfile>,
     ) -> io::Result<Self> {

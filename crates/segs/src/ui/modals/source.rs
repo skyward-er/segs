@@ -113,6 +113,7 @@ impl<'a> SourceModal<'a> {
                                     Ok(adapter) => {
                                         app.data_adapter = Some(Box::new(adapter));
                                         connect_error = false;
+                                        ui.close();
                                     }
                                     Err(e) => {
                                         eprintln!("Connect error: {e}");

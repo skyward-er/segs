@@ -107,6 +107,7 @@ pub mod svgs {
     pub static NETWORK: egui::ImageSource = include_svg!("svgs", "network.svg");
     pub static PALETTE: egui::ImageSource = include_svg!("svgs", "palette.svg");
     pub static PLOTS: egui::ImageSource = include_svg!("svgs", "plots.svg");
+    pub static PLUG_CONNECTED_X: egui::ImageSource = include_svg!("svgs", "plug-connected-x.svg");
     pub static PULSE: egui::ImageSource = include_svg!("svgs", "pulse.svg");
     pub static RECTANGLE_VERTICAL_OUTLINE: egui::ImageSource = include_svg!("svgs", "rectangle_vertical_outline.svg");
     pub static RECTANGLE_VERTICAL_SOLID: egui::ImageSource = include_svg!("svgs", "rectangle_vertical_solid.svg");

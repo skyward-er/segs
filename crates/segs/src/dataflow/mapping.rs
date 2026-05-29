@@ -10,7 +10,7 @@ pub enum MappingType {
 
 /// Enum representing the different types of data mapping sources
 /// that can be used to define how raw data should be interpreted by the data adapter.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DataMapping {
     /// Mapping that is built into the adapter implementation
     BuiltIn(i32), // ID of the built-in mapping
