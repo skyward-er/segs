@@ -23,7 +23,8 @@ enum Variant<'a> {
 impl<'a> IconBtn<'a> {
     pub fn new(icon: impl Icon + 'static) -> Self {
         Self {
-            variant: Variant::Inactive { icon: Box::new(icon) }, size: DEFAULT_ICON_SIZE
+            variant: Variant::Inactive { icon: Box::new(icon) },
+            size: DEFAULT_ICON_SIZE,
         }
     }
 

@@ -126,8 +126,6 @@ impl Modal {
 
             let frame = frame.unwrap_or_else(|| Frame::popup(ui.style()));
 
-            let mut should_close = false;
-
             // We need the extra scope with the sense since frame can't have a sense and since we
             // need to prevent the clicks from passing through to the backdrop.
             let inner = ui
@@ -135,26 +133,20 @@ impl Modal {
                     frame
                         .show(ui, |ui| {
                             let res = show_top_bar(ui, &modal_rect, title);
-                            ctx.memory_mut(|mem| mem.data.insert_temp(modal_rect_id, res.rect));
-
                             ui.add(Separator::default().grow(ui.style().spacing.window_margin.leftf()));
 
                             // Add user content
                             let inner = content(ui);
 
-                            if res.should_close() {
-                                should_close = true;
-                            }
+                            // Store the final rect of the modal
+                            let modal_rect = res.rect.union(ui.min_rect());
+                            ctx.memory_mut(|mem| mem.data.insert_temp(modal_rect_id, modal_rect));
 
                             inner
                         })
                         .inner
                 })
                 .inner;
-
-            if should_close {
-                ui.close();
-            }
 
             (inner, backdrop_response)
         });
@@ -177,7 +169,7 @@ impl Modal {
 fn show_top_bar(ui: &mut Ui, rect: &Rect, title: String) -> Response {
     // Allocate space for the tob bar area
     let size = vec2(rect.width(), TOP_BAR_HEIGHT);
-    let (rect, mut res) = ui.allocate_exact_size(size, Sense::empty());
+    let (rect, res) = ui.allocate_exact_size(size, Sense::empty());
 
     let painter = ui.painter();
     let text_color = ui.visuals().text_color();
@@ -198,7 +190,7 @@ fn show_top_bar(ui: &mut Ui, rect: &Rect, title: String) -> Response {
     let close_res = ui.place(close_rect, close_btn);
     // Handle close icon interactions
     if close_res.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-        res.set_close();
+        ui.close();
     }
 
     let total_width = text_rect.width() + close_rect.width() + 48.;
