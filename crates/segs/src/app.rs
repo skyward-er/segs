@@ -3,7 +3,7 @@ use egui::{Context, Id, Ui};
 use serde::{Deserialize, Serialize};
 
 use segs_assets::{install_fonts, install_icons};
-use segs_memory::{MemoryExt};
+use segs_memory::MemoryExt;
 use segs_ui::style::{AppStyle, setup_style};
 
 use crate::args::AppArgs;
@@ -13,9 +13,9 @@ use crate::ui::status_bar;
 use crate::ui::views;
 
 pub struct App {
-    state: AppState,
-    data_store: DataStore,
-    data_adapter: Option<Box<dyn DataAdapter>>,
+    pub state: AppState,
+    pub data_store: DataStore,
+    pub data_adapter: Option<Box<dyn DataAdapter>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ impl App {
         let mut data_store = DataStore::new();
 
         let data_adapter = match (args.transport, args.adapter, args.mapping) {
-            (Some(transport), Some(AdapterType::Mavlink), Some(mapping)) => {
+            (Some(transport), Some(AdapterType::MAVLink), Some(mapping)) => {
                 println!("Loading MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
                 let adapter = MavlinkAdapter::new(transport, mapping).expect("Failed to create MAVLink adapter");
                 Some(Box::new(adapter) as Box<dyn DataAdapter>)
@@ -68,7 +68,7 @@ impl eframe::App for App {
         let _guard = AppStyle::sync(ui);
 
         // Show the status bar at the bottom
-        status_bar::show_inside(ui, self);
+        status_bar::show(ui, self);
 
         // Show the current view based on state
         self.state.view.show_inside(ui);

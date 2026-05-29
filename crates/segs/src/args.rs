@@ -83,8 +83,8 @@ pub fn parse_args() -> Result<AppArgs, Box<dyn std::error::Error>> {
 
     // Validate adapter arguments
     match cli_args.adapter {
-        Some(AdapterType::Mavlink) => {
-            args.adapter = Some(AdapterType::Mavlink);
+        Some(AdapterType::MAVLink) => {
+            args.adapter = Some(AdapterType::MAVLink);
             // Ensure a mapping file is provided if an adapter was specified
             let Some(mapping_file) = cli_args.mapping_file else {
                 return Err("Error: MAVLink adapter selected but no mapping file provided.".into());

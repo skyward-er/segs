@@ -1,15 +1,19 @@
 use argh::FromArgValue;
+use serde::{Deserialize, Serialize};
 
 use crate::dataflow::{
     DataStore,
     mapping::{DataMapping, MappingDescriptor},
+    mavlink_adapter::MavlinkAdapter,
     protocol::ProtocolDescriptor,
     transport::DataTransport,
 };
 
-#[derive(FromArgValue)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromArgValue)]
 pub enum AdapterType {
-    Mavlink,
+    #[default]
+    #[argh(name = "mavlink")]
+    MAVLink,
     // Future adapter types can be added here
 }
 
@@ -46,4 +50,10 @@ pub trait DataAdapter {
     ///
     /// Returns true if new data was processed, false otherwise.
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool;
+}
+
+pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {
+    match adapter {
+        AdapterType::MAVLink => MavlinkAdapter::get_mapping_sources(),
+    }
 }
