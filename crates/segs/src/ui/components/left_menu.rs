@@ -2,25 +2,25 @@ use egui::{Response, Ui, Widget, vec2};
 use segs_assets::icons::Icon;
 use segs_ui::widgets::buttons::RibbonToggle;
 
-use crate::ui::views::configuration::ConfigurationView;
+use crate::ui::views::configuration::Activity;
 
 pub struct LeftBarMenuButton<'a> {
-    selector: &'a mut Option<ConfigurationView>,
-    selected_variant: ConfigurationView,
+    selected: &'a mut Option<Activity>,
+    activity: Activity,
     inactive_icon: Box<dyn Icon>,
     active_icon: Box<dyn Icon>,
 }
 
 impl<'a> LeftBarMenuButton<'a> {
     pub fn new(
-        selector: &'a mut Option<ConfigurationView>,
-        selected_variant: ConfigurationView,
+        selected: &'a mut Option<Activity>,
+        activity: Activity,
         inactive_icon: impl Icon + 'static,
         active_icon: impl Icon + 'static,
     ) -> Self {
         Self {
-            selector,
-            selected_variant,
+            selected,
+            activity,
             inactive_icon: Box::new(inactive_icon),
             active_icon: Box::new(active_icon),
         }
@@ -30,8 +30,8 @@ impl<'a> LeftBarMenuButton<'a> {
 impl<'a> Widget for LeftBarMenuButton<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         let Self {
-            selector,
-            selected_variant,
+            selected: selector,
+            activity: selected_variant,
             inactive_icon,
             active_icon,
         } = self;

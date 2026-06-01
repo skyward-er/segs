@@ -6,30 +6,30 @@ use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
 use segs_ui::widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton};
 
-use crate::App;
+use crate::app::AppContext;
 use crate::dataflow::transport::DataTransport::{Ethernet, Serial};
 use crate::ui::modals::SourceModal;
 
 /// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
 /// the current state of the application.
-pub fn show(ui: &mut Ui, app: &mut App) {
+pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
     Panel::bottom("status_bar")
         .show_separator_line(false)
         .frame(Frame::new().fill(ui.style().visuals.panel_fill))
         .show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6., 0.);
-                ui.with_layout(Layout::left_to_right(Align::Min), |ui| show_left_side(ui, app));
+                ui.with_layout(Layout::left_to_right(Align::Min), |ui| show_left_side(ui, appctx));
                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| show_right_side(ui));
             });
         });
 }
 
-fn show_left_side(ui: &mut Ui, app: &mut App) {
+fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
     let source_id = ui.id().with("status_bar_source");
     let mut source_selection: bool = ui.mem().get_temp_or_default(source_id);
 
-    let adapter_status = app.data_adapter.as_ref().and_then(|a| Some(a.status()));
+    let adapter_status = appctx.data_adapter.as_ref().and_then(|a| Some(a.status()));
 
     let text = if adapter_status.is_some() {
         "Connected"
@@ -56,7 +56,7 @@ fn show_left_side(ui: &mut Ui, app: &mut App) {
     }
 
     if source_selection {
-        if SourceModal::new(app).show(ui).should_close() {
+        if SourceModal::new(appctx).show(ui).should_close() {
             source_selection = false;
         }
     }

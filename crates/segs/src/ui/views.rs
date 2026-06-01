@@ -1,18 +1,22 @@
 pub mod configuration;
 pub mod operator;
 
-use egui::{Align, Frame, Layout, Margin, Panel, Ui, Vec2};
+use egui::{CentralPanel, CornerRadius, Frame, Id, Panel, Ui, UiBuilder};
 use enum_dispatch::enum_dispatch;
+use segs_memory::MemoryExt;
+use segs_ui::style::CtxStyleExt;
 use serde::{Deserialize, Serialize};
 
-use super::components::buttons;
+use crate::app::AppContext;
+
+const LEFT_PANEL_VISIBLE_ID: &str = "left_panel_visible";
 
 /// View represents what the user is currently looking at, imagine this as the
 /// index of a document, but instead of pages, we index over possible layouts of
 /// the UI. This is useful to keep track of which panels should be visible, and
 /// which should not, as well as to keep track of the state of each view.
 #[enum_dispatch(ViewTrait)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum View {
     Configuration(configuration::ConfigurationView),
     Operator(operator::OperatorView),
@@ -20,69 +24,68 @@ pub enum View {
 
 #[enum_dispatch]
 trait ViewTrait {
-    fn top_bar_left_fn(&mut self, _ui: &mut Ui) {
-        // Default implementation does nothing
-    }
+    fn show_activities(&mut self, ui: &mut Ui, appctx: &mut AppContext);
 
-    fn top_bar_middle_fn(&mut self, _ui: &mut Ui) {
-        // Default implementation does nothing
-    }
+    fn show_left_panel(&mut self, ui: &mut Ui, appctx: &mut AppContext);
 
-    fn top_bar_right_fn(&mut self, _ui: &mut Ui) {
-        // Default implementation does nothing
-    }
-
-    fn main_view_fn(&mut self, _ui: &mut Ui) {
-        // Default implementation does nothing
-    }
+    fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext);
 }
 
 impl View {
-    fn show_top_bar(&mut self, ui: &mut Ui) {
-        Panel::top("top_panel")
+    pub fn show(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
+        let app_style = ui.app_style();
+        let style = ui.style().clone();
+        let visuals = &style.visuals;
+        let spacing = &style.spacing;
+
+        let left_panel_id = Id::new(LEFT_PANEL_VISIBLE_ID);
+
+        Panel::left("activity_panel")
+            .frame(Frame::new().fill(visuals.panel_fill))
+            .resizable(false)
             .show_separator_line(false)
+            .exact_size(34.)
+            .show_inside(ui, |ui| self.show_activities(ui, appctx));
+
+        // Read visibility flag after showing activities, since they might have modified it
+        let left_panel_visible = ui.mem().get_perm_or_default(left_panel_id);
+        Panel::left("left_panel")
             .frame(
                 Frame::new()
-                    .inner_margin(Margin::symmetric(4, 3))
-                    .fill(ui.style().visuals.panel_fill),
+                    .fill(visuals.panel_fill)
+                    .inner_margin(spacing.window_margin),
             )
+            .resizable(false)
+            .exact_size(180.)
+            .show_separator_line(false)
+            .show_animated_inside(ui, left_panel_visible, |ui| self.show_left_panel(ui, appctx));
+
+        CentralPanel::default()
+            .frame(Frame::new().fill(visuals.panel_fill))
             .show_inside(ui, |ui| {
-                ui.spacing_mut().item_spacing = Vec2::ZERO;
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let width = ui.max_rect().width();
-                    let window_controls_width = 75.;
-                    let middle_width = 300.;
-                    let right_side_width = (width - middle_width) / 2.;
-                    let side_width = right_side_width - window_controls_width;
+                let corner_radius = {
+                    let cr = visuals.window_corner_radius;
+                    CornerRadius {
+                        nw: cr.nw,
+                        ne: 0,
+                        sw: cr.sw,
+                        se: 0,
+                    }
+                };
 
-                    ui.add_space(window_controls_width);
-
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.set_min_width(side_width);
-                        self.top_bar_left_fn(ui);
+                Frame::new()
+                    .corner_radius(corner_radius)
+                    .fill(app_style.main_panels_fill)
+                    .stroke(app_style.main_view_stroke)
+                    .show(ui, |ui| {
+                        ui.scope_builder(UiBuilder::new().id_salt("_contents"), |ui| {
+                            ui.expand_to_include_rect(ui.max_rect());
+                            self.show_main_view(ui, appctx)
+                        })
                     });
-
-                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.set_width(middle_width);
-                        self.top_bar_middle_fn(ui);
-                    });
-
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.set_min_width(side_width);
-                        ui.add_space(3.);
-
-                        // Theme toggle button
-                        buttons::theme_toggle(ui);
-
-                        self.top_bar_right_fn(ui);
-                    });
-                });
             });
-    }
 
-    pub fn show_inside(&mut self, ui: &mut Ui) {
-        self.show_top_bar(ui);
-        self.main_view_fn(ui);
+        ui.mem().insert_perm(left_panel_id, left_panel_visible);
     }
 }
 

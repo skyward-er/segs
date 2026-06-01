@@ -13,7 +13,7 @@ use segs_ui::{
 };
 
 use crate::{
-    app::App,
+    app::AppContext,
     dataflow::{
         adapter::{
             AdapterType::{self, MAVLink},
@@ -29,16 +29,16 @@ use crate::{
 const MODAL_ID: &str = "source_modal";
 
 pub struct SourceModal<'a> {
-    app: &'a mut App,
+    appctx: &'a mut AppContext,
 }
 
 impl<'a> SourceModal<'a> {
-    pub fn new(app: &'a mut App) -> Self {
-        Self { app }
+    pub fn new(appctx: &'a mut AppContext) -> Self {
+        Self { appctx }
     }
 
     pub fn show(self, ui: &mut Ui) -> ModalResponse<()> {
-        let SourceModal { app } = self;
+        let SourceModal { appctx } = self;
 
         let adapter_id = ui.id().with("_adapter_index");
         let mapping_id = ui.id().with("_mapping_id");
@@ -100,10 +100,10 @@ impl<'a> SourceModal<'a> {
 
                 ui.add_space(8.);
 
-                let connected = app.data_adapter.is_some();
+                let connected = appctx.data_adapter.is_some();
                 ui.horizontal(|ui| {
                     if ui.add(Button::new("Disconnect").frame(connected)).clicked() && connected {
-                        app.data_adapter = None;
+                        appctx.data_adapter = None;
                     }
 
                     if ui.add(Button::new("Connect").frame(!connected)).clicked() && !connected {
@@ -111,7 +111,7 @@ impl<'a> SourceModal<'a> {
                             MAVLink => match (transport, mapping) {
                                 (Some(transport), Some(mapping)) => match MavlinkAdapter::new(transport, mapping) {
                                     Ok(adapter) => {
-                                        app.data_adapter = Some(Box::new(adapter));
+                                        appctx.data_adapter = Some(Box::new(adapter));
                                         connect_error = false;
                                         ui.close();
                                     }
