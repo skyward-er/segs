@@ -4,3 +4,4 @@ pub mod popups;
 pub mod status_bar;
 pub mod top_bar;
 pub mod views;
+pub mod widgets;

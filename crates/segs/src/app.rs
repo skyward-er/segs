@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use eframe::Frame;
 use egui::{Context, Id, Ui};
 
@@ -9,6 +11,7 @@ use crate::args::AppArgs;
 use crate::dataflow::adapter::AdapterType;
 use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
 use crate::ui::views;
+use crate::ui::widgets::WidgetData;
 use crate::ui::{status_bar, top_bar};
 
 pub struct App {
@@ -19,6 +22,7 @@ pub struct App {
 pub struct AppContext {
     pub data_store: DataStore,
     pub data_adapter: Option<Box<dyn DataAdapter>>,
+    pub layout: Arc<Vec<WidgetData>>,
 }
 
 impl App {
@@ -44,11 +48,40 @@ impl App {
             adapter.prepare_data_store(&mut data_store);
         }
 
+        // Example test layout
+        let layout = Arc::new(vec![
+            WidgetData {
+                id: Id::new("example_widget1"),
+                pos: crate::ui::widgets::wpos2(3., 0.),
+                size: egui::vec2(2., 1.),
+                variant: crate::ui::widgets::WidgetVariant::ValueDisplay(crate::ui::widgets::ValueDisplayWidget {
+                    value: "15.024".to_string(),
+                }),
+            },
+            WidgetData {
+                id: Id::new("example_widget2"),
+                pos: crate::ui::widgets::wpos2(7., 3.),
+                size: egui::vec2(2., 3.),
+                variant: crate::ui::widgets::WidgetVariant::ValueDisplay(crate::ui::widgets::ValueDisplayWidget {
+                    value: "25.024".to_string(),
+                }),
+            },
+            WidgetData {
+                id: Id::new("example_widget3"),
+                pos: crate::ui::widgets::wpos2(2., 5.),
+                size: egui::vec2(2., 2.),
+                variant: crate::ui::widgets::WidgetVariant::ValueDisplay(crate::ui::widgets::ValueDisplayWidget {
+                    value: "189.024".to_string(),
+                }),
+            },
+        ]);
+
         Self {
             view,
             context: AppContext {
                 data_store,
                 data_adapter,
+                layout,
             },
         }
     }

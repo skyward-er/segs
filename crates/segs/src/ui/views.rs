@@ -75,13 +75,16 @@ impl View {
 
                 Frame::new()
                     .corner_radius(corner_radius)
-                    .fill(app_style.main_panels_fill)
+                    .fill(app_style.main_view_fill)
                     .stroke(app_style.main_view_stroke)
                     .show(ui, |ui| {
-                        ui.scope_builder(UiBuilder::new().id_salt("_contents"), |ui| {
-                            ui.expand_to_include_rect(ui.max_rect());
-                            self.show_main_view(ui, appctx)
-                        })
+                        let main_view_rect = ui.available_rect_before_wrap();
+                        ui.allocate_rect(main_view_rect, egui::Sense::empty());
+
+                        ui.scope_builder(
+                            UiBuilder::new().id_salt("main_view_contents").max_rect(main_view_rect),
+                            |ui| self.show_main_view(ui, appctx),
+                        );
                     });
             });
 
