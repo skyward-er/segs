@@ -1,13 +1,13 @@
 use egui::{Frame, Sense, Ui, UiBuilder, pos2, vec2};
 use segs_ui::style::CtxStyleExt;
 
-use crate::{app::AppContext, ui::widgets::WidgetData};
+use crate::{dataflow::DataStore, ui::widgets::WidgetData};
 
 pub const GRID_GRANULARITY: f32 = 50.0;
 
 #[derive(Default)]
 pub struct WidgetGrid<'a> {
-    widgets: Option<&'a [WidgetData]>,
+    widgets: Option<&'a mut [WidgetData]>,
     show_snap_guide: bool,
 }
 
@@ -17,7 +17,7 @@ impl<'a> WidgetGrid<'a> {
     }
 
     /// Draw these widgets
-    pub fn with_widgets(mut self, widgets: &'a [WidgetData]) -> Self {
+    pub fn with_widgets(mut self, widgets: &'a mut [WidgetData]) -> Self {
         self.widgets = Some(widgets);
         self
     }
@@ -28,7 +28,7 @@ impl<'a> WidgetGrid<'a> {
         self
     }
 
-    pub fn show(self, ui: &mut Ui, appctx: &mut AppContext) {
+    pub fn show(self, ui: &mut Ui, data_store: &mut DataStore) {
         let Self {
             show_snap_guide,
             widgets,
@@ -88,7 +88,7 @@ impl<'a> WidgetGrid<'a> {
                             // Hide overflowing content
                             ui.set_clip_rect(widget_rect);
                             // Finally show the widget
-                            widget.show(ui, appctx);
+                            widget.show(ui, data_store);
                         });
                     });
                 },

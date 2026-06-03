@@ -89,11 +89,12 @@ impl ViewTrait for ConfigurationView {
     }
 
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
-        let widgets = &appctx.layout.clone();
+        let widgets = &mut appctx.layout;
+        let data_store = &mut appctx.data_store;
 
         WidgetGrid::new()
             .show_snap_guide(true)
             .with_widgets(widgets)
-            .show(ui, appctx);
+            .show(ui, data_store);
     }
 }

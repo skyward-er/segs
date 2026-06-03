@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use eframe::Frame;
 use egui::{Context, Id, Ui};
 
@@ -22,7 +20,7 @@ pub struct App {
 pub struct AppContext {
     pub data_store: DataStore,
     pub data_adapter: Option<Box<dyn DataAdapter>>,
-    pub layout: Arc<Vec<WidgetData>>,
+    pub layout: Vec<WidgetData>,
 }
 
 impl App {
@@ -49,7 +47,7 @@ impl App {
         }
 
         // Example test layout
-        let layout = Arc::new(vec![
+        let layout = vec![
             WidgetData {
                 id: Id::new("example_widget1"),
                 pos: crate::ui::widgets::wpos2(3., 0.),
@@ -60,7 +58,7 @@ impl App {
             },
             WidgetData {
                 id: Id::new("example_widget2"),
-                pos: crate::ui::widgets::wpos2(7., 3.),
+                pos: crate::ui::widgets::wpos2(14., 3.),
                 size: egui::vec2(2., 3.),
                 variant: crate::ui::widgets::WidgetVariant::ValueDisplay(crate::ui::widgets::ValueDisplayWidget {
                     value: "25.024".to_string(),
@@ -74,7 +72,7 @@ impl App {
                     value: "189.024".to_string(),
                 }),
             },
-        ]);
+        ];
 
         Self {
             view,

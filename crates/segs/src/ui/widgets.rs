@@ -5,7 +5,7 @@ pub use value_display::ValueDisplayWidget;
 
 use egui::{Id, Pos2, Rect, Ui, Vec2};
 
-use crate::app::AppContext;
+use crate::dataflow::DataStore;
 
 /// A widget position in the main view.
 ///
@@ -44,8 +44,8 @@ impl WidgetData {
         Rect::from_min_size(min, size)
     }
 
-    pub fn show(&self, ui: &mut Ui, appctx: &mut AppContext) {
-        self.variant.show(ui, appctx);
+    pub fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
+        self.variant.show(ui, data_store);
     }
 }
 
@@ -57,5 +57,5 @@ pub enum WidgetVariant {
 #[enum_dispatch]
 pub trait WidgetTrait {
     /// Show the content of the widget
-    fn show(&self, ui: &mut Ui, appctx: &mut AppContext);
+    fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
 }
