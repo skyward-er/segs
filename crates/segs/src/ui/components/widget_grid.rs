@@ -1,55 +1,56 @@
-use egui::{Frame, Sense, Ui, UiBuilder, pos2, vec2};
+use egui::{Frame, Response, Sense, Ui, UiBuilder, Vec2, pos2};
 use segs_ui::style::CtxStyleExt;
 
-use crate::{dataflow::DataStore, ui::widgets::WidgetData};
+use crate::{
+    dataflow::DataStore,
+    ui::{grid::Grid, widgets::WidgetData},
+};
 
-pub const GRID_GRANULARITY: f32 = 50.0;
-
-#[derive(Default)]
+/// Draws the widgets on the grid.
+///
+/// When in edit mode, grid indicators are drawn and the widgets are rendered in a disabled style.
 pub struct WidgetGrid<'a> {
-    widgets: Option<&'a mut [WidgetData]>,
-    show_snap_guide: bool,
+    widgets: &'a mut [WidgetData],
+    grid: &'a Grid,
+    edit_mode: bool,
 }
 
 impl<'a> WidgetGrid<'a> {
-    pub fn new() -> Self {
-        Self { ..Default::default() }
-    }
-
-    /// Draw these widgets
-    pub fn with_widgets(mut self, widgets: &'a mut [WidgetData]) -> Self {
-        self.widgets = Some(widgets);
-        self
-    }
-
-    /// Draw a dotted background to help visualize snap zones for widget placement
-    pub fn show_snap_guide(mut self, snap_guide: bool) -> Self {
-        self.show_snap_guide = snap_guide;
-        self
-    }
-
-    pub fn show(self, ui: &mut Ui, data_store: &mut DataStore) {
-        let Self {
-            show_snap_guide,
+    pub fn new(widgets: &'a mut [WidgetData], grid: &'a Grid) -> Self {
+        Self {
             widgets,
+            grid,
+            edit_mode: false,
+        }
+    }
+
+    /// Enable edit mode for the widgets, allowing them to be dragged and resized.
+    pub fn edit_mode(mut self, mode: bool) -> Self {
+        self.edit_mode = mode;
+        self
+    }
+
+    /// Show the widgets in the grid.
+    ///
+    /// Returns the widget currently being hovered/dragged for edit mode interactions, if any.
+    pub fn show(self, ui: &mut Ui, data_store: &mut DataStore) -> Option<(&'a mut WidgetData, Response)> {
+        let Self {
+            widgets,
+            grid,
+            edit_mode,
         } = self;
 
-        let rect = ui.available_rect_before_wrap();
-        let origin = rect.min;
+        let rect = grid.rect;
 
-        // Determine how many slots fit
-        let num_columns = (rect.width() / GRID_GRANULARITY).floor().max(1.);
-        let num_rows = (rect.height() / GRID_GRANULARITY).floor().max(1.);
-
-        // Calculate the spacing so dots stretch to perfectly fill the screen
-        // This is the final span slot size, adjusted to the screen size
-        let spacing_x = rect.width() / num_columns as f32;
-        let spacing_y = rect.height() / num_rows as f32;
-
-        if show_snap_guide {
+        if edit_mode {
             const DOT_RADIUS: f32 = 0.75;
             let painter = ui.painter();
             let color = ui.visuals().weak_text_color().gamma_multiply(0.75);
+
+            let Vec2 {
+                x: spacing_x,
+                y: spacing_y,
+            } = grid.cell_size;
 
             // Compute grid boundaries, adjust with spacing to avoid drawing dots on the very edge of the view
             let start_x = rect.min.x + spacing_x;
@@ -68,12 +69,10 @@ impl<'a> WidgetGrid<'a> {
             }
         }
 
-        let Some(widgets) = widgets else {
-            return;
-        };
+        let mut active_widget = None;
 
         for widget in widgets {
-            let widget_rect = widget.rect(origin, vec2(spacing_x, spacing_y));
+            let widget_rect = grid.to_screen_rect(widget.grect);
 
             // Create a child ui for the widget container
             ui.scope_builder(
@@ -82,17 +81,30 @@ impl<'a> WidgetGrid<'a> {
                     // Show a solid background behind the widget
                     Frame::new().fill(ui.app_style().main_panels_fill).show(ui, |ui| {
                         // Allocate the space for the widget in the grid
-                        ui.allocate_rect(widget_rect, Sense::empty());
+                        let res = ui.allocate_rect(widget_rect, Sense::drag());
+
                         // Create a child ui for the widget content
                         ui.scope_builder(UiBuilder::new().id(widget.id).max_rect(widget_rect), |ui| {
+                            // Disable the child if edit mode is active to prevent interactions
+                            if edit_mode {
+                                ui.disable();
+                            }
+
                             // Hide overflowing content
                             ui.set_clip_rect(widget_rect);
                             // Finally show the widget
                             widget.show(ui, data_store);
                         });
+
+                        // Save the currently active widget for edit mode interactions
+                        if (res.hovered() || res.dragged()) && edit_mode && active_widget.is_none() {
+                            active_widget = Some((widget, res));
+                        }
                     });
                 },
             );
         }
+
+        active_widget
     }
 }

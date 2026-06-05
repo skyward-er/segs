@@ -6,7 +6,9 @@ use segs_memory::MemoryExt;
 
 use self::Activity::{WidgetGallery, WidgetSettings};
 use crate::app::AppContext;
+use crate::ui::components::widget_editor::WidgetEditor;
 use crate::ui::components::widget_grid::WidgetGrid;
+use crate::ui::grid::Grid;
 use crate::ui::views::LEFT_PANEL_VISIBLE_ID;
 use crate::ui::{components::left_menu::LeftBarMenuButton, views::ViewTrait};
 
@@ -89,12 +91,16 @@ impl ViewTrait for ConfigurationView {
     }
 
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
-        let widgets = &mut appctx.layout;
-        let data_store = &mut appctx.data_store;
+        let rect = ui.available_rect_before_wrap();
 
-        WidgetGrid::new()
-            .show_snap_guide(true)
-            .with_widgets(widgets)
-            .show(ui, data_store);
+        let widgets = &mut appctx.layout.widgets;
+        let data_store = &mut appctx.data_store;
+        let grid = Grid::new(rect, appctx.layout.grid_settings);
+
+        let res = WidgetGrid::new(widgets, &grid).edit_mode(true).show(ui, data_store);
+
+        if let Some((widget, response)) = res {
+            WidgetEditor::new(&grid, widget, response).show(ui);
+        }
     }
 }
