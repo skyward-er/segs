@@ -1,4 +1,4 @@
-use egui::{Frame, Response, Sense, Ui, UiBuilder, Vec2, pos2};
+use egui::{CornerRadius, Frame, Response, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2};
 use segs_ui::style::CtxStyleExt;
 
 use crate::{
@@ -40,6 +40,9 @@ impl<'a> WidgetGrid<'a> {
             edit_mode,
         } = self;
 
+        let app_style = ui.app_style();
+        let corner_radius = CornerRadius::same(1);
+
         let rect = grid.rect;
 
         if edit_mode {
@@ -79,28 +82,39 @@ impl<'a> WidgetGrid<'a> {
                 UiBuilder::new().id(widget.id.with("_container")).max_rect(widget_rect),
                 |ui| {
                     // Show a solid background behind the widget
-                    Frame::new().fill(ui.app_style().main_panels_fill).show(ui, |ui| {
-                        // Allocate the space for the widget in the grid
-                        let res = ui.allocate_rect(widget_rect, Sense::drag());
+                    Frame::new()
+                        .corner_radius(corner_radius)
+                        .fill(app_style.main_panels_fill)
+                        .show(ui, |ui| {
+                            // Allocate the space for the widget in the grid
+                            let res = ui.allocate_rect(widget_rect, Sense::drag());
 
-                        // Create a child ui for the widget content
-                        ui.scope_builder(UiBuilder::new().id(widget.id).max_rect(widget_rect), |ui| {
-                            // Disable the child if edit mode is active to prevent interactions
-                            if edit_mode {
-                                ui.disable();
+                            // Create a child ui for the widget content
+                            ui.scope_builder(UiBuilder::new().id(widget.id).max_rect(widget_rect), |ui| {
+                                // Disable the child if edit mode is active to prevent interactions
+                                if edit_mode {
+                                    ui.disable();
+                                }
+
+                                // Manually draw the widget background stroke
+                                ui.painter().rect_stroke(
+                                    res.rect,
+                                    corner_radius,
+                                    app_style.main_view_stroke,
+                                    StrokeKind::Outside,
+                                );
+
+                                // Hide overflowing content
+                                ui.set_clip_rect(widget_rect);
+                                // Finally show the widget
+                                widget.show(ui, data_store);
+                            });
+
+                            // Save the currently active widget for edit mode interactions
+                            if (res.hovered() || res.dragged()) && edit_mode && active_widget.is_none() {
+                                active_widget = Some((widget, res));
                             }
-
-                            // Hide overflowing content
-                            ui.set_clip_rect(widget_rect);
-                            // Finally show the widget
-                            widget.show(ui, data_store);
                         });
-
-                        // Save the currently active widget for edit mode interactions
-                        if (res.hovered() || res.dragged()) && edit_mode && active_widget.is_none() {
-                            active_widget = Some((widget, res));
-                        }
-                    });
                 },
             );
         }
