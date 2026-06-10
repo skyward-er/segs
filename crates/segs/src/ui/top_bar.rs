@@ -1,9 +1,12 @@
 use egui::{Align, Frame, Id, Layout, Margin, Panel, Ui, Vec2};
 use segs_memory::MemoryExt;
 
-use crate::ui::components::{
-    buttons,
-    mode_toggle::{Mode, ModeToggle},
+use crate::ui::{
+    components::{
+        buttons,
+        mode_toggle::{ModeToggle, ViewMode},
+    },
+    views::{LEFT_PANEL_VISIBLE_ID, VIEW_MODE_ID},
 };
 
 pub fn show(ui: &mut Ui) {
@@ -47,7 +50,7 @@ pub fn show(ui: &mut Ui) {
 }
 
 fn top_bar_left_fn(ui: &mut Ui) {
-    let id = Id::new("left_panel_visible");
+    let id = Id::new(LEFT_PANEL_VISIBLE_ID);
     let mut left_panel_visible: bool = ui.mem().get_perm_or_default(id);
 
     buttons::left_panel_toggle(ui, &mut left_panel_visible);
@@ -56,8 +59,8 @@ fn top_bar_left_fn(ui: &mut Ui) {
 }
 
 fn top_bar_middle_fn(ui: &mut Ui) {
-    let id = Id::new("current_mode");
-    let mut mode: Mode = ui.mem().get_temp_or_default(id);
+    let id = Id::new(VIEW_MODE_ID);
+    let mut mode: ViewMode = ui.mem().get_temp_or_default(id);
 
     ModeToggle::new(&mut mode).with_height(22.).with_width(300.).show(ui);
 

@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppContext, ui::views::ViewTrait};
+use crate::{
+    app::AppContext,
+    ui::{components::widget_grid::WidgetGrid, grid::Grid, views::ViewTrait},
+};
 
 /// View subtype representing the different operator views available when the
 /// user is in the Operator mode.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperatorView {
-    selected_layout: String,
+    pub layout: String,
 }
 
 impl ViewTrait for OperatorView {
@@ -14,5 +17,13 @@ impl ViewTrait for OperatorView {
 
     fn show_left_panel(&mut self, _ui: &mut egui::Ui, _appctx: &mut AppContext) {}
 
-    fn show_main_view(&mut self, _ui: &mut egui::Ui, _appctx: &mut AppContext) {}
+    fn show_main_view(&mut self, ui: &mut egui::Ui, appctx: &mut AppContext) {
+        let rect = ui.available_rect_before_wrap();
+
+        let widgets = &mut appctx.layout.widgets;
+        let data_store = &mut appctx.data_store;
+        let grid = Grid::new(rect, appctx.layout.grid_settings);
+
+        WidgetGrid::new(widgets, &grid).edit_mode(false).show(ui, data_store);
+    }
 }

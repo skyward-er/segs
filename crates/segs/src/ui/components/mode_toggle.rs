@@ -19,20 +19,20 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Mode {
+pub enum ViewMode {
     #[default]
     Configuration,
     Operator(String),
 }
 
 pub struct ModeToggle<'a> {
-    mode: &'a mut Mode,
+    mode: &'a mut ViewMode,
     width: f32,
     height: f32,
 }
 
 impl<'a> ModeToggle<'a> {
-    pub fn new(mode: &'a mut Mode) -> Self {
+    pub fn new(mode: &'a mut ViewMode) -> Self {
         Self {
             mode,
             width: 100.,
@@ -59,7 +59,7 @@ impl ModeToggle<'_> {
         id: Id,
         non_hovered: impl FnOnce(&mut Ui, Rect, f32),
         hovered: impl FnOnce(&mut Ui, Rect, f32),
-        clicked: impl FnOnce(&mut Ui, Id, &mut Mode),
+        clicked: impl FnOnce(&mut Ui, Id, &mut ViewMode),
     ) {
         let Self { mode, width, height } = self;
         let hover_t_id = id.with("hover_t");
@@ -175,7 +175,7 @@ impl ModeToggle<'_> {
                             show_operator_mode(ui, layout_name, rect, hover_t);
                         },
                         show_move_to_conf_hint,
-                        |_, _, mode| *mode = Mode::Configuration,
+                        |_, _, mode| *mode = ViewMode::Configuration,
                     )
                 });
             }
@@ -183,7 +183,7 @@ impl ModeToggle<'_> {
     }
 }
 
-fn show_layout_filter(ui: &mut Ui, id: Id, mode: &mut Mode, width: f32) {
+fn show_layout_filter(ui: &mut Ui, id: Id, mode: &mut ViewMode, width: f32) {
     let text_edit_id = id.with("layout_name_text_edit");
 
     // Show a text input to filter layouts by name
@@ -221,7 +221,14 @@ fn show_layout_filter(ui: &mut Ui, id: Id, mode: &mut Mode, width: f32) {
     });
 }
 
-fn show_layout_selection_list(ui: &mut Ui, id: Id, mode: &mut Mode, layouts: &[String], filter: String, width: f32) {
+fn show_layout_selection_list(
+    ui: &mut Ui,
+    id: Id,
+    mode: &mut ViewMode,
+    layouts: &[String],
+    filter: String,
+    width: f32,
+) {
     let finder_id = id.with("text_finder");
     let matches_list_id = id.with("matches_list");
     let finder = ui
@@ -269,7 +276,7 @@ fn show_layout_selection_list(ui: &mut Ui, id: Id, mode: &mut Mode, layouts: &[S
 /// Shows a single entry in the layout choice popup, highlighting the parts of the layout name that match the search query
 fn layout_entry_ui(
     ui: &mut Ui,
-    mode: &mut Mode,
+    mode: &mut ViewMode,
     layout: &str,
     matches: &TextMatch,
     height: f32,
@@ -295,7 +302,7 @@ fn layout_entry_ui(
 
         if response.clicked() {
             // If a layout is clicked, switch to operator mode with the selected layout
-            *mode = Mode::Operator(layout.to_string());
+            *mode = ViewMode::Operator(layout.to_string());
         }
     }
 
@@ -474,10 +481,10 @@ impl ToggleState {
         *self = mode;
     }
 
-    fn sync(&mut self, mode: &Mode, ui: &mut Ui, id: Id) {
+    fn sync(&mut self, mode: &ViewMode, ui: &mut Ui, id: Id) {
         match (&self, mode) {
-            (ToggleState::Configuration | ToggleState::ChooseLayout, Mode::Configuration) => {}
-            (ToggleState::Operator(layout), Mode::Operator(mode_layout)) if layout == mode_layout => {}
+            (ToggleState::Configuration | ToggleState::ChooseLayout, ViewMode::Configuration) => {}
+            (ToggleState::Operator(layout), ViewMode::Operator(mode_layout)) if layout == mode_layout => {}
             _ => {
                 self.force_to(mode.clone().into(), ui, id);
             }
@@ -485,21 +492,21 @@ impl ToggleState {
     }
 }
 
-impl From<Mode> for ToggleState {
-    fn from(value: Mode) -> Self {
+impl From<ViewMode> for ToggleState {
+    fn from(value: ViewMode) -> Self {
         match value {
-            Mode::Configuration => ToggleState::Configuration,
-            Mode::Operator(layout) => ToggleState::Operator(layout),
+            ViewMode::Configuration => ToggleState::Configuration,
+            ViewMode::Operator(layout) => ToggleState::Operator(layout),
         }
     }
 }
 
-impl From<ToggleState> for Mode {
+impl From<ToggleState> for ViewMode {
     fn from(value: ToggleState) -> Self {
         match value {
-            ToggleState::Configuration => Mode::Configuration,
-            ToggleState::ChooseLayout => Mode::Configuration,
-            ToggleState::Operator(layout) => Mode::Operator(layout),
+            ToggleState::Configuration => ViewMode::Configuration,
+            ToggleState::ChooseLayout => ViewMode::Configuration,
+            ToggleState::Operator(layout) => ViewMode::Operator(layout),
         }
     }
 }

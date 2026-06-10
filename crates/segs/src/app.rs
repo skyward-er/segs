@@ -8,8 +8,11 @@ use segs_ui::style::{AppStyle, setup_style};
 use crate::args::AppArgs;
 use crate::dataflow::adapter::AdapterType;
 use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
+use crate::ui::components::mode_toggle::ViewMode;
 use crate::ui::layout::Layout;
-use crate::ui::views;
+use crate::ui::views::configuration::ConfigurationView;
+use crate::ui::views::operator::OperatorView;
+use crate::ui::views::{self, VIEW_MODE_ID, View};
 use crate::ui::{status_bar, top_bar};
 
 pub struct App {
@@ -66,21 +69,27 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) {
-        // Sync the current style based on the theme, and get a guard to keep it alive
-        // for the frame
+        // Sync the current style based on the theme, and get a guard to keep it alive for the frame
         let _guard = AppStyle::sync(ui);
 
         // Show the status bar at the bottom
         status_bar::show(ui, &mut self.context);
-
+        // Show the top bar
         top_bar::show(ui);
+
+        let view_mode: ViewMode = ui.mem().get_temp_or_default(Id::new(VIEW_MODE_ID));
+
+        // TODO: do this properly without recreating every frame
+        self.view = match view_mode {
+            ViewMode::Configuration => View::Configuration(ConfigurationView {}),
+            ViewMode::Operator(layout) => View::Operator(OperatorView { layout }),
+        };
 
         self.view.show(ui, &mut self.context);
 
         // Save the app state to memory at the end of the update loop
         ui.mem().insert_perm(Id::new("app_state"), self.view.clone());
-        // Sync the persistent memory to disk to ensure the state is saved across
-        // sessions
+        // Sync the persistent memory to disk to ensure the state is saved across sessions
         ui.mem().sync_persistence().expect("Failed to sync persistent memory");
     }
 }

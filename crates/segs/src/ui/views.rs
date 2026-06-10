@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::AppContext;
 
-const LEFT_PANEL_VISIBLE_ID: &str = "left_panel_visible";
+pub const LEFT_PANEL_VISIBLE_ID: &str = "left_panel_visible";
+pub const VIEW_MODE_ID: &str = "view_mode";
 
 /// View represents what the user is currently looking at, imagine this as the
 /// index of a document, but instead of pages, we index over possible layouts of
