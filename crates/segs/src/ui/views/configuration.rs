@@ -1,4 +1,4 @@
-use egui::{Id, Ui, Vec2};
+use egui::{Id, Ui, UiBuilder, Vec2};
 use serde::{Deserialize, Serialize};
 
 use segs_assets::icons;
@@ -19,7 +19,7 @@ const LEFT_PANEL_CONFIGURATION_ACTIVITY_ID: &str = "left_panel_configuration_act
 #[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigurationView {}
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Activity {
     #[default]
     WidgetSettings,
@@ -78,16 +78,18 @@ impl ViewTrait for ConfigurationView {
         let selected_id = Id::new(LEFT_PANEL_CONFIGURATION_ACTIVITY_ID);
         let selected = ui.mem().get_perm_or_default(selected_id);
 
-        match selected {
-            WidgetSettings => ui.vertical(|ui| {
-                ui.heading("Widget Settings");
-                ui.label("Settings go here");
-            }),
-            WidgetGallery => ui.vertical(|ui| {
-                ui.heading("Widget Gallery");
-                ui.label("Gallery goes here");
-            }),
-        };
+        ui.scope_builder(UiBuilder::new().id_salt(selected), |ui| {
+            match selected {
+                WidgetSettings => ui.vertical(|ui| {
+                    ui.heading("Widget Settings");
+                    ui.label("Settings go here");
+                }),
+                WidgetGallery => ui.vertical(|ui| {
+                    ui.heading("Widget Gallery");
+                    ui.label("Gallery goes here");
+                }),
+            };
+        });
     }
 
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext) {

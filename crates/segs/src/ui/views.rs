@@ -1,10 +1,10 @@
 pub mod configuration;
 pub mod operator;
 
-use egui::{CentralPanel, CornerRadius, Frame, Id, Panel, Ui, UiBuilder};
+use egui::{Align, CentralPanel, CornerRadius, Frame, Id, Layout, Panel, Ui};
 use enum_dispatch::enum_dispatch;
 use segs_memory::MemoryExt;
-use segs_ui::style::CtxStyleExt;
+use segs_ui::{containers::ResizablePanel, style::CtxStyleExt};
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppContext;
@@ -38,6 +38,16 @@ impl View {
         let visuals = &style.visuals;
         let spacing = &style.spacing;
 
+        let corner_radius = visuals.window_corner_radius;
+        let main_view_corner_radius = {
+            CornerRadius {
+                nw: corner_radius.nw,
+                ne: 0,
+                sw: corner_radius.sw,
+                se: 0,
+            }
+        };
+
         let left_panel_id = Id::new(LEFT_PANEL_VISIBLE_ID);
 
         Panel::left("activity_panel")
@@ -48,44 +58,61 @@ impl View {
             .show_inside(ui, |ui| self.show_activities(ui, appctx));
 
         // Read visibility flag after showing activities, since they might have modified it
-        let left_panel_visible = ui.mem().get_perm_or_default(left_panel_id);
-        Panel::left("left_panel")
-            .frame(
-                Frame::new()
-                    .fill(visuals.panel_fill)
-                    .inner_margin(spacing.window_margin),
-            )
-            .resizable(false)
-            .exact_size(180.)
-            .show_separator_line(false)
-            .show_animated_inside(ui, left_panel_visible, |ui| self.show_left_panel(ui, appctx));
+        let mut left_panel_visible: bool = ui.mem().get_perm_or_default(left_panel_id);
 
         CentralPanel::default()
             .frame(Frame::new().fill(visuals.panel_fill))
             .show_inside(ui, |ui| {
-                let corner_radius = {
-                    let cr = visuals.window_corner_radius;
-                    CornerRadius {
-                        nw: cr.nw,
-                        ne: 0,
-                        sw: cr.sw,
-                        se: 0,
-                    }
-                };
+                // Define collapse state based on visibility
+                let mut collapsed_left = !left_panel_visible;
 
-                Frame::new()
+                let panel_outer_frame = Frame::new()
                     .corner_radius(corner_radius)
-                    .fill(app_style.main_view_fill)
-                    .stroke(app_style.main_view_stroke)
-                    .show(ui, |ui| {
-                        let main_view_rect = ui.available_rect_before_wrap();
-                        ui.allocate_rect(main_view_rect, egui::Sense::empty());
+                    .fill(app_style.main_panels_fill);
+                let panel_inner_frame = Frame::new().inner_margin(spacing.window_margin);
 
-                        ui.scope_builder(
-                            UiBuilder::new().id_salt("main_view_contents").max_rect(main_view_rect),
-                            |ui| self.show_main_view(ui, appctx),
-                        );
-                    });
+                let main_outer_frame = Frame::new()
+                    .corner_radius(main_view_corner_radius)
+                    .fill(app_style.main_panels_fill)
+                    .stroke(app_style.main_view_stroke);
+                let main_inner_frame = Frame::new()
+                    .corner_radius(corner_radius)
+                    .fill(app_style.main_panels_fill);
+
+                let left_resizable_panel = ResizablePanel::horizontal_left()
+                    .set_minimum_size(180.)
+                    .inactive_separator_stroke(app_style.main_view_stroke)
+                    .left_frame(panel_outer_frame)
+                    .collapsed(&mut collapsed_left)
+                    .animate(true);
+
+                let layout = Layout::top_down(Align::Min);
+
+                main_outer_frame.show(ui, |ui| {
+                    left_resizable_panel
+                        .show(ui, |panel| {
+                            panel
+                                .show_left(|ui| {
+                                    // Show left panel content
+                                    panel_inner_frame.show(ui, |ui| {
+                                        ui.set_min_size(ui.available_size());
+                                        ui.set_clip_rect(ui.max_rect());
+                                        ui.with_layout(layout, |ui| self.show_left_panel(ui, appctx));
+                                    });
+                                })
+                                .show_right(|ui| {
+                                    // Show main view content
+                                    main_inner_frame.show(ui, |ui| {
+                                        ui.set_min_size(ui.available_size());
+                                        ui.with_layout(layout, |ui| self.show_main_view(ui, appctx));
+                                    });
+                                });
+                        })
+                        .inner
+                });
+
+                // Update visibility state based on collapses
+                left_panel_visible = !collapsed_left;
             });
 
         ui.mem().insert_perm(left_panel_id, left_panel_visible);
