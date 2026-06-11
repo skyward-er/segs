@@ -23,8 +23,9 @@ impl<'a> WidgetEditor<'a> {
             response: res,
         } = self;
 
+        // Widget rect
         let rect = res.rect;
-        let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) else {
+        let Some(mut pointer_pos) = ui.input(|i| i.pointer.interact_pos()) else {
             return;
         };
 
@@ -76,16 +77,24 @@ impl<'a> WidgetEditor<'a> {
             HitRegion::INSIDE | HitRegion::OUTSIDE => {
                 ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
 
+                // Clamp possible movements to the grid rect
+                let clamp_rect = grid.rect.shrink2(rect.size() * 0.5);
+                pointer_pos = clamp_rect.clamp(pointer_pos);
+
                 // Compute the new position
                 let new_rect = Rect::from_center_size(pointer_pos, rect.size());
                 // Transform and apply the new position
                 widget.grect = grid.to_grid_rect(new_rect);
             }
             _ => {
-                let direction = active_hit_region;
-                let mut widget_rect = rect;
                 // Minimum rect the widget can be resized to, to avoid zero-sized widgets
                 let min_rect = rect.shrink2(grid.cell_size);
+                // Clamp the new size to the grid rect
+                let clamp_rect = grid.rect;
+                pointer_pos = clamp_rect.clamp(pointer_pos);
+
+                let direction = active_hit_region;
+                let mut widget_rect = rect;
 
                 if direction.contains(HitRegion::LEFT) {
                     *widget_rect.left_mut() = pointer_pos.x.min(min_rect.right());
