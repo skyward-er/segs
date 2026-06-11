@@ -73,7 +73,7 @@ impl UdpConnection {
                 dest: send_address,
             }),
             profile,
-            protocol_version: MavlinkVersion::V2,
+            protocol_version: MavlinkVersion::V1,
             recv_any_version: false,
         })
     }

@@ -109,17 +109,19 @@ impl<'a> SourceModal<'a> {
                     if ui.add(Button::new("Connect").frame(!connected)).clicked() && !connected {
                         match adapter_sel {
                             MAVLink => match (transport, mapping) {
-                                (Some(transport), Some(mapping)) => match MavlinkAdapter::new(transport, mapping) {
-                                    Ok(adapter) => {
-                                        appctx.data_adapter = Some(Box::new(adapter));
-                                        connect_error = false;
-                                        ui.close();
+                                (Some(transport), Some(mapping)) => {
+                                    match MavlinkAdapter::new(ui.ctx().clone(), transport, mapping) {
+                                        Ok(adapter) => {
+                                            appctx.data_adapter = Some(Box::new(adapter));
+                                            connect_error = false;
+                                            ui.close();
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Connect error: {e}");
+                                            connect_error = true;
+                                        }
                                     }
-                                    Err(e) => {
-                                        eprintln!("Connect error: {e}");
-                                        connect_error = true;
-                                    }
-                                },
+                                }
                                 _ => {
                                     eprintln!("Connect error: incomplete parameters");
                                     connect_error = true;

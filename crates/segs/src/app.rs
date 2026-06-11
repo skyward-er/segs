@@ -39,7 +39,8 @@ impl App {
         let data_adapter = match (args.transport, args.adapter, args.mapping) {
             (Some(transport), Some(AdapterType::MAVLink), Some(mapping)) => {
                 println!("Loading MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
-                let adapter = MavlinkAdapter::new(transport, mapping).expect("Failed to create MAVLink adapter");
+                let adapter =
+                    MavlinkAdapter::new(ctx.clone(), transport, mapping).expect("Failed to create MAVLink adapter");
                 Some(Box::new(adapter) as Box<dyn DataAdapter>)
             }
             _ => None,

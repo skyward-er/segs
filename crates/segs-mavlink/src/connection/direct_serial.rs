@@ -47,7 +47,7 @@ impl SerialConnection {
             read_port: Mutex::new(PeekReader::new(buf_reader)),
             write_port: Mutex::new(write_port),
             profile,
-            protocol_version: MavlinkVersion::V2,
+            protocol_version: MavlinkVersion::V1,
             recv_any_version: false,
         })
     }

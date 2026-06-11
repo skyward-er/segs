@@ -26,8 +26,13 @@ pub enum AdapterType {
 /// This abstraction allows the core application logic to remain decoupled from specific data formats and sources,
 /// enabling flexibility and extensibility in how data is ingested and processed.
 pub trait DataAdapter {
-    /// Create a new adapter instance with the given transport configuration and mapping source.
-    fn new(transport: DataTransport, mapping: DataMapping) -> Result<Self, Box<dyn std::error::Error>>
+    /// Create a new adapter instance with the given transport configuration and mapping source. 
+    /// The egui context is provided to allow the adapter to request UI updates when new data is received.
+    fn new(
+        ctx: egui::Context,
+        transport: DataTransport,
+        mapping: DataMapping,
+    ) -> Result<Self, Box<dyn std::error::Error>>
     where
         Self: Sized;
 

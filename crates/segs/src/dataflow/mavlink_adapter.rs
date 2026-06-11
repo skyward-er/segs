@@ -39,7 +39,7 @@ impl DataAdapter for MavlinkAdapter {
         }]
     }
 
-    fn new(transport: DataTransport, mapping: DataMapping) -> Result<Self, Box<dyn Error>> {
+    fn new(ctx: egui::Context, transport: DataTransport, mapping: DataMapping) -> Result<Self, Box<dyn Error>> {
         let profile = match &mapping {
             DataMapping::LocalFile(path) => {
                 let mav_profile = segs_mavlink::parse_profile(&path)?;
@@ -67,6 +67,7 @@ impl DataAdapter for MavlinkAdapter {
                         let Ok(_) = tx.send(frame) else {
                             break; // Receiver has been dropped, exit the thread
                         };
+                        ctx.request_repaint_of(egui::ViewportId::ROOT) // Notify the UI to update with new data
                     }
                     Err(MessageReadError::Io(e)) => match e.kind() {
                         WouldBlock | TimedOut | Interrupted => continue, // retry
@@ -138,12 +139,12 @@ impl DataAdapter for MavlinkAdapter {
 
         for MavFrame { header, message, .. } in self.incoming.try_iter() {
             let timestamp = Instant::now().duration_since(self.created_at).as_secs_f64();
-            println!("[{:<10.3}] Received MAVLink message: {:?}", timestamp, message);
 
-            let Some(message_info) = self.profile.messages.get(&message.id) else {
-                eprintln!("Unknown message ID: {}", message.id);
-                continue;
-            };
+            let message_info = self
+                .profile
+                .messages
+                .get(&message.id)
+                .expect("Message with unknown ID wasn't caught by the parser, this should never happen");
 
             for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
                 let stream_key = StreamKey {
