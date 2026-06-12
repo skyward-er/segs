@@ -233,12 +233,24 @@ pub fn encode_command(cmd: &CommandPacket, def: &CommandDef, apid: u16, seq: u16
 
     // User parameters
     for (param_def, &value) in def.params.iter().zip(cmd.param_values.iter()) {
-        match param_def.bit_size {
-            8 => data.push(value as u8),
-            16 => data.extend_from_slice(&(value as u16).to_be_bytes()),
-            32 => data.extend_from_slice(&(value as u32).to_be_bytes()),
-            64 => data.extend_from_slice(&value.to_be_bytes()),
-            _ => data.push(value as u8), // fallback: treat as u8
+        match (&param_def.ty, param_def.bit_size) {
+            (FieldType::Float, 32) => {
+                // param_values stores either IEEE-754 bit patterns (new) or plain integers
+                // (legacy saved layouts). Subnormal bit patterns indicate a legacy integer.
+                let f = f32::from_bits(value as u32);
+                let to_send = if f.is_subnormal() && value != 0 { value as f32 } else { f };
+                data.extend_from_slice(&to_send.to_be_bytes());
+            }
+            (FieldType::Float, 64) => {
+                let f = f64::from_bits(value);
+                let to_send = if f.is_subnormal() && value != 0 { value as f64 } else { f };
+                data.extend_from_slice(&to_send.to_be_bytes());
+            }
+            (_, 8) => data.push(value as u8),
+            (_, 16) => data.extend_from_slice(&(value as u16).to_be_bytes()),
+            (_, 32) => data.extend_from_slice(&(value as u32).to_be_bytes()),
+            (_, 64) => data.extend_from_slice(&value.to_be_bytes()),
+            _ => data.push(value as u8),
         }
     }
 

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
+    cosmos::FieldType,
     mavlink::{CommandPacket, MAVLINK_PROFILE, TimedMessage},
     ui::app::PaneResponse,
 };
@@ -202,8 +203,29 @@ fn command_settings(ui: &mut Ui, pane: &mut CommandPane) {
                                             }
                                         }
                                     });
+                            } else if param.ty == FieldType::Float {
+                                let stored = pane.param_values[i];
+                                let mut v = match param.bit_size {
+                                    32 => {
+                                        let f = f32::from_bits(stored as u32);
+                                        // Legacy saved layouts store plain integers, not bit patterns.
+                                        // Subnormal (with non-zero bits) means it's a legacy integer.
+                                        if f.is_subnormal() && stored != 0 { stored as f64 } else { f as f64 }
+                                    }
+                                    64 => {
+                                        let f = f64::from_bits(stored);
+                                        if f.is_subnormal() && stored != 0 { stored as f64 } else { f }
+                                    }
+                                    _ => stored as f64,
+                                };
+                                ui.add(egui::DragValue::new(&mut v).speed(0.1));
+                                pane.param_values[i] = match param.bit_size {
+                                    32 => f32::to_bits(v as f32) as u64,
+                                    64 => f64::to_bits(v),
+                                    _ => v as u64,
+                                };
                             } else {
-                                // Numeric parameter: drag value
+                                // Integer parameter: drag value
                                 let max_val = match param.bit_size {
                                     8 => u8::MAX as u64,
                                     16 => u16::MAX as u64,
