@@ -17,11 +17,38 @@ use crate::{
     message_broker::{ConnectionConfig, MessageBroker},
 };
 
-#[derive(Default)]
 pub struct ConnectionsWindow {
     pub visible: bool,
     connection_kind: ConnectionKind,
     connection_config: ConnectionSetting,
+}
+
+impl Default for ConnectionsWindow {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            connection_kind: ConnectionKind::Ethernet,
+            connection_config: ConnectionSetting::default(),
+        }
+    }
+}
+
+impl From<ConnectionConfig> for ConnectionsWindow {
+    fn from(config: ConnectionConfig) -> Self {
+        let (connection_kind, connection_config) = match config {
+            ConnectionConfig::Ethernet(eth) => {
+                (ConnectionKind::Ethernet, ConnectionSetting::Ethernet(eth))
+            }
+            ConnectionConfig::Serial(serial) => {
+                (ConnectionKind::Serial, ConnectionSetting::Serial(Some(serial)))
+            }
+        };
+        Self {
+            visible: false,
+            connection_kind,
+            connection_config,
+        }
+    }
 }
 
 impl ConnectionsWindow {

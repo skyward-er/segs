@@ -58,10 +58,10 @@ impl eframe::App for App {
                 .capture_actions("global_shortcut_lease", Box::new(()), |s| {
                     if s.is_composition_mode() {
                         vec![
-                            (Modifiers::ALT, Key::V, PaneAction::SplitV),
-                            (Modifiers::ALT, Key::H, PaneAction::SplitH),
-                            (Modifiers::ALT, Key::C, PaneAction::Close),
-                            (Modifiers::ALT, Key::R, PaneAction::ReplaceThroughGallery),
+                            (Modifiers::CTRL, Key::V, PaneAction::SplitV),
+                            (Modifiers::CTRL, Key::H, PaneAction::SplitH),
+                            (Modifiers::CTRL, Key::C, PaneAction::Close),
+                            (Modifiers::CTRL, Key::R, PaneAction::ReplaceThroughGallery),
                         ]
                     } else {
                         Vec::new()
@@ -341,9 +341,12 @@ impl App {
         }
 
         let mut message_broker = MessageBroker::new(ctx.egui_ctx.clone());
-        if let Some(conf) = config.connection_config {
-            message_broker.open_connection(conf);
-        }
+        let sources_window = if let Some(conf) = config.connection_config {
+            message_broker.open_connection(conf.clone());
+            ConnectionsWindow::from(conf)
+        } else {
+            ConnectionsWindow::default()
+        };
 
         Self {
             state,
@@ -353,7 +356,7 @@ impl App {
             behavior: AppBehavior::new(),
             maximized_pane: None,
             message_bundle: MessageBundle::default(),
-            sources_window: ConnectionsWindow::default(),
+            sources_window,
             layout_manager_window: LayoutManagerWindow::default(),
         }
     }
