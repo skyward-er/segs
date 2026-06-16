@@ -70,7 +70,6 @@ impl View {
                 let panel_outer_frame = Frame::new()
                     .corner_radius(corner_radius)
                     .fill(app_style.main_panels_fill);
-                let panel_inner_frame = Frame::new().inner_margin(spacing.window_margin);
 
                 let main_outer_frame = Frame::new()
                     .corner_radius(main_view_corner_radius)
@@ -95,11 +94,9 @@ impl View {
                             panel
                                 .show_left(|ui| {
                                     // Show left panel content
-                                    panel_inner_frame.show(ui, |ui| {
-                                        ui.set_min_size(ui.available_size());
-                                        ui.set_clip_rect(ui.max_rect());
-                                        ui.with_layout(layout, |ui| self.show_left_panel(ui, appctx));
-                                    });
+                                    ui.set_min_size(ui.available_size());
+                                    ui.set_clip_rect(ui.max_rect());
+                                    ui.with_layout(layout, |ui| self.show_left_panel(ui, appctx));
                                 })
                                 .show_right(|ui| {
                                     // Show main view content

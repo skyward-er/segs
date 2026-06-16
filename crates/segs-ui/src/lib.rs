@@ -3,6 +3,7 @@ pub mod containers;
 pub mod style;
 pub mod utils;
 pub mod widgets;
+pub mod components;
 
 pub use animation::AnimationExt;
 

@@ -3,7 +3,7 @@ mod value_display;
 use enum_dispatch::enum_dispatch;
 pub use value_display::ValueDisplayWidget;
 
-use egui::{Id, Ui};
+use egui::{Id, Ui, Vec2};
 
 use crate::{dataflow::DataStore, ui::grid::GRect};
 
@@ -29,6 +29,16 @@ pub enum WidgetVariant {
 
 #[enum_dispatch]
 pub trait WidgetTrait {
-    /// Show the content of the widget
+    /// Show the content of the widget.
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
+
+    /// Minimum size of the widget in grid space units.
+    fn min_size(&self) -> Vec2 {
+        Vec2::ONE
+    }
+
+    /// Default size of the widget in grid space units. May be more than the minimum size.
+    fn default_size(&self) -> Vec2 {
+        self.min_size()
+    }
 }
