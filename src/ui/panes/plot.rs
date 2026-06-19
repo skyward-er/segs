@@ -157,7 +157,9 @@ impl PaneBehavior for Plot2DPane {
 
         egui::Window::new("Plot Settings")
             .id(ui.auto_id_with("plot_settings"))
-            .auto_sized()
+            .default_size([340.0, 400.0])
+            .min_width(260.0)
+            .resizable(true)
             .collapsible(true)
             .movable(true)
             .open(&mut self.settings_visible)
