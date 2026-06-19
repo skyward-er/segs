@@ -217,7 +217,6 @@ impl ConnectionsWindow {
                                     {
                                         error!("Failed to open connection: {:?}", e); // TODO: handle user erros
                                     }
-                                    *can_be_closed = true;
                                 }
                             },
                         );
