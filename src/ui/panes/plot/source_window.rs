@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::{error::ErrInstrument, mavlink::reflection::plottable_fields};
+use crate::{
+    error::ErrInstrument, mavlink::reflection::plottable_fields, ui::widgets::filtered_select,
+};
 
 use super::{
     LineSettings, PlotSettings,
@@ -48,20 +50,17 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
     };
     plot_settings.x_field = new_x;
 
-    // X axis search + combo box
-    let x_field = &mut plot_settings.x_field;
-    let x_id = ui.auto_id_with("x_search");
-    let mut x_search: String = ui.ctx().memory(|m| m.data.get_temp(x_id).unwrap_or_default());
-    ui.add(egui::TextEdit::singleline(&mut x_search).hint_text("Filter X axis…").desired_width(ui.available_width()));
-    ui.ctx().memory_mut(|m| m.data.insert_temp(x_id, x_search.clone()));
-    let x_lower = x_search.to_lowercase();
-    egui::ComboBox::from_label("X Axis")
-        .selected_text(x_field.name())
-        .show_ui(ui, |ui| {
-            for f in x_fields.iter().filter(|f| f.name().to_lowercase().contains(&x_lower)) {
-                ui.selectable_value(x_field, f.to_owned(), f.name());
-            }
-        });
+    // X axis picker
+    filtered_select(
+        ui,
+        "x_axis",
+        "X axis",
+        &mut plot_settings.x_field,
+        &x_fields,
+        |f| f.name(),
+    );
+
+    ui.add_space(4.0);
 
     // Retain only valid y_fields
     plot_settings
@@ -75,51 +74,44 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
 
     let plot_lines_len = plot_settings.y_fields.len();
     let mut delete_idx: Option<usize> = None;
-    egui::Grid::new(ui.auto_id_with("y_axis"))
-        .num_columns(4)
-        .spacing([10.0, 2.5])
-        .show(ui, |ui| {
-            for (i, (field, line_settings)) in plot_settings.y_fields[..].iter_mut().enumerate() {
-                let LineSettings { width, color } = line_settings;
-                let widget_label = if plot_lines_len > 1 {
-                    format!("Y Axis {}", i + 1)
-                } else {
-                    "Y Axis".to_owned()
-                };
-                let y_id = ui.auto_id_with(format!("y_search_{i}"));
-                let mut y_search: String =
-                    ui.ctx().memory(|m| m.data.get_temp(y_id).unwrap_or_default());
-                ui.add(egui::TextEdit::singleline(&mut y_search).hint_text("Filter Y axis…").desired_width(ui.available_width()));
-                ui.ctx().memory_mut(|m| m.data.insert_temp(y_id, y_search.clone()));
-                let y_lower = y_search.to_lowercase();
-                egui::ComboBox::from_label(widget_label)
-                    .selected_text(field.name())
-                    .show_ui(ui, |ui| {
-                        for f in y_fields.iter().filter(|f| f.name().to_lowercase().contains(&y_lower)) {
-                            ui.selectable_value(field, f.to_owned(), f.name());
-                        }
-                    });
-                ui.color_edit_button_srgba(color);
-                ui.add(
-                    egui::DragValue::new(width)
-                        .range(0.0..=10.0)
-                        .speed(0.02)
-                        .suffix(" pt"),
-                )
-                .on_hover_text("Width of the line in points");
-                if ui.button("✕").clicked() {
-                    delete_idx = Some(i);
-                }
-                ui.end_row();
+    for (i, (field, line_settings)) in plot_settings.y_fields[..].iter_mut().enumerate() {
+        let LineSettings { width, color } = line_settings;
+        let widget_label = if plot_lines_len > 1 {
+            format!("Y axis {}", i + 1)
+        } else {
+            "Y axis".to_owned()
+        };
+
+        ui.horizontal(|ui| {
+            ui.color_edit_button_srgba(color);
+            ui.add(
+                egui::DragValue::new(width)
+                    .range(0.0..=10.0)
+                    .speed(0.02)
+                    .suffix(" pt"),
+            )
+            .on_hover_text("Width of the line in points");
+            if ui.button("🗑").on_hover_text("Remove this Y axis").clicked() {
+                delete_idx = Some(i);
             }
+            filtered_select(
+                ui,
+                ("y_axis", i),
+                &widget_label,
+                field,
+                &y_fields,
+                |f| f.name(),
+            );
         });
+        ui.add_space(2.0);
+    }
     if let Some(i) = delete_idx {
         plot_settings.y_fields.remove(i);
     }
 
     if y_fields.len().saturating_sub(plot_lines_len + 1) > 0
         && ui
-            .button("Add Y Axis")
+            .button("Add Y axis")
             .on_hover_text("Add another Y axis")
             .clicked()
     {

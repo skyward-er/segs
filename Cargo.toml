@@ -11,6 +11,7 @@ description = "Skyward Enhanced Ground Software"
 license = "MIT"
 
 [dependencies]
+aho-corasick = "1.1"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 egui_tiles = "0.12"
@@ -29,6 +30,7 @@ ring-channel = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serialport = "4.9"
+smallvec = "1.13"
 strum = "0.26"
 strum_macros = "0.26"
 thiserror = "2.0"
