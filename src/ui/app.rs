@@ -24,7 +24,7 @@ use super::{
     utils::maximized_pane_ui,
     widget_gallery::WidgetGallery,
     widgets::ReceptionLed,
-    windows::{ConnectionsWindow, LayoutManagerWindow},
+    windows::{ConnectionsWindow, LayoutManagerWindow, ShortcutsWindow},
 };
 
 static LAYOUTS_DIR: &str = "layouts";
@@ -39,6 +39,7 @@ pub struct App {
     widget_gallery: WidgetGallery,
     sources_window: ConnectionsWindow,
     layout_manager_window: LayoutManagerWindow,
+    shortcuts_window: ShortcutsWindow,
 }
 
 impl eframe::App for App {
@@ -59,7 +60,7 @@ impl eframe::App for App {
                     vec![
                         (Modifiers::CTRL, Key::V, PaneAction::SplitV),
                         (Modifiers::CTRL, Key::H, PaneAction::SplitH),
-                        (Modifiers::CTRL, Key::C, PaneAction::Close),
+                        (Modifiers::CTRL, Key::W, PaneAction::Close),
                         (Modifiers::CTRL, Key::R, PaneAction::ReplaceThroughGallery),
                     ]
                 })
@@ -218,6 +219,18 @@ impl eframe::App for App {
                                 .toggle_open_state(&self.layout_manager);
                         }
 
+                        if ui
+                            .add(
+                                Button::new("Shortcuts ⌨")
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(0),
+                            )
+                            .on_hover_text("Show the available keyboard shortcuts")
+                            .clicked()
+                        {
+                            self.shortcuts_window.visible = !self.shortcuts_window.visible;
+                        }
+
                         if self.maximized_pane.is_some() {
                             ui.label("Pane Maximized!");
                         }
@@ -241,6 +254,7 @@ impl eframe::App for App {
 
         self.layout_manager_window
             .show(ctx, &mut self.layout_manager, &mut self.state);
+        self.shortcuts_window.show(ctx);
         if let Some(action) = self.widget_gallery.show(ctx) {
             debug!("Widget gallery returned action {action:?}");
             self.behavior.action = Some(action);
@@ -325,6 +339,7 @@ impl App {
             message_bundle: MessageBundle::default(),
             sources_window,
             layout_manager_window: LayoutManagerWindow::default(),
+            shortcuts_window: ShortcutsWindow::default(),
         }
     }
 
