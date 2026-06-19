@@ -14,23 +14,36 @@ use super::SymbolBehavior;
 
 const FONT_SIZE: f32 = 2.0;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Label {
     text: String,
-    size: Vec2,
 
+    /// Display size in grid units. Recomputed every frame from the rendered
+    /// text rect, so it must not be persisted nor participate in equality.
+    #[serde(skip, default = "default_size")]
+    size: Vec2,
     #[serde(skip)]
     is_window_visible: bool,
+}
+
+impl PartialEq for Label {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
 }
 
 impl Default for Label {
     fn default() -> Self {
         Self {
             text: "Label".to_string(),
-            size: Vec2::new(FONT_SIZE * 0.6 * 4.0, FONT_SIZE),
+            size: default_size(),
             is_window_visible: false,
         }
     }
+}
+
+fn default_size() -> Vec2 {
+    Vec2::new(FONT_SIZE * 0.6 * 4.0, FONT_SIZE)
 }
 
 impl SymbolBehavior for Label {

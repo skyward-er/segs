@@ -82,9 +82,18 @@ impl Default for PidPane {
 
 impl PartialEq for PidPane {
     fn eq(&self, other: &Self) -> bool {
+        // When centering is enabled, `grid.zero_pos` is recomputed every frame
+        // from the current UI rect, so it can't participate in equality —
+        // otherwise loaded layouts would always look "modified". Compare only
+        // the user-controlled grid `size()` in that case.
+        let grids_match = if self.center_content && other.center_content {
+            self.grid.size() == other.grid.size()
+        } else {
+            self.grid == other.grid
+        };
         self.elements == other.elements
             && self.connections == other.connections
-            && self.grid == other.grid
+            && grids_match
             && self.center_content == other.center_content
     }
 }

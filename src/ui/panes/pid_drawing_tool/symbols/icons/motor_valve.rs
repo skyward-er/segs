@@ -41,15 +41,33 @@ impl Default for MotorValveVariant {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct TwoWayInternal {
+    /// Last received state from telemetry. Runtime-only, must not affect
+    /// equality or persistence.
+    #[serde(skip)]
     last_value: Option<TwoWayStates>,
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Default, Debug)]
+impl PartialEq for TwoWayInternal {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct ThreeWayInternal {
+    /// Last received state from telemetry. Runtime-only, must not affect
+    /// equality or persistence.
+    #[serde(skip)]
     last_value: Option<ThreeWayStates>,
     invert: bool,
+}
+
+impl PartialEq for ThreeWayInternal {
+    fn eq(&self, other: &Self) -> bool {
+        self.invert == other.invert
+    }
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
