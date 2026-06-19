@@ -108,6 +108,9 @@ pub enum FieldValue {
     Uint(u64),
     Int(i64),
     Float(f64),
+    /// Raw byte payload for COSMOS STRING/BLOCK fields. UTF-8 decoding and
+    /// null-byte truncation happen at the display layer.
+    String(Vec<u8>),
 }
 
 /// A decoded telemetry packet payload.
@@ -145,8 +148,34 @@ pub fn decode_telemetry(
             });
         }
 
-        let raw_bits = extract_bits(payload, bit_offset, bit_size);
-        let value = interpret_bits(raw_bits, &field_def.ty, bit_size);
+        let value = match field_def.ty {
+            FieldType::String => {
+                // COSMOS STRING/BLOCK fields are byte-aligned in offset and
+                // size. Read the bytes directly instead of going through the
+                // 64-bit extract_bits path.
+                debug_assert_eq!(
+                    bit_offset % 8,
+                    0,
+                    "STRING field {} is not byte-aligned (bit_offset={})",
+                    field_def.name,
+                    bit_offset
+                );
+                debug_assert_eq!(
+                    bit_size % 8,
+                    0,
+                    "STRING field {} has a non-byte-aligned bit size ({})",
+                    field_def.name,
+                    bit_size
+                );
+                let byte_offset = bit_offset / 8;
+                let byte_size = bit_size / 8;
+                FieldValue::String(payload[byte_offset..byte_offset + byte_size].to_vec())
+            }
+            _ => {
+                let raw_bits = extract_bits(payload, bit_offset, bit_size);
+                interpret_bits(raw_bits, &field_def.ty, bit_size)
+            }
+        };
         fields.push(value);
         bit_offset += bit_size;
     }
@@ -193,6 +222,9 @@ fn interpret_bits(raw: u64, ty: &FieldType, bits: usize) -> FieldValue {
             // Non-standard float width — store raw bits as float zero.
             _ => FieldValue::Float(0.0),
         },
+        // STRING fields are handled directly in `decode_telemetry` before
+        // bit extraction, so this branch is unreachable.
+        FieldType::String => unreachable!("STRING fields must be decoded outside interpret_bits"),
     }
 }
 
@@ -233,6 +265,18 @@ pub fn encode_command(cmd: &CommandPacket, def: &CommandDef, apid: u16, seq: u16
 
     // User parameters
     for (param_def, &value) in def.params.iter().zip(cmd.param_values.iter()) {
+        if matches!(param_def.ty, FieldType::String) {
+            // No widget produces STRING command params yet; send zeroed bytes
+            // so following params stay byte-aligned on the wire.
+            let byte_size = param_def.byte_size();
+            data.extend(std::iter::repeat(0u8).take(byte_size));
+            tracing::warn!(
+                "STRING command param '{}' encoded as {} zero bytes (not yet supported)",
+                param_def.name,
+                byte_size
+            );
+            continue;
+        }
         match (&param_def.ty, param_def.bit_size) {
             (FieldType::Float, 32) => {
                 // param_values stores either IEEE-754 bit patterns (new) or plain integers
@@ -385,6 +429,58 @@ mod tests {
         let def = make_tlm_def();
         let result = decode_telemetry(&[0u8; 4], 0, 3, &def); // too short
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn decode_telemetry_with_string_field() {
+        // Layout: u32 counter, 8-byte STRING, u16 trailer — verifies that
+        // STRING bytes are captured verbatim and the trailing field stays
+        // aligned past the blob.
+        let def = TelemetryPacketDef {
+            target: "T".into(),
+            name: "PKT".into(),
+            apid: 3,
+            fields: vec![
+                TlmFieldDef {
+                    name: "counter".into(),
+                    bit_size: 32,
+                    ty: FieldType::Uint,
+                    states: vec![],
+                    units: None,
+                    description: String::new(),
+                },
+                TlmFieldDef {
+                    name: "label".into(),
+                    bit_size: 64,
+                    ty: FieldType::String,
+                    states: vec![],
+                    units: None,
+                    description: String::new(),
+                },
+                TlmFieldDef {
+                    name: "trailer".into(),
+                    bit_size: 16,
+                    ty: FieldType::Uint,
+                    states: vec![],
+                    units: None,
+                    description: String::new(),
+                },
+            ],
+        };
+
+        let counter: u32 = 0xDEADBEEF;
+        let label: [u8; 8] = *b"hi\0world";
+        let trailer: u16 = 0x1234;
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&counter.to_be_bytes());
+        payload.extend_from_slice(&label);
+        payload.extend_from_slice(&trailer.to_be_bytes());
+
+        let pkt = decode_telemetry(&payload, 0, 3, &def).unwrap();
+        assert_eq!(pkt.fields[0], FieldValue::Uint(0xDEADBEEF));
+        assert_eq!(pkt.fields[1], FieldValue::String(label.to_vec()));
+        assert_eq!(pkt.fields[2], FieldValue::Uint(0x1234));
     }
 
     // ── encode_command ───────────────────────────────────────────────

@@ -89,7 +89,7 @@ fn parse_field_type(token: &str, line: usize) -> Result<FieldType, ParseError> {
         "UINT" => Ok(FieldType::Uint),
         "INT" => Ok(FieldType::Int),
         "FLOAT" => Ok(FieldType::Float),
-        // STRING / BLOCK / DERIVED — treat as Uint for now (unlikely in our files)
+        "STRING" => Ok(FieldType::String),
         other => Err(ParseError::InvalidFieldType {
             line,
             token: other.to_string(),
@@ -460,7 +460,7 @@ pub fn parse_commands(input: &str) -> Result<Vec<CommandDef>, ParseError> {
                             .map(|t| parse_default(t, line_no))
                             .transpose()?
                             .unwrap_or(0);
-                        (FieldType::Uint, default)
+                        (FieldType::String, default)
                     }
                     _ => {
                         // Unknown type — treat as Uint
@@ -805,6 +805,26 @@ APPEND_ITEM timestamp 64 INT 'Unix timestamp'
         let def = parse_telemetry(MINIMAL_TLM).unwrap();
         // 4 (float) + 1 (uint8) + 8 (int64) = 13 bytes
         assert_eq!(def.payload_byte_len(), 13);
+    }
+
+    #[test]
+    fn parse_telemetry_string_field() {
+        let src = r#"
+TELEMETRY TARGET PKT BIG_ENDIAN "A packet"
+<%= render "_ccsds_tlm.txt", locals: {apid: 1} %>
+APPEND_ITEM serial 1024 STRING ''
+APPEND_ITEM counter 32 UINT 'Trailing counter'
+"#;
+        let def = parse_telemetry(src).unwrap();
+        assert_eq!(def.fields.len(), 2);
+        let s = &def.fields[0];
+        assert_eq!(s.name, "serial");
+        assert_eq!(s.bit_size, 1024);
+        assert_eq!(s.ty, FieldType::String);
+        assert!(!s.is_plottable());
+        // Trailing field must keep its offset (128-byte STRING + 4-byte uint).
+        assert_eq!(def.fields[1].ty, FieldType::Uint);
+        assert_eq!(def.payload_byte_len(), 128 + 4);
     }
 
     // ── parse_commands ───────────────────────────────────────────────

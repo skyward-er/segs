@@ -41,6 +41,7 @@ impl IndexedField {
             Some(FieldValue::Uint(v)) => Ok(*v as f64),
             Some(FieldValue::Int(v)) => Ok(*v as f64),
             Some(FieldValue::Float(v)) => Ok(*v),
+            Some(FieldValue::String(_)) => Err("string field is not numeric".into()),
             None => Err(format!("field index {} out of range", self.index)),
         }
     }
@@ -53,6 +54,7 @@ impl IndexedField {
             Some(FieldValue::Uint(v)) => Ok(*v),
             Some(FieldValue::Int(v)) => Ok(*v as u64),
             Some(FieldValue::Float(v)) => Ok(*v as u64),
+            Some(FieldValue::String(_)) => Err("string field is not numeric".into()),
             None => Err(format!("field index {} out of range", self.index)),
         }
     }
@@ -73,6 +75,11 @@ impl IndexedField {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| v.to_string()),
             Some(FieldValue::Float(v)) => format!("{v:.5}"),
+            Some(FieldValue::String(bytes)) => {
+                // COSMOS STRING semantics: stop at the first null byte.
+                let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+                String::from_utf8_lossy(&bytes[..end]).into_owned()
+            }
             None => "N/A".to_string(),
         }
     }

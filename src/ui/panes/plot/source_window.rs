@@ -52,7 +52,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
     let x_field = &mut plot_settings.x_field;
     let x_id = ui.auto_id_with("x_search");
     let mut x_search: String = ui.ctx().memory(|m| m.data.get_temp(x_id).unwrap_or_default());
-    ui.add(egui::TextEdit::singleline(&mut x_search).hint_text("Filter X axis…").desired_width(f32::INFINITY));
+    ui.add(egui::TextEdit::singleline(&mut x_search).hint_text("Filter X axis…").desired_width(ui.available_width()));
     ui.ctx().memory_mut(|m| m.data.insert_temp(x_id, x_search.clone()));
     let x_lower = x_search.to_lowercase();
     egui::ComboBox::from_label("X Axis")
@@ -89,7 +89,7 @@ pub fn sources_window(ui: &mut egui::Ui, plot_settings: &mut PlotSettings) {
                 let y_id = ui.auto_id_with(format!("y_search_{i}"));
                 let mut y_search: String =
                     ui.ctx().memory(|m| m.data.get_temp(y_id).unwrap_or_default());
-                ui.add(egui::TextEdit::singleline(&mut y_search).hint_text("Filter Y axis…").desired_width(f32::INFINITY));
+                ui.add(egui::TextEdit::singleline(&mut y_search).hint_text("Filter Y axis…").desired_width(ui.available_width()));
                 ui.ctx().memory_mut(|m| m.data.insert_temp(y_id, y_search.clone()));
                 let y_lower = y_search.to_lowercase();
                 egui::ComboBox::from_label(widget_label)

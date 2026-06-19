@@ -278,19 +278,43 @@ impl App {
 
         // Initialize the packet registry before anything else (needed for
         // deserialization of IndexedField in saved layouts).
-        if let (Some(tlm_path), Some(cmd_path)) = (&config.tlm_def_path, &config.cmd_def_path) {
-            match crate::mavlink::init_packet_registry(tlm_path, cmd_path) {
-                Ok(()) => {
-                    let registry = crate::mavlink::MAVLINK_PROFILE.get().unwrap();
-                    let total_fields: usize = registry.telemetry.iter().map(|p| p.fields.len()).sum();
-                    println!(
-                        "Loaded COSMOS definitions: {} packets, {} telemetry fields, {} commands",
-                        registry.telemetry.len(),
-                        total_fields,
-                        registry.commands.len()
-                    );
+        match (&config.tlm_def_path, &config.cmd_def_path) {
+            (Some(tlm_path), Some(cmd_path)) => {
+                match crate::mavlink::init_packet_registry(tlm_path, cmd_path) {
+                    Ok(()) => {
+                        let registry = crate::mavlink::MAVLINK_PROFILE.get().unwrap();
+                        let total_fields: usize =
+                            registry.telemetry.iter().map(|p| p.fields.len()).sum();
+                        println!(
+                            "Loaded COSMOS definitions: {} packets, {} telemetry fields, {} commands",
+                            registry.telemetry.len(),
+                            total_fields,
+                            registry.commands.len()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Failed to load COSMOS definitions from --tlm-def {:?} / --cmd-def {:?}: {e}",
+                            tlm_path, cmd_path
+                        );
+                        error!("Failed to load COSMOS definitions: {e}");
+                    }
                 }
-                Err(e) => error!("Failed to load COSMOS definitions: {e}"),
+            }
+            (Some(_), None) => {
+                eprintln!(
+                    "--tlm-def provided without --cmd-def: skipping COSMOS definition loading"
+                );
+            }
+            (None, Some(_)) => {
+                eprintln!(
+                    "--cmd-def provided without --tlm-def: skipping COSMOS definition loading"
+                );
+            }
+            (None, None) => {
+                eprintln!(
+                    "No COSMOS definitions provided (--tlm-def and --cmd-def). Telemetry and commands will not be available."
+                );
             }
         }
 

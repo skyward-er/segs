@@ -23,7 +23,6 @@ pub fn all_fields() -> Vec<IndexedField> {
 
 /// Returns only fields that can be plotted (numeric types), across all packets.
 pub fn plottable_fields() -> Vec<IndexedField> {
-    use crate::cosmos::FieldType;
     let Some(registry) = MAVLINK_PROFILE.get() else {
         return Vec::new();
     };
@@ -34,7 +33,7 @@ pub fn plottable_fields() -> Vec<IndexedField> {
             pkt.fields
                 .iter()
                 .enumerate()
-                .filter(|(_, f)| matches!(f.ty, FieldType::Uint | FieldType::Int | FieldType::Float))
+                .filter(|(_, f)| f.is_plottable())
                 .map(|(index, field)| IndexedField::new(pkt.apid, index, field, &pkt.name))
         })
         .collect()

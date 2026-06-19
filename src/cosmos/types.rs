@@ -4,6 +4,7 @@ pub enum FieldType {
     Uint,
     Int,
     Float,
+    String,
 }
 
 /// Value of a STATE entry for a field or parameter.
