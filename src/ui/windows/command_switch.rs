@@ -48,12 +48,8 @@ impl CommandSwitchWindow {
             .ctx()
             .shortcuts()
             .lock()
-            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |s| {
-                if s.is_operation_mode() {
-                    vec![(Modifiers::NONE, Key::Slash, true)]
-                } else {
-                    vec![]
-                }
+            .capture_actions(ui.id().with("command_switch_lease"), Box::new(()), |_| {
+                vec![(Modifiers::NONE, Key::Slash, true)]
             })
             .unwrap_or_default();
         if !self.commands.is_empty() && slash_pressed {
@@ -220,8 +216,8 @@ fn command_btn(ui: &mut Ui, cmd: &Command) -> Response {
         .capture_actions(
             ui.id().with("shortcut_lease"),
             Box::new(CommandSwitchLease),
-            |s| {
-                if s.is_operation_mode() && cmd.base().reply_state.is_enabled() {
+            |_| {
+                if cmd.base().reply_state.is_enabled() {
                     vec![(Modifiers::NONE, key, true)]
                 } else {
                     vec![]

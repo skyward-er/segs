@@ -55,31 +55,23 @@ impl eframe::App for App {
             pane_action = pane_action.or(ctx
                 .shortcuts()
                 .lock()
-                .capture_actions("global_shortcut_lease", Box::new(()), |s| {
-                    if s.is_composition_mode() {
-                        vec![
-                            (Modifiers::CTRL, Key::V, PaneAction::SplitV),
-                            (Modifiers::CTRL, Key::H, PaneAction::SplitH),
-                            (Modifiers::CTRL, Key::C, PaneAction::Close),
-                            (Modifiers::CTRL, Key::R, PaneAction::ReplaceThroughGallery),
-                        ]
-                    } else {
-                        Vec::new()
-                    }
+                .capture_actions("global_shortcut_lease", Box::new(()), |_| {
+                    vec![
+                        (Modifiers::CTRL, Key::V, PaneAction::SplitV),
+                        (Modifiers::CTRL, Key::H, PaneAction::SplitH),
+                        (Modifiers::CTRL, Key::C, PaneAction::Close),
+                        (Modifiers::CTRL, Key::R, PaneAction::ReplaceThroughGallery),
+                    ]
                 })
                 .map(|a| (hovered_tile, a)));
             pane_action = pane_action.or(ctx
                 .shortcuts()
                 .lock()
-                .capture_actions("global_shortcut_lease", Box::new(()), |s| {
-                    if s.is_composition_mode() {
-                        vec![
-                            (Modifiers::SHIFT, Key::Escape, PaneAction::Maximize),
-                            (Modifiers::NONE, Key::Escape, PaneAction::Exit),
-                        ]
-                    } else {
-                        Vec::new()
-                    }
+                .capture_actions("global_shortcut_lease", Box::new(()), |_| {
+                    vec![
+                        (Modifiers::SHIFT, Key::Escape, PaneAction::Maximize),
+                        (Modifiers::NONE, Key::Escape, PaneAction::Exit),
+                    ]
                 })
                 .map(|a| (hovered_tile, a)));
         }
@@ -224,31 +216,6 @@ impl eframe::App for App {
                         {
                             self.layout_manager_window
                                 .toggle_open_state(&self.layout_manager);
-                        }
-
-                        if ui.ctx().shortcuts().lock().is_in_operation_mode()
-                            && ui
-                                .add(
-                                    Button::new("Switch to composition mode")
-                                        .stroke(Stroke::NONE)
-                                        .corner_radius(0),
-                                )
-                                .on_hover_text("Switch to the composition mode")
-                                .clicked()
-                        {
-                            ui.ctx().shortcuts().lock().set_composition_mode();
-                        }
-                        if ui.ctx().shortcuts().lock().is_in_composition_mode()
-                            && ui
-                                .add(
-                                    Button::new("Switch to operation mode")
-                                        .stroke(Stroke::NONE)
-                                        .corner_radius(0),
-                                )
-                                .on_hover_text("Switch to the operation mode")
-                                .clicked()
-                        {
-                            ui.ctx().shortcuts().lock().set_operation_mode();
                         }
 
                         if self.maximized_pane.is_some() {

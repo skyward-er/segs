@@ -4,9 +4,7 @@ use egui::{Context, Id, IdMap, Key, KeyboardShortcut, Modifiers, mutex::Mutex};
 
 /// Contains all keyboard shortcuts added by the UI.
 ///
-/// [`ShortcutHandler`] is used to register shortcuts and consume them, while
-/// keeping tracks of all enabled shortcuts and filter active shortcut based on
-/// UI views and modes (see [`ShortcutModeStack`]).
+/// [`ShortcutHandler`] is used to register shortcuts and consume them.
 pub struct ShortcutHandler {
     /// The egui context. Needed to consume shortcuts.
     ctx: Context,
@@ -14,7 +12,6 @@ pub struct ShortcutHandler {
     current_term: u32,
     active_leases: IdMap<(u32, Box<dyn ShortcutLease>)>,
 
-    /// Stack layers of keyboard shortcuts. Controls which shortcuts are active at any given time.
     shortcut_state: ShortcutAppState,
 }
 
@@ -69,48 +66,11 @@ impl ShortcutHandler {
         captured_action
     }
 
-    pub fn set_operation_mode(&mut self) {
-        self.shortcut_state.ui_mode = UiModes::Operation;
-    }
-
-    pub fn set_composition_mode(&mut self) {
-        self.shortcut_state.ui_mode = UiModes::Composition;
-    }
-
-    pub fn is_in_operation_mode(&self) -> bool {
-        self.shortcut_state.is_operation_mode()
-    }
-
-    pub fn is_in_composition_mode(&self) -> bool {
-        self.shortcut_state.is_composition_mode()
-    }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct ShortcutAppState {
     pub is_command_switch_active: bool,
-    pub ui_mode: UiModes,
-}
-
-impl ShortcutAppState {
-    pub fn is_operation_mode(&self) -> bool {
-        self.ui_mode == UiModes::Operation
-    }
-
-    pub fn is_composition_mode(&self) -> bool {
-        self.ui_mode == UiModes::Composition
-    }
-}
-
-/// First layer of keyboard shortcuts.
-///
-/// Active when the user is on the main view choosing how to customize their layout.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum UiModes {
-    /// Shortcuts that are active when the user is in the main menu.
-    Composition,
-    #[default]
-    Operation,
 }
 
 pub trait ShortcutLease: Send + Sync {
