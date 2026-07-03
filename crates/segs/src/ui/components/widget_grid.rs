@@ -1,4 +1,5 @@
-use egui::{CornerRadius, Frame, Response, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2};
+use egui::{CornerRadius, Frame, Rect, Response, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2};
+use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
 
 use crate::{
@@ -75,7 +76,12 @@ impl<'a> WidgetGrid<'a> {
         let mut active_widget = None;
 
         for widget in widgets {
-            let widget_rect = grid.to_screen_rect(widget.grect);
+            let drag_rect_id = widget.id.with("drag_rect");
+            let floating: Option<Rect> = ui.mem().get_temp(drag_rect_id);
+
+            // While a drag (move or resize) is in progress, render the widget at its floating
+            // (unsnapped) rect
+            let widget_rect = floating.unwrap_or_else(|| grid.to_screen_rect(widget.grect));
 
             // Create a child ui for the widget container
             ui.scope_builder(
@@ -88,6 +94,14 @@ impl<'a> WidgetGrid<'a> {
                         .show(ui, |ui| {
                             // Allocate the space for the widget in the grid
                             let res = ui.allocate_rect(widget_rect, Sense::drag());
+
+                            // Drag ended (or the state was orphaned): snap the floating rect to the grid
+                            if let Some(floating) = floating
+                                && !res.dragged()
+                            {
+                                widget.grect = grid.to_grid_rect(floating);
+                                ui.mem().remove_temp::<Rect>(drag_rect_id);
+                            }
 
                             // Create a child ui for the widget content
                             ui.scope_builder(UiBuilder::new().id(widget.id).max_rect(widget_rect), |ui| {
@@ -110,8 +124,11 @@ impl<'a> WidgetGrid<'a> {
                                 widget.show(ui, data_store);
                             });
 
-                            // Save the currently active widget for edit mode interactions
-                            if (res.hovered() || res.dragged()) && edit_mode && active_widget.is_none() {
+                            // Save the currently active widget for edit mode interactions.
+                            // A dragged/drag-stopped widget takes priority over a merely hovered one.
+                            if edit_mode
+                                && (res.dragged() || res.drag_stopped() || (active_widget.is_none() && res.hovered()))
+                            {
                                 active_widget = Some((widget, res));
                             }
                         });

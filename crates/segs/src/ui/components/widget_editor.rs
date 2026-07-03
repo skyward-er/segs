@@ -1,9 +1,12 @@
 use bitflags::bitflags;
-use egui::{CursorIcon, Pos2, Rect, Response, Stroke, StrokeKind, Ui};
+use egui::{CursorIcon, Id, Pos2, Rect, Response, Stroke, StrokeKind, Ui, pos2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
 
 use crate::ui::{grid::Grid, widgets::WidgetData};
+
+/// How long the snap-preview rect takes to glide to a newly snapped grid cell, in seconds.
+const SNAP_ANIMATION_TIME: f32 = 0.150;
 
 pub struct WidgetEditor<'a> {
     grid: &'a Grid,
@@ -29,14 +32,6 @@ impl<'a> WidgetEditor<'a> {
             return;
         };
 
-        // Draw the indicator stroke
-        let stroke = Stroke {
-            width: 2.,
-            color: ui.app_style().accent_fill,
-        };
-        let painter = ui.painter();
-        painter.rect_stroke(rect, 1., stroke, StrokeKind::Middle);
-
         let hit_region_id = ui.id().with("_edit_hit_region");
         let mut last_hit_region = ui.mem().get_temp_or_insert(hit_region_id, None);
 
@@ -50,6 +45,21 @@ impl<'a> WidgetEditor<'a> {
         ui.mem().insert_temp(hit_region_id, last_hit_region);
 
         let active_hit_region = if let Some(hr) = last_hit_region { hr } else { hit_region };
+
+        let preview_stroke = Stroke {
+            width: 2.,
+            color: ui.app_style().accent_fill.gamma_multiply(0.75),
+        };
+
+        // While the widget is being moved or resized, only the snap-preview stroke is drawn (see
+        // below): the indicator stroke on the widget itself would just duplicate/lag behind it.
+        if !res.dragged() {
+            // Use the widget's committed grid position rather than `rect`: on the frame a move
+            // drag is released, `rect` still reflects the pre-snap floating rect for this frame,
+            // while `widget.grect` has already been snapped by `WidgetGrid`'s commit.
+            let indicator_rect = grid.to_screen_rect(widget.grect);
+            ui.painter().rect_stroke(indicator_rect, 1., preview_stroke, StrokeKind::Middle);
+        }
 
         // Set cursor
         match active_hit_region {
@@ -72,30 +82,23 @@ impl<'a> WidgetEditor<'a> {
             return;
         }
 
-        // Handle drag interaction
-        match active_hit_region {
+        // Update the floating rect according to the drag interaction: translate while moving,
+        // or adjust the relevant edge(s) while resizing. Either way the widget renders live at
+        // this rect (see `WidgetGrid`) and only snaps to the grid once the drag ends.
+        let drag_rect_id = widget.id.with("drag_rect");
+        let floating = ui.mem().get_temp(drag_rect_id).unwrap_or(rect);
+
+        let floating = match active_hit_region {
             HitRegion::INSIDE | HitRegion::OUTSIDE => {
                 ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
-
-                // Clamp possible movements to the grid rect
-                let clamp_rect = grid.rect.shrink2(rect.size() * 0.5);
-                pointer_pos = clamp_rect.clamp(pointer_pos);
-
-                // Compute the new position
-                let new_rect = Rect::from_center_size(pointer_pos, rect.size());
-                // Transform and apply the new position
-                widget.grect = grid.to_grid_rect(new_rect);
+                clamp_rect_to(floating.translate(res.drag_delta()), grid.rect)
             }
-            _ => {
+            direction => {
                 // Minimum rect the widget can be resized to, to avoid zero-sized widgets
-                let min_rect = rect.shrink2(grid.cell_size);
-                // Clamp the new size to the grid rect
-                let clamp_rect = grid.rect;
-                pointer_pos = clamp_rect.clamp(pointer_pos);
+                let min_rect = floating.shrink2(grid.cell_size);
+                pointer_pos = grid.rect.clamp(pointer_pos);
 
-                let direction = active_hit_region;
-                let mut widget_rect = rect;
-
+                let mut widget_rect = floating;
                 if direction.contains(HitRegion::LEFT) {
                     *widget_rect.left_mut() = pointer_pos.x.min(min_rect.right());
                 }
@@ -108,11 +111,19 @@ impl<'a> WidgetEditor<'a> {
                 if direction.contains(HitRegion::BOTTOM) {
                     *widget_rect.bottom_mut() = pointer_pos.y.max(min_rect.top());
                 }
-
-                // Transform and apply the new size
-                widget.grect = grid.to_grid_rect(widget_rect);
+                widget_rect
             }
-        }
+        };
+        ui.mem().insert_temp(drag_rect_id, floating);
+
+        // Preview the grid-snapped target, animating toward it. The widget only actually snaps
+        // there once the drag ends, see `WidgetGrid`.
+        let target = grid.to_screen_rect(grid.to_grid_rect(floating));
+        let anim_id = drag_session_id(ui, widget.id.with("_snap_preview_anim"), res.drag_started());
+        let animated_target = animate_rect(ui.ctx(), anim_id, target, SNAP_ANIMATION_TIME);
+
+        ui.painter()
+            .rect_stroke(animated_target, 1., preview_stroke, StrokeKind::Middle);
     }
 }
 
@@ -134,6 +145,42 @@ bitflags! {
 
         const INSIDE = Self::LEFT.bits() | Self::RIGHT.bits() | Self::TOP.bits() | Self::BOTTOM.bits();
     }
+}
+
+/// Returns an id whose generation bumps every time a new drag starts, so the first
+/// `animate_value_with_time` call of a drag always starts from an un-animated, correct value.
+///
+/// `Context::animate_value_with_time` state is keyed globally and never cleared, so reusing a
+/// fixed id across drag sessions lets a stale target from an unrelated previous drag leak in
+/// e.g. resizing an edge shifts the widget's position without ever touching the *move* preview's
+/// animation state, so the next move would otherwise animate in from that stale, pre-resize spot.
+fn drag_session_id(ui: &Ui, base: Id, drag_started: bool) -> Id {
+    let counter_id = base.with("_session");
+    let mut generation: u64 = ui.mem().get_temp_or_insert(counter_id, 0);
+    if drag_started {
+        generation = generation.wrapping_add(1);
+        ui.mem().insert_temp(counter_id, generation);
+    }
+    base.with(generation)
+}
+
+/// Animates a rect toward `target` by independently interpolating each edge.
+///
+/// egui has no built-in Rect-level animation, only `Context::animate_value_with_time` for a
+/// single `f32`.
+fn animate_rect(ctx: &egui::Context, id: Id, target: Rect, animation_time: f32) -> Rect {
+    let left = ctx.animate_value_with_time(id.with("left"), target.min.x, animation_time);
+    let top = ctx.animate_value_with_time(id.with("top"), target.min.y, animation_time);
+    let right = ctx.animate_value_with_time(id.with("right"), target.max.x, animation_time);
+    let bottom = ctx.animate_value_with_time(id.with("bottom"), target.max.y, animation_time);
+    Rect::from_min_max(pos2(left, top), pos2(right, bottom))
+}
+
+/// Translates `rect` by the minimal amount needed to fit inside `bounds`.
+fn clamp_rect_to(rect: Rect, bounds: Rect) -> Rect {
+    let dx = (bounds.min.x - rect.min.x).max(0.) + (bounds.max.x - rect.max.x).min(0.);
+    let dy = (bounds.min.y - rect.min.y).max(0.) + (bounds.max.y - rect.max.y).min(0.);
+    rect.translate(vec2(dx, dy))
 }
 
 /// Compute which area of the widget the pointer is hovering on.
