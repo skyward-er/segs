@@ -2,10 +2,12 @@ use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
 
 const DEFAULT_ICON_SIZE: Vec2 = vec2(24., 24.);
+const DEFAULT_ICON_PADDING: f32 = 3.;
 
 pub struct IconBtn<'a> {
     variant: Variant<'a>,
     size: Vec2,
+    padding: f32,
 }
 
 enum Variant<'a> {
@@ -25,6 +27,7 @@ impl<'a> IconBtn<'a> {
         Self {
             variant: Variant::Inactive { icon: Box::new(icon) },
             size: DEFAULT_ICON_SIZE,
+            padding: DEFAULT_ICON_PADDING,
         }
     }
 
@@ -36,6 +39,7 @@ impl<'a> IconBtn<'a> {
                 active: flag,
             },
             size: DEFAULT_ICON_SIZE,
+            padding: DEFAULT_ICON_PADDING,
         }
     }
 
@@ -43,19 +47,25 @@ impl<'a> IconBtn<'a> {
         self.size = size;
         self
     }
+
+    /// Overrides the padding between the button's background and the icon glyph.
+    pub fn with_padding(mut self, padding: f32) -> Self {
+        self.padding = padding;
+        self
+    }
 }
 
 impl<'a> Widget for IconBtn<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         match self.variant {
-            Variant::Inactive { icon } => icon_toggle(ui, icon, self.size),
+            Variant::Inactive { icon } => icon_toggle(ui, icon, self.size, self.padding),
             Variant::Active {
                 inactive_icon,
                 active_icon,
                 active,
             } => {
                 let icon = if *active { active_icon } else { inactive_icon };
-                let response = icon_toggle(ui, icon, self.size);
+                let response = icon_toggle(ui, icon, self.size, self.padding);
                 if response.clicked() {
                     *active = !*active;
                 }
@@ -65,7 +75,7 @@ impl<'a> Widget for IconBtn<'a> {
     }
 }
 
-fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, size: Vec2) -> Response {
+fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, size: Vec2, padding: f32) -> Response {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
 
     // Paint the button
@@ -83,7 +93,7 @@ fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, size: Vec2) -> Response {
             painter.rect_filled(rect.shrink(1.), rounded, bg_color);
         }
 
-        let icon_rect = rect.shrink(3.);
+        let icon_rect = rect.shrink(padding);
         let icon_color = ui.visuals().text_color();
         icon.to_image()
             .tint(icon_color)

@@ -128,6 +128,7 @@ pub mod svgs {
     pub static SUN_SOLID: egui::ImageSource = include_svg!("svgs", "sun_solid.svg");
     pub static TAG: egui::ImageSource = include_svg!("svgs", "tag.svg");
     pub static TOOLS: egui::ImageSource = include_svg!("svgs", "tools.svg");
+    pub static TRASH: egui::ImageSource = include_svg!("svgs", "trash.svg");
     pub static USB: egui::ImageSource = include_svg!("svgs", "usb.svg");
     pub static WINDOW_OUTLINE: egui::ImageSource = include_svg!("svgs", "window_outline.svg");
     pub static WINDOW_SOLID: egui::ImageSource = include_svg!("svgs", "window_solid.svg");

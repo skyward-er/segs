@@ -36,4 +36,9 @@ impl Layout {
 
         Self { widgets, grid_settings }
     }
+
+    /// Removes the widget with the given id from the layout, if present.
+    pub fn remove_widget(&mut self, id: egui::Id) {
+        self.widgets.retain(|widget| widget.id != id);
+    }
 }
