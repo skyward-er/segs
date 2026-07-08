@@ -15,54 +15,57 @@
     }:
     let
       overlays = [ (import rust-overlay) ];
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-      	config.allowUnfree = true;
-        inherit system overlays;
-      };
-
-      systems = [ "x86_64-linux" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-darwin"
+      ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
-    with pkgs;
     {
-      devShells = forAllSystems (system: {
-        default = mkShell rec {
-          buildInputs = [
-            # Rust
-            just
-	    cargo
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs {
+            config.allowUnfree = true;
+            inherit system overlays;
+          };
+        in
+        with pkgs;
+        {
+          default = mkShell rec {
+            buildInputs = [
+              # Rust
+              just
+              cargo
 
-            # misc. libraries
-            openssl
-            pkg-config
-	    udev
+              # # misc. libraries
+              # openssl
+              # pkg-config
+              # udev
 
-            # GUI libs
-            libxkbcommon
-	    libxcb
-            libGL
-            fontconfig
+              # # GUI libs
+              # libxkbcommon
+              # libxcb
+              # libGL
+              # fontconfig
 
-            # wayland libraries
-            wayland
+              # # wayland libraries
+              # wayland
 
-            # x11 libraries
-            libxcursor
-            libxrandr
-            libxi
-            libx11
+              # # x11 libraries
+              # libxcursor
+              # libxrandr
+              # libxi
+              # libx11
 
-            # Nix
-            nil # LSP
-            alejandra # Formatter
-	    
-	    claude-code
-          ];
+              # Nix
+              nil # LSP
+              alejandra # Formatter
+            ];
 
-          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
-        };
-      });
+            LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          };
+        }
+      );
     };
 }
-
