@@ -3396,6 +3396,7 @@ dependencies = [
  "egui",
  "segs-assets",
  "segs-memory",
+ "segs-plot",
  "serde",
  "smallvec",
 ]

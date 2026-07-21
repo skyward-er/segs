@@ -12,5 +12,6 @@ eframe.workspace = true
 egui.workspace = true
 segs-assets.path = "../segs-assets"
 segs-memory = { version = "0.1.0", path = "../segs-memory" }
+segs-plot.path = "../segs-plot"
 serde = { workspace = true, features = ["derive"] }
 smallvec = { version = "1.15.1", features = ["serde"] }

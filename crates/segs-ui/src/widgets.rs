@@ -1,6 +1,8 @@
 pub mod atoms;
 pub mod buttons;
 pub mod labels;
+pub mod message_view;
+pub mod plot;
 mod separator;
 pub mod text;
 
