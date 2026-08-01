@@ -132,11 +132,21 @@ impl<'a> WidgetGrid<'a> {
                         .corner_radius(corner_radius)
                         .fill(app_style.main_panels_fill)
                         .show(ui, |ui| {
-                            // Plain `Sense::drag()`: with `click_and_drag` egui delays `dragged()`
-                            // until it's sure this isn't a click, which lets the pointer drift off
-                            // an edge before resize locks in. Selection uses a separate click-only
-                            // interaction below instead.
-                            let res = ui.allocate_rect(widget_rect, Sense::drag());
+                            let remove_button_rect = Rect::from_center_size(widget_rect.center(), REMOVE_BUTTON_SIZE);
+                            // A pure drag interaction becomes active as soon as the pointer is
+                            // pressed. Do not register it beneath the remove button: otherwise it
+                            // would make `res.dragged()` true, hide the button, and prevent egui
+                            // from completing the button click on release.
+                            let pointer_over_remove_button = edit_mode && ui.rect_contains_pointer(remove_button_rect);
+                            let widget_sense = if pointer_over_remove_button {
+                                Sense::hover()
+                            } else {
+                                // `Sense::drag()` locks resize edges in immediately, unlike
+                                // `click_and_drag`, which delays `dragged()` until it is sure the
+                                // pointer is not clicking.
+                                Sense::drag()
+                            };
+                            let res = ui.allocate_rect(widget_rect, widget_sense);
 
                             // Drag ended (or the state was orphaned): snap the floating rect to the grid
                             if let Some(floating) = floating
@@ -147,9 +157,13 @@ impl<'a> WidgetGrid<'a> {
                             }
 
                             // Must be registered after `res` so it wins hit-test priority for clicks.
-                            let click_res = ui.interact(widget_rect, widget.id.with("select_click"), Sense::click());
-                            if edit_mode && click_res.clicked() {
-                                set_selected_widget(ui, Some(widget.id));
+                            // Skip it over the remove button so it cannot claim that click either.
+                            if !pointer_over_remove_button {
+                                let click_res =
+                                    ui.interact(widget_rect, widget.id.with("select_click"), Sense::click());
+                                if edit_mode && click_res.clicked() {
+                                    set_selected_widget(ui, Some(widget.id));
+                                }
                             }
 
                             // Create a child ui for the widget content
@@ -195,9 +209,8 @@ impl<'a> WidgetGrid<'a> {
 
                                 // Hidden while dragging so it doesn't compete for clicks.
                                 if is_hovered && !res.dragged() {
-                                    let button_rect = Rect::from_center_size(res.rect.center(), REMOVE_BUTTON_SIZE);
                                     let button = IconBtn::new(icons::Trash).with_padding(REMOVE_BUTTON_PADDING);
-                                    if ui.place(button_rect, button).clicked() {
+                                    if ui.place(remove_button_rect, button).clicked() {
                                         remove_requested = Some(widget.id);
                                     }
                                 }
