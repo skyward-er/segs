@@ -4,7 +4,10 @@ use egui::{Align, CursorIcon, Frame, Layout, Panel, Ui, Vec2};
 
 use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
-use segs_ui::widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton};
+use segs_ui::{
+    style::CtxStyleExt,
+    widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton},
+};
 
 use crate::app::AppContext;
 use crate::dataflow::transport::DataTransport::{Ethernet, Serial};
@@ -13,7 +16,8 @@ use crate::ui::modals::SourceModal;
 /// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
 /// the current state of the application.
 pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
-    Panel::bottom("status_bar")
+    let stroke = ui.app_style().main_view_stroke;
+    let response = Panel::bottom("status_bar")
         .show_separator_line(false)
         .frame(Frame::new().fill(ui.style().visuals.panel_fill))
         .show_inside(ui, |ui| {
@@ -23,6 +27,10 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| show_right_side(ui));
             });
         });
+
+    let rect = response.response.rect;
+    let y = rect.top() + stroke.width * 0.5;
+    ui.painter().hline(rect.x_range(), y, stroke);
 }
 
 fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {

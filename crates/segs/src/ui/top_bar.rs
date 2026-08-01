@@ -1,16 +1,18 @@
 use egui::{Align, Frame, Id, Layout, Margin, Panel, Ui, Vec2};
 use segs_memory::MemoryExt;
+use segs_ui::style::CtxStyleExt;
 
 use crate::ui::{
     components::{
         buttons,
         mode_toggle::{ModeToggle, ViewMode},
     },
-    views::{LEFT_PANEL_VISIBLE_ID, VIEW_MODE_ID},
+    views::VIEW_MODE_ID,
 };
 
 pub fn show(ui: &mut Ui) {
-    Panel::top("top_panel")
+    let stroke = ui.app_style().main_view_stroke;
+    let response = Panel::top("top_panel")
         .show_separator_line(false)
         .frame(
             Frame::new()
@@ -30,7 +32,6 @@ pub fn show(ui: &mut Ui) {
 
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.set_min_width(side_width);
-                    top_bar_left_fn(ui);
                 });
 
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
@@ -47,15 +48,10 @@ pub fn show(ui: &mut Ui) {
                 });
             });
         });
-}
 
-fn top_bar_left_fn(ui: &mut Ui) {
-    let id = Id::new(LEFT_PANEL_VISIBLE_ID);
-    let mut left_panel_visible: bool = ui.mem().get_perm_or_default(id);
-
-    buttons::left_panel_toggle(ui, &mut left_panel_visible);
-
-    ui.mem().insert_perm(id, left_panel_visible);
+    let rect = response.response.rect;
+    let y = rect.bottom() - stroke.width * 0.5;
+    ui.painter().hline(rect.x_range(), y, stroke);
 }
 
 fn top_bar_middle_fn(ui: &mut Ui) {
