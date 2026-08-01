@@ -1,7 +1,6 @@
-use egui::{Color32, CornerRadius, Frame, Id, Rect, Response, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2, vec2};
-use segs_assets::icons;
+use egui::{CornerRadius, Frame, Id, Rect, Response, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2};
 use segs_memory::MemoryExt;
-use segs_ui::{style::CtxStyleExt, widgets::buttons::IconBtn};
+use segs_ui::style::CtxStyleExt;
 
 use crate::{
     dataflow::DataStore,
@@ -10,12 +9,6 @@ use crate::{
 
 /// Memory key for the id of the currently selected widget, if any.
 const SELECTED_WIDGET_ID: &str = "selected_widget";
-
-const SELECTION_TINT_ALPHA: u8 = 40;
-const HOVER_DARKEN_ALPHA: u8 = 40;
-const REMOVE_BUTTON_SIZE: Vec2 = vec2(28., 28.);
-/// `IconBtn`'s default padding, plus 1 point.
-const REMOVE_BUTTON_PADDING: f32 = 4.;
 
 /// Id of the currently selected widget, if any. Lives in temp memory, not on [`WidgetData`].
 pub fn selected_widget(ui: &Ui) -> Option<Id> {
@@ -27,17 +20,12 @@ pub fn set_selected_widget(ui: &Ui, id: Option<Id>) {
     ui.mem().insert_temp(Id::new(SELECTED_WIDGET_ID), id);
 }
 
-/// `color` with its alpha channel replaced, for translucent tints/overlays.
-fn with_alpha(color: Color32, alpha: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
-}
-
 /// Result of showing the widget grid for one frame.
 pub struct WidgetGridResponse<'a> {
-    /// The widget currently being hovered/dragged, for edit mode drag/resize interactions.
+    /// The widget currently being hovered/dragged, for edit mode interactions.
     pub active: Option<(&'a mut WidgetData, Response)>,
-    /// The id of a widget whose remove button was clicked this frame, if any.
-    pub remove_requested: Option<Id>,
+    /// The rendered rect of the selected widget, if any.
+    pub selected_rect: Option<Rect>,
 }
 
 /// Draws the widgets on the grid.
@@ -111,9 +99,8 @@ impl<'a> WidgetGrid<'a> {
         }
 
         let selected = edit_mode.then(|| selected_widget(ui)).flatten();
-
         let mut active_widget = None;
-        let mut remove_requested = None;
+        let mut selected_rect = None;
 
         for widget in widgets {
             let drag_rect_id = widget.id.with("drag_rect");
@@ -122,6 +109,9 @@ impl<'a> WidgetGrid<'a> {
             // While a drag (move or resize) is in progress, render the widget at its floating
             // (unsnapped) rect
             let widget_rect = floating.unwrap_or_else(|| grid.to_screen_rect(widget.grect));
+            if selected == Some(widget.id) {
+                selected_rect = Some(widget_rect);
+            }
 
             // Create a child ui for the widget container
             ui.scope_builder(
@@ -132,21 +122,7 @@ impl<'a> WidgetGrid<'a> {
                         .corner_radius(corner_radius)
                         .fill(app_style.main_panels_fill)
                         .show(ui, |ui| {
-                            let remove_button_rect = Rect::from_center_size(widget_rect.center(), REMOVE_BUTTON_SIZE);
-                            // A pure drag interaction becomes active as soon as the pointer is
-                            // pressed. Do not register it beneath the remove button: otherwise it
-                            // would make `res.dragged()` true, hide the button, and prevent egui
-                            // from completing the button click on release.
-                            let pointer_over_remove_button = edit_mode && ui.rect_contains_pointer(remove_button_rect);
-                            let widget_sense = if pointer_over_remove_button {
-                                Sense::hover()
-                            } else {
-                                // `Sense::drag()` locks resize edges in immediately, unlike
-                                // `click_and_drag`, which delays `dragged()` until it is sure the
-                                // pointer is not clicking.
-                                Sense::drag()
-                            };
-                            let res = ui.allocate_rect(widget_rect, widget_sense);
+                            let res = ui.allocate_rect(widget_rect, Sense::drag());
 
                             // Drag ended (or the state was orphaned): snap the floating rect to the grid
                             if let Some(floating) = floating
@@ -157,13 +133,9 @@ impl<'a> WidgetGrid<'a> {
                             }
 
                             // Must be registered after `res` so it wins hit-test priority for clicks.
-                            // Skip it over the remove button so it cannot claim that click either.
-                            if !pointer_over_remove_button {
-                                let click_res =
-                                    ui.interact(widget_rect, widget.id.with("select_click"), Sense::click());
-                                if edit_mode && click_res.clicked() {
-                                    set_selected_widget(ui, Some(widget.id));
-                                }
+                            let click_res = ui.interact(widget_rect, widget.id.with("select_click"), Sense::click());
+                            if edit_mode && click_res.clicked() {
+                                set_selected_widget(ui, Some(widget.id));
                             }
 
                             // Create a child ui for the widget content
@@ -187,35 +159,6 @@ impl<'a> WidgetGrid<'a> {
                                 widget.show(ui, data_store);
                             });
 
-                            if edit_mode {
-                                let is_selected = selected == Some(widget.id);
-                                let is_hovered = res.dragged() || ui.rect_contains_pointer(widget_rect);
-
-                                if is_selected {
-                                    ui.painter().rect_filled(
-                                        res.rect,
-                                        corner_radius,
-                                        with_alpha(app_style.accent_fill, SELECTION_TINT_ALPHA),
-                                    );
-                                }
-
-                                if is_hovered {
-                                    ui.painter().rect_filled(
-                                        res.rect,
-                                        corner_radius,
-                                        with_alpha(Color32::BLACK, HOVER_DARKEN_ALPHA),
-                                    );
-                                }
-
-                                // Hidden while dragging so it doesn't compete for clicks.
-                                if is_hovered && !res.dragged() {
-                                    let button = IconBtn::new(icons::Trash).with_padding(REMOVE_BUTTON_PADDING);
-                                    if ui.place(remove_button_rect, button).clicked() {
-                                        remove_requested = Some(widget.id);
-                                    }
-                                }
-                            }
-
                             // Save the currently active widget for edit mode interactions.
                             // A dragged/drag-stopped widget takes priority over a merely hovered one.
                             if edit_mode
@@ -230,7 +173,7 @@ impl<'a> WidgetGrid<'a> {
 
         WidgetGridResponse {
             active: active_widget,
-            remove_requested,
+            selected_rect,
         }
     }
 }

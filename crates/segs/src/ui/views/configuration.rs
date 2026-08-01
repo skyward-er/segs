@@ -10,7 +10,7 @@ use segs_memory::MemoryExt;
 
 use self::Activity::{WidgetGallery, WidgetSettings};
 use crate::app::AppContext;
-use crate::ui::components::widget_editor::WidgetEditor;
+use crate::ui::components::widget_editor::{WidgetEditor, WidgetEditorResponse};
 use crate::ui::components::widget_grid::{WidgetGrid, WidgetGridResponse, set_selected_widget};
 use crate::ui::grid::Grid;
 use crate::ui::views::LEFT_PANEL_VISIBLE_ID;
@@ -120,12 +120,16 @@ impl ViewTrait for ConfigurationView {
         let data_store = &mut appctx.data_store;
         let grid = Grid::new(rect, appctx.layout.grid_settings);
 
-        let WidgetGridResponse { active, remove_requested } =
+        let WidgetGridResponse { active, selected_rect } =
             WidgetGrid::new(widgets, &grid).edit_mode(true).show(ui, data_store);
 
-        if let Some((widget, response)) = active {
-            WidgetEditor::new(&grid, widget, response).show(ui);
-        }
+        WidgetEditor::show_selection(ui, selected_rect);
+
+        let WidgetEditorResponse { remove_requested } = if let Some((widget, response)) = active {
+            WidgetEditor::new(&grid, widget, response).show(ui)
+        } else {
+            WidgetEditorResponse { remove_requested: None }
+        };
 
         // Applied after `active`'s borrow of `appctx.layout.widgets` ends.
         if let Some(id) = remove_requested {

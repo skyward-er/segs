@@ -1,12 +1,29 @@
 use bitflags::bitflags;
-use egui::{CursorIcon, Id, Pos2, Rect, Response, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, CornerRadius, CursorIcon, Id, Pos2, Rect, Response, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
+use segs_assets::icons;
 use segs_memory::MemoryExt;
-use segs_ui::style::CtxStyleExt;
+use segs_ui::{style::CtxStyleExt, widgets::buttons::IconBtn};
 
 use crate::ui::{grid::Grid, widgets::WidgetData};
 
 /// How long the snap-preview rect takes to glide to a newly snapped grid cell, in seconds.
 const SNAP_ANIMATION_TIME: f32 = 0.150;
+const SELECTION_TINT_ALPHA: u8 = 40;
+const HOVER_DARKEN_ALPHA: u8 = 40;
+const REMOVE_BUTTON_SIZE: Vec2 = vec2(28., 28.);
+/// `IconBtn`'s default padding, plus 1 point.
+const REMOVE_BUTTON_PADDING: f32 = 4.;
+
+/// `color` with its alpha channel replaced, for translucent editor overlays.
+fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
+/// Result of showing the editor for one frame.
+pub struct WidgetEditorResponse {
+    /// The id of the widget whose remove button was clicked, if any.
+    pub remove_requested: Option<Id>,
+}
 
 pub struct WidgetEditor<'a> {
     grid: &'a Grid,
@@ -15,21 +32,52 @@ pub struct WidgetEditor<'a> {
 }
 
 impl<'a> WidgetEditor<'a> {
+    /// Draws the selection tint independently of hover and drag interactions.
+    pub fn show_selection(ui: &Ui, selected_rect: Option<Rect>) {
+        if let Some(rect) = selected_rect {
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(1),
+                with_alpha(ui.app_style().accent_fill, SELECTION_TINT_ALPHA),
+            );
+        }
+    }
+
     pub fn new(grid: &'a Grid, widget: &'a mut WidgetData, response: Response) -> Self {
         Self { grid, widget, response }
     }
 
-    pub fn show(self, ui: &mut Ui) {
+    /// Shows edit controls for one frame.
+    pub fn show(self, ui: &mut Ui) -> WidgetEditorResponse {
         let Self {
             grid,
             widget,
             response: res,
         } = self;
 
-        // Widget rect
         let rect = res.rect;
+        let is_hovered = res.dragged() || ui.rect_contains_pointer(rect);
+
+        if is_hovered {
+            ui.painter().rect_filled(
+                rect,
+                CornerRadius::same(1),
+                with_alpha(Color32::BLACK, HOVER_DARKEN_ALPHA),
+            );
+        }
+
+        // Keep the button registered while a click is in progress. The grid's pure drag response
+        // becomes dragged on mouse-down, so hiding the button then would discard its click on release.
+        let remove_requested = if is_hovered {
+            let button_rect = Rect::from_center_size(rect.center(), REMOVE_BUTTON_SIZE);
+            let button = IconBtn::new(icons::Trash).with_padding(REMOVE_BUTTON_PADDING);
+            ui.place(button_rect, button).clicked().then_some(widget.id)
+        } else {
+            None
+        };
+
         let Some(mut pointer_pos) = ui.input(|i| i.pointer.interact_pos()) else {
-            return;
+            return WidgetEditorResponse { remove_requested };
         };
 
         let hit_region_id = ui.id().with("_edit_hit_region");
@@ -58,7 +106,8 @@ impl<'a> WidgetEditor<'a> {
             // drag is released, `rect` still reflects the pre-snap floating rect for this frame,
             // while `widget.grect` has already been snapped by `WidgetGrid`'s commit.
             let indicator_rect = grid.to_screen_rect(widget.grect);
-            ui.painter().rect_stroke(indicator_rect, 1., preview_stroke, StrokeKind::Middle);
+            ui.painter()
+                .rect_stroke(indicator_rect, 1., preview_stroke, StrokeKind::Middle);
         }
 
         // Set cursor
@@ -78,8 +127,8 @@ impl<'a> WidgetEditor<'a> {
         }
 
         if !res.dragged() {
-            // Widget is only being hovered, nothing more to do
-            return;
+            // Widget is only being hovered, nothing more to do.
+            return WidgetEditorResponse { remove_requested };
         }
 
         // Update the floating rect according to the drag interaction: translate while moving,
@@ -124,6 +173,8 @@ impl<'a> WidgetEditor<'a> {
 
         ui.painter()
             .rect_stroke(animated_target, 1., preview_stroke, StrokeKind::Middle);
+
+        WidgetEditorResponse { remove_requested }
     }
 }
 
