@@ -7,6 +7,7 @@ use egui::{Id, Ui, Vec2};
 
 use crate::{dataflow::DataStore, ui::grid::GRect};
 
+#[derive(Clone)]
 pub struct WidgetData {
     pub id: Id,
     /// Widget rect in grid space coordinates
@@ -16,21 +17,26 @@ pub struct WidgetData {
     pub variant: WidgetVariant,
 }
 
-impl WidgetData {
-    pub fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
-        self.variant.show(ui, data_store);
-    }
-}
-
 #[enum_dispatch(WidgetTrait)]
+#[derive(Clone)]
 pub enum WidgetVariant {
     ValueDisplay(ValueDisplayWidget),
+}
+
+impl WidgetVariant {
+    /// Gallery defaults in display order.
+    pub fn gallery() -> Vec<Self> {
+        vec![ValueDisplayWidget::default().into()]
+    }
 }
 
 #[enum_dispatch]
 pub trait WidgetTrait {
     /// Show the content of the widget.
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
+
+    /// Gallery display name.
+    fn display_name(&self) -> &'static str;
 
     /// Minimum size of the widget in grid space units.
     fn min_size(&self) -> Vec2 {

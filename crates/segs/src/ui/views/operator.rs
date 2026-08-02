@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     app::AppContext,
-    ui::{components::widget_grid::WidgetGrid, grid::Grid, views::ViewTrait},
+    ui::{components::widget_renderer::show_widgets, grid::Grid, views::ViewTrait},
 };
 
 /// View subtype representing the different operator views available when the
@@ -23,11 +23,8 @@ impl ViewTrait for OperatorView {
             .show_inside(ui, |ui| {
                 let rect = ui.available_rect_before_wrap();
 
-                let widgets = &mut appctx.layout.widgets;
-                let data_store = &mut appctx.data_store;
                 let grid = Grid::new(rect, appctx.layout.grid_settings);
-
-                WidgetGrid::new(widgets, &grid).edit_mode(false).show(ui, data_store);
+                show_widgets(ui, &appctx.layout.widgets, &grid, &mut appctx.data_store);
             });
     }
 }

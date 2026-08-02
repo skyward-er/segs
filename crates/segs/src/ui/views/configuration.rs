@@ -1,20 +1,51 @@
 mod gallery;
 mod settings;
 
-use egui::{CentralPanel, Frame, Panel, ScrollArea, Ui};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+use egui::{CentralPanel, Color32, Frame, Id, Panel, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+use segs_memory::MemoryExt;
 use segs_ui::{components::panel_header::PanelHeader, style::CtxStyleExt};
 use serde::{Deserialize, Serialize};
 
-use crate::app::AppContext;
-use crate::ui::components::widget_editor::{WidgetEditor, WidgetEditorResponse};
-use crate::ui::components::widget_grid::{WidgetGrid, WidgetGridResponse, set_selected_widget};
-use crate::ui::grid::Grid;
-use crate::ui::views::ViewTrait;
+use crate::{
+    app::AppContext,
+    ui::{
+        components::{
+            widget_editor::{
+                HitRegion, clamp_rect_to, hit_region, resize_rect, set_cursor, show_hover, show_outline,
+                show_remove_button, show_selection, show_snap_preview,
+            },
+            widget_renderer::{show_snapping_guide, show_widget, show_widgets},
+        },
+        grid::Grid,
+        views::ViewTrait,
+        widgets::{WidgetTrait, WidgetVariant},
+    },
+};
+
+const SELECTED_WIDGET_ID: &str = "selected_widget";
+static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 
 /// View subtype representing the different configuration views available when
 /// the user is in the Configuration mode.
 #[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigurationView {}
+
+enum WidgetDragSource {
+    Layout(Id),
+    Gallery(WidgetVariant),
+}
+
+struct WidgetDragPayload {
+    source: WidgetDragSource,
+    session: u64,
+    snap_generation: AtomicU64,
+    snap_visible: AtomicBool,
+    interaction: HitRegion,
+    initial_rect: Option<Rect>,
+    pointer_offset: Vec2,
+}
 
 impl ViewTrait for ConfigurationView {
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
@@ -27,7 +58,9 @@ impl ViewTrait for ConfigurationView {
             .max_size(300.)
             .frame(panel_frame)
             .show_inside(ui, |ui| {
-                show_panel(ui, "WIDGET GALLERY", "Drag to add to the layout", gallery::show);
+                show_panel(ui, "WIDGET GALLERY", "Drag to add to the layout", |ui| {
+                    gallery::show(ui, &mut appctx.data_store);
+                });
             });
 
         Panel::right("configuration_widget_settings")
@@ -39,35 +72,286 @@ impl ViewTrait for ConfigurationView {
                 show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", settings::show);
             });
 
+        let grid = Grid::new(ui.available_rect_before_wrap(), appctx.layout.grid_settings);
+
         CentralPanel::default()
             .frame(Frame::new().fill(app_style.main_panels_fill))
-            .show_inside(ui, |ui| show_widget_grid(ui, appctx));
+            .show_inside(ui, |ui| show_layout_editor(ui, appctx, &grid));
+
+        show_widget_drag(ui, appctx, &grid);
     }
 }
 
-fn show_widget_grid(ui: &mut Ui, appctx: &mut AppContext) {
-    let rect = ui.available_rect_before_wrap();
+/// Draws the layout and handles editor interactions.
+fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
+    show_snapping_guide(ui, grid);
 
-    let widgets = &mut appctx.layout.widgets;
-    let data_store = &mut appctx.data_store;
-    let grid = Grid::new(rect, appctx.layout.grid_settings);
-
-    let WidgetGridResponse { active, selected_rect } =
-        WidgetGrid::new(widgets, &grid).edit_mode(true).show(ui, data_store);
-
-    WidgetEditor::show_selection(ui, selected_rect);
-
-    let WidgetEditorResponse { remove_requested } = if let Some((widget, response)) = active {
-        WidgetEditor::new(&grid, widget, response).show(ui)
-    } else {
-        WidgetEditorResponse { remove_requested: None }
-    };
-
-    // Applied after `active`'s borrow of `appctx.layout.widgets` ends.
-    if let Some(id) = remove_requested {
-        appctx.layout.remove_widget(id);
+    if ui.allocate_rect(grid.rect, Sense::click()).clicked() {
         set_selected_widget(ui, None);
     }
+
+    let drag_in_progress = egui::DragAndDrop::has_payload_of_type::<WidgetDragPayload>(ui.ctx());
+    let pointer = ui.ctx().pointer_interact_pos();
+    let mut hovered_widget = None;
+
+    if !drag_in_progress {
+        for widget in &appctx.layout.widgets {
+            let rect = grid.to_screen_rect(widget.grect);
+            let response = ui.interact(rect, widget.id.with("edit_interaction"), Sense::click_and_drag());
+
+            if response.clicked() {
+                set_selected_widget(ui, Some(widget.id));
+            }
+
+            // Keep the pressed edge active when the pointer leaves the widget
+            let pointer_down = response.is_pointer_button_down_on();
+            let region_pointer = if pointer_down {
+                ui.input(|input| input.pointer.press_origin()).or(pointer)
+            } else {
+                pointer
+            };
+            let region = region_pointer.map_or(HitRegion::OUTSIDE, |pointer| hit_region(rect, pointer));
+            if response.drag_started()
+                && let Some(pointer) = response.interact_pointer_pos()
+            {
+                // Preserve the resize handle and offset from the initial press position
+                let origin = ui.input(|input| input.pointer.press_origin()).unwrap_or(pointer);
+                egui::DragAndDrop::set_payload(
+                    ui.ctx(),
+                    WidgetDragPayload {
+                        source: WidgetDragSource::Layout(widget.id),
+                        session: next_drag_session(),
+                        snap_generation: AtomicU64::new(0),
+                        snap_visible: AtomicBool::new(false),
+                        interaction: hit_region(rect, origin),
+                        initial_rect: Some(rect),
+                        pointer_offset: origin - rect.min,
+                    },
+                );
+                hovered_widget = None;
+                break;
+            }
+
+            // Keep edit controls visible while the widget owns the pointer
+            if ui.rect_contains_pointer(rect) || pointer_down {
+                hovered_widget = Some((widget.id, rect, region));
+            }
+        }
+    }
+
+    // Hide a layout widget as soon as its floating drag starts
+    let dragged_layout_widget = egui::DragAndDrop::payload::<WidgetDragPayload>(ui.ctx()).and_then(|payload| {
+        if let WidgetDragSource::Layout(id) = payload.source {
+            Some(id)
+        } else {
+            None
+        }
+    });
+
+    ui.add_enabled_ui(false, |ui| {
+        show_widgets(
+            ui,
+            appctx
+                .layout
+                .widgets
+                .iter()
+                .filter(|widget| Some(widget.id) != dragged_layout_widget),
+            grid,
+            &mut appctx.data_store,
+        );
+    });
+
+    let selected = selected_widget(ui);
+    if let Some(widget) = appctx
+        .layout
+        .widgets
+        .iter()
+        .find(|widget| Some(widget.id) == selected && Some(widget.id) != dragged_layout_widget)
+    {
+        show_selection(ui, grid.to_screen_rect(widget.grect));
+    }
+
+    let mut remove_requested = None;
+    if let Some((id, rect, region)) = hovered_widget {
+        show_hover(ui, rect);
+        show_outline(ui, rect);
+        set_cursor(ui, region, false);
+        if show_remove_button(ui, rect) {
+            remove_requested = Some(id);
+        }
+    }
+
+    if let Some(id) = remove_requested {
+        appctx.layout.remove_widget(id);
+        if selected_widget(ui) == Some(id) {
+            set_selected_widget(ui, None);
+        }
+    }
+}
+
+/// Draws and commits the active widget drag.
+fn show_widget_drag(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
+    let Some(payload) = egui::DragAndDrop::payload::<WidgetDragPayload>(ui.ctx()) else {
+        return;
+    };
+    let Some(pointer) = ui.ctx().pointer_interact_pos() else {
+        return;
+    };
+
+    set_cursor(ui, payload.interaction, true);
+
+    let (preview_id, variant, show_floating_selection) = match &payload.source {
+        WidgetDragSource::Layout(id) => {
+            let Some(widget) = appctx.layout.widgets.iter().find(|widget| widget.id == *id) else {
+                egui::DragAndDrop::clear_payload(ui.ctx());
+                return;
+            };
+            (*id, widget.variant.clone(), selected_widget(ui) == Some(*id))
+        }
+        WidgetDragSource::Gallery(variant) => (
+            Id::new("gallery_widget_drag_preview").with(payload.session),
+            variant.clone(),
+            false,
+        ),
+    };
+
+    let is_resize = payload.initial_rect.is_some() && payload.interaction != HitRegion::INSIDE;
+    let raw_rect = match payload.initial_rect {
+        Some(initial_rect) if is_resize => {
+            // Stop resized edges at the grid boundary
+            let pointer = grid.rect.clamp(pointer);
+            resize_rect(
+                initial_rect,
+                pointer,
+                payload.interaction,
+                validated_size(variant.min_size(), Vec2::ONE) * grid.cell_size,
+            )
+        }
+        Some(initial_rect) => Rect::from_min_size(pointer - payload.pointer_offset, initial_rect.size()),
+        None => Rect::from_center_size(
+            pointer,
+            capped_grid_size(grid, variant.default_size(), variant.min_size()) * grid.cell_size,
+        ),
+    };
+
+    let over_grid = is_resize || grid.rect.contains(pointer);
+    let drop_candidate = if over_grid {
+        // Snap only the drop target; keep the floating widget under the pointer.
+        // Paint the target first so the floating widget passes over its outline.
+        let placement_rect = clamp_rect_to(raw_rect, grid.rect);
+        // Use a fresh animation after each grid re-entry
+        if !payload.snap_visible.swap(true, Ordering::Relaxed) {
+            payload.snap_generation.fetch_add(1, Ordering::Relaxed);
+        }
+        let snap_generation = payload.snap_generation.load(Ordering::Relaxed);
+        let drop_candidate = show_snap_preview(
+            ui,
+            grid,
+            placement_rect,
+            preview_id.with(("snap", payload.session, snap_generation)),
+        );
+        show_disabled_widget(ui, preview_id, raw_rect, &variant, &mut appctx.data_store);
+        if show_floating_selection {
+            show_selection(ui, raw_rect);
+        }
+        Some(drop_candidate)
+    } else {
+        payload.snap_visible.store(false, Ordering::Relaxed);
+        show_disabled_widget(ui, preview_id, raw_rect, &variant, &mut appctx.data_store);
+        if show_floating_selection {
+            show_selection(ui, raw_rect);
+        }
+        show_rejected_tint(ui, raw_rect);
+        None
+    };
+
+    if ui.input(|input| input.pointer.any_released()) {
+        egui::DragAndDrop::clear_payload(ui.ctx());
+
+        if let Some(grect) = drop_candidate {
+            match &payload.source {
+                WidgetDragSource::Layout(id) => {
+                    if let Some(widget) = appctx.layout.widgets.iter_mut().find(|widget| widget.id == *id) {
+                        widget.grect = grect;
+                    }
+                }
+                WidgetDragSource::Gallery(variant) => {
+                    appctx.layout.add_widget(variant.clone(), grect);
+                }
+            }
+        } else if let WidgetDragSource::Layout(id) = payload.source {
+            // Rejected layout drops delete the committed widget
+            appctx.layout.remove_widget(id);
+            if selected_widget(ui) == Some(id) {
+                set_selected_widget(ui, None);
+            }
+        }
+    }
+}
+
+/// Draws a widget without content interactions.
+fn show_disabled_widget(
+    ui: &mut Ui,
+    id: Id,
+    rect: Rect,
+    variant: &WidgetVariant,
+    data_store: &mut crate::dataflow::DataStore,
+) {
+    ui.scope(|ui| {
+        ui.disable();
+        show_widget(ui, id, rect, variant, data_store);
+    });
+}
+
+/// Draws the invalid-placement overlay.
+fn show_rejected_tint(ui: &Ui, rect: Rect) {
+    let error = ui.visuals().error_fg_color;
+    let tint = Color32::from_rgba_unmultiplied(error.r(), error.g(), error.b(), 48);
+    ui.painter().rect_filled(rect, 1., tint);
+    ui.painter().rect_stroke(
+        rect,
+        1.,
+        Stroke::new(1.5, error.gamma_multiply(0.8)),
+        StrokeKind::Middle,
+    );
+}
+
+/// Returns the selected widget id.
+fn selected_widget(ui: &Ui) -> Option<Id> {
+    ui.mem().get_temp_or_default(Id::new(SELECTED_WIDGET_ID))
+}
+
+/// Updates the selected widget id.
+fn set_selected_widget(ui: &Ui, id: Option<Id>) {
+    ui.mem().insert_temp(Id::new(SELECTED_WIDGET_ID), id);
+}
+
+/// Returns a unique drag session number.
+fn next_drag_session() -> u64 {
+    NEXT_DRAG_SESSION.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Checks whether a size is finite and positive.
+fn valid_size(size: Vec2) -> bool {
+    size.is_finite() && size.x > 0. && size.y > 0.
+}
+
+/// Returns a valid size or its fallback.
+fn validated_size(size: Vec2, fallback: Vec2) -> Vec2 {
+    if valid_size(size) { size } else { fallback }
+}
+
+/// Chooses a widget size that fits the grid.
+fn capped_grid_size(grid: &Grid, default_size: Vec2, min_size: Vec2) -> Vec2 {
+    let requested = if valid_size(default_size) {
+        default_size
+    } else if valid_size(min_size) {
+        min_size
+    } else {
+        Vec2::ONE
+    };
+    let grid_extent = grid.rect.size() / grid.cell_size;
+    Vec2::new(requested.x.min(grid_extent.x), requested.y.min(grid_extent.y))
 }
 
 fn show_panel(ui: &mut Ui, title: &str, subtitle: &str, content: impl FnOnce(&mut Ui)) {
