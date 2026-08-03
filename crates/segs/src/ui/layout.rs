@@ -22,6 +22,7 @@ impl Layout {
                 grect: GRect::new(Rect::from_min_size(pos2(1., 0.), vec2(1., 1.))),
                 variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
                     value: "15.024".to_string(),
+                    ..Default::default()
                 }),
             },
             WidgetData {
@@ -29,6 +30,7 @@ impl Layout {
                 grect: GRect::new(Rect::from_min_size(pos2(1., 5.), vec2(2., 2.))),
                 variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
                     value: "25.024".to_string(),
+                    ..Default::default()
                 }),
             },
             WidgetData {
@@ -36,6 +38,7 @@ impl Layout {
                 grect: GRect::new(Rect::from_min_size(pos2(6., 2.), vec2(2., 6.))),
                 variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
                     value: "189.024".to_string(),
+                    ..Default::default()
                 }),
             },
         ];
