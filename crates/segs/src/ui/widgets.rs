@@ -5,7 +5,10 @@ pub use value_display::ValueDisplayWidget;
 
 use egui::{Id, Ui, Vec2};
 
-use crate::{dataflow::DataStore, ui::grid::GRect};
+use crate::{
+    dataflow::DataStore,
+    ui::{grid::GRect, widget_settings::WidgetSetting},
+};
 
 #[derive(Clone)]
 pub struct WidgetData {
@@ -34,6 +37,11 @@ impl WidgetVariant {
 pub trait WidgetTrait {
     /// Show the content of the widget.
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
+
+    /// Settings exposed by this widget for the standard settings panel.
+    fn settings(&mut self) -> Vec<WidgetSetting<'_>> {
+        Vec::new()
+    }
 
     /// Gallery display name.
     fn display_name(&self) -> &'static str;

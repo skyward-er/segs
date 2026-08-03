@@ -69,7 +69,12 @@ impl ViewTrait for ConfigurationView {
             .max_size(300.)
             .frame(panel_frame)
             .show_inside(ui, |ui| {
-                show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", settings::show);
+                show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", |ui| {
+                    let selected = selected_widget(ui);
+                    let widget =
+                        selected.and_then(|id| appctx.layout.widgets.iter_mut().find(|widget| widget.id == id));
+                    settings::show(ui, widget);
+                });
             });
 
         let grid = Grid::new(ui.available_rect_before_wrap(), appctx.layout.grid_settings);

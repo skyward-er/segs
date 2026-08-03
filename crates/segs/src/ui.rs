@@ -6,4 +6,5 @@ pub mod popups;
 pub mod status_bar;
 pub mod top_bar;
 pub mod views;
+pub mod widget_settings;
 pub mod widgets;
