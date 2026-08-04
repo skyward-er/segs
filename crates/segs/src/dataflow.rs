@@ -25,6 +25,16 @@ pub struct StreamKey {
     pub data_key: DataKey,
 }
 
+impl StreamKey {
+    /// A stream key that is always available from a mock [`DataStore`].
+    pub const fn mock() -> Self {
+        Self {
+            source_key: SourceKey(0),
+            data_key: DataKey(0),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DataPoint<T> {
     pub timestamp: f64,
@@ -84,6 +94,16 @@ pub struct DataStore {
 impl DataStore {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Ensures the fixed sample stream used by widget gallery previews exists.
+    pub fn ensure_mock_stream(&mut self) {
+        self.streams.entry(StreamKey::mock()).or_insert_with(|| {
+            DataStream::F64(vec![DataPoint {
+                timestamp: 0.,
+                value: 42.,
+            }])
+        });
     }
 
     /// Returns the complete stream associated with `key`.

@@ -88,4 +88,13 @@ impl<'a> WidgetDataSetting<'a> {
             Self::SingleStream { id, .. } => id,
         }
     }
+
+    /// Assigns a stream to this setting when the widget has not configured one.
+    pub fn set_stream_if_empty(&mut self, key: StreamKey) {
+        match self {
+            Self::SingleStream { stream, .. } => {
+                stream.get_or_insert(key);
+            }
+        }
+    }
 }

@@ -28,14 +28,14 @@ const AUTO_SIZE_CACHE_ID: &str = "value_display_auto_size";
 
 #[derive(Clone)]
 pub struct ValueDisplayWidget {
-    pub label: String,
-    pub stream: Option<StreamKey>,
-    pub auto_size: bool,
-    pub text_size: String,
+    label: String,
+    stream: Option<StreamKey>,
+    auto_size: bool,
+    text_size: String,
 }
 
 impl Default for ValueDisplayWidget {
-    /// Creates the gallery's default value display.
+    /// Creates an unconfigured value display.
     fn default() -> Self {
         Self {
             label: "Value".to_owned(),

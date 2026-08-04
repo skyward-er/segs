@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use egui::{Id, Sense, Ui, Vec2, vec2};
 
 use crate::{
-    dataflow::DataStore,
+    dataflow::{DataStore, StreamKey},
     ui::{
         components::widget_renderer::show_widget,
         widgets::{WidgetTrait, WidgetVariant},
@@ -14,7 +14,15 @@ use super::{HitRegion, WidgetDragPayload, WidgetDragSource, next_drag_session};
 
 /// Draws gallery cards and starts widget drags.
 pub fn show(ui: &mut Ui, data_store: &mut DataStore) {
+    data_store.ensure_mock_stream();
+
     for (index, variant) in WidgetVariant::gallery().into_iter().enumerate() {
+        let mut preview = variant.clone();
+        // Inject the mock stream for the gallery preview
+        for mut setting in preview.data_settings() {
+            setting.set_stream_if_empty(StreamKey::mock());
+        }
+
         let name = variant.display_name();
         let card_id = Id::new(("widget_gallery_card", index, name));
 
@@ -33,7 +41,7 @@ pub fn show(ui: &mut Ui, data_store: &mut DataStore) {
             let (preview_rect, _) = ui.allocate_exact_size(preview_size, Sense::hover());
 
             ui.disable();
-            show_widget(ui, card_id.with("preview"), preview_rect, &variant, data_store);
+            show_widget(ui, card_id.with("preview"), preview_rect, &preview, data_store);
         });
 
         let drag_response = ui
