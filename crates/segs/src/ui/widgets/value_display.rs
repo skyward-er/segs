@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use egui::{Ui, Vec2, pos2, vec2};
+use egui::{FontFamily, FontId, Ui, Vec2, pos2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
 
@@ -65,7 +65,7 @@ impl WidgetTrait for ValueDisplayWidget {
         let value_color = ui.visuals().text_color();
         let label_galley =
             painter.layout_no_wrap(self.label.clone(), app_style.base_font_of(label_text_size), label_color);
-        let value_galley = painter.layout_no_wrap(value, app_style.base_font_of(value_text_size), value_color);
+        let value_galley = painter.layout_no_wrap(value, monospace_font(value_text_size), value_color);
 
         let total_height = label_galley.size().y + spacing + value_galley.size().y;
         let top = container.center().y - total_height * 0.5;
@@ -111,7 +111,7 @@ impl ValueDisplayWidget {
         };
 
         match data_store.latest(stream) {
-            Some(DataValue::F64(value)) => value.to_string(),
+            Some(DataValue::F64(value)) => format!("{value:.3}"),
             Some(DataValue::I64(value)) => value.to_string(),
             Some(DataValue::Bool(value)) => value.to_string(),
             Some(DataValue::String(value)) => value,
@@ -192,19 +192,23 @@ fn compute_auto_text_size(ui: &Ui, label: &str, value: &str, available_size: Vec
     let painter = ui.painter();
     let text_color = ui.visuals().text_color();
 
-    // Measure both lines at a fixed size to derive dimensions
-    let measure = |text: &str| {
-        painter
-            .layout_no_wrap(
-                text.to_owned(),
-                app_style.base_font_of(TEXT_METRICS_REFERENCE_SIZE),
-                text_color,
-            )
-            .size()
-            / TEXT_METRICS_REFERENCE_SIZE
-    };
-    let label_size_per_point = measure(label);
-    let value_size_per_point = measure(value);
+    // Measure both lines with the same fonts used during painting.
+    let label_size_per_point = painter
+        .layout_no_wrap(
+            label.to_owned(),
+            app_style.base_font_of(TEXT_METRICS_REFERENCE_SIZE),
+            text_color,
+        )
+        .size()
+        / TEXT_METRICS_REFERENCE_SIZE;
+    let value_size_per_point = painter
+        .layout_no_wrap(
+            value.to_owned(),
+            monospace_font(TEXT_METRICS_REFERENCE_SIZE),
+            text_color,
+        )
+        .size()
+        / TEXT_METRICS_REFERENCE_SIZE;
 
     // Scale one uniform margin from the widget's shorter edge
     let margin = available_size.x.min(available_size.y) * AUTO_SIZE_MARGIN_RATIO;
@@ -230,4 +234,9 @@ fn compute_auto_text_size(ui: &Ui, label: &str, value: &str, available_size: Vec
     }
 
     value_text_size.floor().clamp(MIN_VALUE_TEXT_SIZE, MAX_AUTO_TEXT_SIZE)
+}
+
+/// Uses equal-width glyphs so changing numeric values does not shift the display width.
+fn monospace_font(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Monospace)
 }

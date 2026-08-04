@@ -26,9 +26,6 @@ pub fn install_fonts(ctx: &egui::Context) {
     fonts
         .families
         .insert(FontFamily::Proportional, vec![Figtree::medium().name()]);
-    fonts
-        .families
-        .insert(FontFamily::Monospace, vec![Figtree::regular().name()]);
 
     ctx.set_fonts(fonts);
 }
