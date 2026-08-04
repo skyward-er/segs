@@ -9,8 +9,11 @@ use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
 
 use crate::{
-    dataflow::DataStore,
-    ui::{widget_settings::WidgetSetting, widgets::WidgetTrait},
+    dataflow::{DataStore, DataValue, StreamKey},
+    ui::{
+        widget_settings::{WidgetDataSetting, WidgetSetting},
+        widgets::WidgetTrait,
+    },
 };
 
 const DEFAULT_TEXT_SIZE: f32 = 32.;
@@ -26,7 +29,7 @@ const AUTO_SIZE_CACHE_ID: &str = "value_display_auto_size";
 #[derive(Clone)]
 pub struct ValueDisplayWidget {
     pub label: String,
-    pub value: String,
+    pub stream: Option<StreamKey>,
     pub auto_size: bool,
     pub text_size: String,
 }
@@ -36,7 +39,7 @@ impl Default for ValueDisplayWidget {
     fn default() -> Self {
         Self {
             label: "Value".to_owned(),
-            value: "123.456".to_owned(),
+            stream: None,
             auto_size: true,
             text_size: DEFAULT_TEXT_SIZE.to_string(),
         }
@@ -44,11 +47,13 @@ impl Default for ValueDisplayWidget {
 }
 
 impl WidgetTrait for ValueDisplayWidget {
-    fn show(&self, ui: &mut Ui, _data_store: &mut DataStore) {
+    fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
+        let value = self.value_text(data_store);
+
         let container = ui.max_rect();
         let spacing = ui.spacing().item_spacing.y;
         let value_text_size = if self.auto_size {
-            cached_auto_text_size(ui, &self.label, &self.value, container.size(), spacing)
+            cached_auto_text_size(ui, &self.label, &value, container.size(), spacing)
         } else {
             configured_text_size(&self.text_size)
         };
@@ -60,8 +65,7 @@ impl WidgetTrait for ValueDisplayWidget {
         let value_color = ui.visuals().text_color();
         let label_galley =
             painter.layout_no_wrap(self.label.clone(), app_style.base_font_of(label_text_size), label_color);
-        let value_galley =
-            painter.layout_no_wrap(self.value.clone(), app_style.base_font_of(value_text_size), value_color);
+        let value_galley = painter.layout_no_wrap(value, app_style.base_font_of(value_text_size), value_color);
 
         let total_height = label_galley.size().y + spacing + value_galley.size().y;
         let top = container.center().y - total_height * 0.5;
@@ -76,11 +80,14 @@ impl WidgetTrait for ValueDisplayWidget {
         painter.galley(value_pos, value_galley, value_color);
     }
 
+    fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>> {
+        vec![WidgetDataSetting::single_stream("stream", "Field", &mut self.stream)]
+    }
+
     fn settings(&mut self) -> Vec<WidgetSetting<'_>> {
         let show_text_size = !self.auto_size;
         let mut settings = vec![
             WidgetSetting::text_box("label", "Label", &mut self.label),
-            WidgetSetting::text_box("value", "Value", &mut self.value),
             WidgetSetting::checkbox("auto_size", "Auto size", &mut self.auto_size),
         ];
 
@@ -94,6 +101,22 @@ impl WidgetTrait for ValueDisplayWidget {
     /// Returns the widget's gallery name.
     fn display_name(&self) -> &'static str {
         "Value display"
+    }
+}
+
+impl ValueDisplayWidget {
+    fn value_text(&self, data_store: &DataStore) -> String {
+        let Some(stream) = self.stream else {
+            return "No stream".to_owned();
+        };
+
+        match data_store.latest(stream) {
+            Some(DataValue::F64(value)) => value.to_string(),
+            Some(DataValue::I64(value)) => value.to_string(),
+            Some(DataValue::Bool(value)) => value.to_string(),
+            Some(DataValue::String(value)) => value,
+            None => "No data".to_owned(),
+        }
     }
 }
 
@@ -114,7 +137,7 @@ fn configured_text_size(text_size: &str) -> f32 {
         .unwrap_or(DEFAULT_TEXT_SIZE)
 }
 
-/// Returns a cached auto size, rate-limiting recomputation while the widget rect changes.
+/// Returns a cached auto size, debouncing recomputation while the widget rect changes.
 fn cached_auto_text_size(ui: &Ui, label: &str, value: &str, available_size: Vec2, spacing: f32) -> f32 {
     let cache_id = ui.id().with(AUTO_SIZE_CACHE_ID);
     let now = ui.input(|input| input.time);

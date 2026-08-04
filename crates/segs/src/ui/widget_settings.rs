@@ -1,3 +1,5 @@
+use crate::dataflow::StreamKey;
+
 /// One selectable value displayed by a widget settings combobox.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComboBoxOption {
@@ -60,6 +62,30 @@ impl<'a> WidgetSetting<'a> {
     pub fn id(&self) -> &'static str {
         match self {
             Self::Checkbox { id, .. } | Self::ComboBox { id, .. } | Self::TextBox { id, .. } => id,
+        }
+    }
+}
+
+/// A widget configuration field that selects data streams.
+///
+/// Data settings are kept separate from regular widget settings so the
+/// settings panel can render them separately.
+pub enum WidgetDataSetting<'a> {
+    SingleStream {
+        id: &'static str,
+        label: &'static str,
+        stream: &'a mut Option<StreamKey>,
+    },
+}
+
+impl<'a> WidgetDataSetting<'a> {
+    pub fn single_stream(id: &'static str, label: &'static str, stream: &'a mut Option<StreamKey>) -> Self {
+        Self::SingleStream { id, label, stream }
+    }
+
+    pub fn id(&self) -> &'static str {
+        match self {
+            Self::SingleStream { id, .. } => id,
         }
     }
 }

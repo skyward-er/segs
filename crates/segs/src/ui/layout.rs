@@ -20,26 +20,17 @@ impl Layout {
             WidgetData {
                 id: Id::new("example_widget1"),
                 grect: GRect::new(Rect::from_min_size(pos2(1., 0.), vec2(1., 1.))),
-                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
-                    value: "15.024".to_string(),
-                    ..Default::default()
-                }),
+                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget::default()),
             },
             WidgetData {
                 id: Id::new("example_widget2"),
                 grect: GRect::new(Rect::from_min_size(pos2(1., 5.), vec2(2., 2.))),
-                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
-                    value: "25.024".to_string(),
-                    ..Default::default()
-                }),
+                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget::default()),
             },
             WidgetData {
                 id: Id::new("example_widget3"),
                 grect: GRect::new(Rect::from_min_size(pos2(6., 2.), vec2(2., 6.))),
-                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget {
-                    value: "189.024".to_string(),
-                    ..Default::default()
-                }),
+                variant: WidgetVariant::ValueDisplay(ValueDisplayWidget::default()),
             },
         ];
 

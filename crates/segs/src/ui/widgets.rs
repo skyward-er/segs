@@ -7,7 +7,10 @@ use egui::{Id, Ui, Vec2};
 
 use crate::{
     dataflow::DataStore,
-    ui::{grid::GRect, widget_settings::WidgetSetting},
+    ui::{
+        grid::GRect,
+        widget_settings::{WidgetDataSetting, WidgetSetting},
+    },
 };
 
 #[derive(Clone)]
@@ -37,6 +40,12 @@ impl WidgetVariant {
 pub trait WidgetTrait {
     /// Show the content of the widget.
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
+
+    /// Data stream settings exposed by this widget.
+    ///
+    /// Implementations must explicitly return an empty vector when they do not
+    /// consume data streams.
+    fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>>;
 
     /// Settings exposed by this widget for the standard settings panel.
     fn settings(&mut self) -> Vec<WidgetSetting<'_>> {

@@ -21,8 +21,8 @@ pub struct SourceKey(u32);
 /// This is the key that will be used to store and retrieve data in the central [`DataStore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StreamKey {
-    source_key: SourceKey,
-    data_key: DataKey,
+    pub source_key: SourceKey,
+    pub data_key: DataKey,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +42,17 @@ pub enum DataStream {
     F64(Vec<DataPoint<f64>>),
     I64(Vec<DataPoint<i64>>),
     String(Vec<DataPoint<String>>),
+}
+
+impl DataStream {
+    /// Returns the most recent value in this stream, if one has been received.
+    pub fn last(&self) -> Option<DataValue> {
+        match self {
+            Self::F64(points) => points.last().map(|point| DataValue::F64(point.value)),
+            Self::I64(points) => points.last().map(|point| DataValue::I64(point.value)),
+            Self::String(points) => points.last().map(|point| DataValue::String(point.value.clone())),
+        }
+    }
 }
 
 pub enum DataValue {
@@ -73,5 +84,15 @@ pub struct DataStore {
 impl DataStore {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Returns the complete stream associated with `key`.
+    pub fn stream(&self, key: StreamKey) -> Option<&DataStream> {
+        self.streams.get(&key)
+    }
+
+    /// Returns the most recent value in the stream associated with `key`.
+    pub fn latest(&self, key: StreamKey) -> Option<DataValue> {
+        self.stream(key).and_then(DataStream::last)
     }
 }

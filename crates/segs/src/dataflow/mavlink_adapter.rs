@@ -25,6 +25,7 @@ pub struct MavlinkAdapter {
     stop_flag: Arc<AtomicBool>,
     incoming: Receiver<MavFrame>,
     profile: Arc<MavProfile>,
+    protocol: ProtocolDescriptor,
     created_at: Instant,
 }
 
@@ -59,6 +60,7 @@ impl DataAdapter for MavlinkAdapter {
             } => Connection::udp(recv_socket, send_socket.clone(), profile.clone())?,
             DataTransport::Serial { tty, baud_rate } => Connection::serial(tty.clone(), *baud_rate, profile.clone())?,
         };
+        let protocol = make_protocol_descriptor(&profile);
 
         thread::spawn(move || {
             while !thread_stop_flag.load(Ordering::Relaxed) {
@@ -86,52 +88,13 @@ impl DataAdapter for MavlinkAdapter {
             stop_flag,
             incoming: rx,
             profile,
+            protocol,
             created_at: Instant::now(),
         })
     }
 
-    fn describe_protocol(&self) -> ProtocolDescriptor {
-        let messages = self
-            .profile
-            .messages
-            .values()
-            .map(|message| {
-                let fields = message
-                    .fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, field)| FieldDescriptor::Field {
-                        name: field.name.clone(),
-                        data_key: compute_data_key(message.id, i as u32, &field.name),
-                        field_type: mavtype_to_datatype(field.mavtype.clone()),
-                    })
-                    .collect();
-
-                FieldDescriptor::Structure {
-                    name: message.name.clone(),
-                    fields,
-                }
-            })
-            .collect();
-
-        let sources = self
-            .profile
-            .enums
-            .iter()
-            .find(|(name, _)| *name == "Sysids") // Weird capitalization by mavlink parser
-            .map(|(_, mavenum)| {
-                mavenum
-                    .entries
-                    .iter()
-                    .map(|entry| SourceDescriptor {
-                        name: entry.name.clone(),
-                        key: SourceKey(entry.value.expect("Found SysID enum member without explicit value") as u32),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        ProtocolDescriptor { messages, sources }
+    fn describe_protocol(&self) -> &ProtocolDescriptor {
+        &self.protocol
     }
 
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool {
@@ -307,4 +270,46 @@ fn compute_data_key(message_id: u32, field_id: u32, field_name: &str) -> DataKey
     field_name.hash(&mut hasher);
 
     DataKey(hasher.finish())
+}
+
+fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
+    let messages = profile
+        .messages
+        .values()
+        .map(|message| {
+            let fields = message
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, field)| FieldDescriptor::Field {
+                    name: field.name.clone(),
+                    field_type: mavtype_to_datatype(field.mavtype.clone()),
+                    data_key: compute_data_key(message.id, i as u32, &field.name),
+                })
+                .collect();
+
+            FieldDescriptor::Structure {
+                name: message.name.clone(),
+                fields,
+            }
+        })
+        .collect();
+
+    let sources = profile
+        .enums
+        .iter()
+        .find(|(name, _)| *name == "Sysids") // Weird capitalization by mavlink parser
+        .map(|(_, mavenum)| {
+            mavenum
+                .entries
+                .iter()
+                .map(|entry| SourceDescriptor {
+                    name: entry.name.clone(),
+                    key: SourceKey(entry.value.expect("Found SysID enum member without explicit value") as u32),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    ProtocolDescriptor { messages, sources }
 }

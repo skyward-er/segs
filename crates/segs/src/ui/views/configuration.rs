@@ -71,9 +71,10 @@ impl ViewTrait for ConfigurationView {
             .show_inside(ui, |ui| {
                 show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", |ui| {
                     let selected = selected_widget(ui);
+                    let protocol = appctx.data_adapter.as_ref().map(|adapter| adapter.describe_protocol());
                     let widget =
                         selected.and_then(|id| appctx.layout.widgets.iter_mut().find(|widget| widget.id == id));
-                    settings::show(ui, widget);
+                    settings::show(ui, widget, protocol);
                 });
             });
 

@@ -8,8 +8,8 @@ pub enum FieldDescriptor {
     },
     Field {
         name: String,
-        data_key: DataKey,
         field_type: DataType,
+        data_key: DataKey,
     },
 }
 
