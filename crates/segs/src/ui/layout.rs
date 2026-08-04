@@ -34,7 +34,7 @@ impl Layout {
             },
         ];
 
-        let grid_settings = GridSettings::fixed(8, 8);
+        let grid_settings = GridSettings::new(8, 8);
 
         Self {
             widgets,

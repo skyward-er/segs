@@ -14,19 +14,15 @@ impl GRect {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum GridSettings {
-    Auto { granularity: f32 },
-    Fixed { cols: u32, rows: u32 },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridSettings {
+    pub cols: u32,
+    pub rows: u32,
 }
 
 impl GridSettings {
-    pub fn fixed(cols: u32, rows: u32) -> Self {
-        Self::Fixed { cols, rows }
-    }
-
-    pub fn auto(granularity: f32) -> Self {
-        Self::Auto { granularity }
+    pub fn new(cols: u32, rows: u32) -> Self {
+        Self { cols, rows }
     }
 }
 
@@ -52,19 +48,7 @@ pub struct Grid {
 impl Grid {
     /// Constructs a grid object in the given screen space area with the given settings.
     pub fn new(rect: Rect, settings: GridSettings) -> Self {
-        let cell_count = match settings {
-            GridSettings::Auto { granularity } => {
-                // Compute how many granularity-sized cells fit in the grid space
-                Vec2 {
-                    x: (rect.width() / granularity).round().max(1.),
-                    y: (rect.height() / granularity).round().max(1.),
-                }
-            }
-            GridSettings::Fixed { cols, rows } => {
-                // Grid cell count is fixed, just return the amounts
-                vec2(cols as f32, rows as f32)
-            }
-        };
+        let cell_count = vec2(settings.cols as f32, settings.rows as f32);
 
         let cell_size = rect.size() / cell_count;
 

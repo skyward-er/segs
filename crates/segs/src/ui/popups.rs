@@ -1,6 +1,12 @@
 #![allow(unused)]
 
-use egui::{Align2, Area, Frame, Id, Pos2, Ui, UiBuilder, Vec2, emath::easing, vec2};
+mod grid_settings;
+
+use egui::{Align2, Area, Frame, Id, Key::A, Pos2, Ui, UiBuilder, Vec2, emath::easing, vec2};
+
+pub use grid_settings::GridSettingsPopup;
+
+const POPUP_MARGIN: Vec2 = vec2(8., 8.);
 
 pub struct Popup<'a> {
     enabled: &'a mut bool,
@@ -71,6 +77,7 @@ impl<'a> Popup<'a> {
                 .show(ui.ctx(), |ui| {
                     ui.set_opacity(source_toggled_t);
                     Frame::new()
+                        .inner_margin(POPUP_MARGIN)
                         .corner_radius(style.visuals.menu_corner_radius)
                         .shadow(style.visuals.popup_shadow)
                         .fill(style.visuals.window_fill())

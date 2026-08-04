@@ -1,4 +1,4 @@
-use egui::{CursorIcon, Response, Sense, Ui, Vec2, Widget, vec2};
+use egui::{CursorIcon, Id, Rect, Response, Sense, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
 
 const DEFAULT_ICON_SIZE: Vec2 = vec2(24., 24.);
@@ -53,19 +53,25 @@ impl<'a> IconBtn<'a> {
         self.padding = padding;
         self
     }
-}
 
-impl<'a> Widget for IconBtn<'a> {
-    fn ui(self, ui: &mut Ui) -> Response {
+    /// Shows the button at an explicit rectangle with a stable interaction ID.
+    ///
+    /// Unlike [`Ui::place`], this does not create a child UI with an automatic ID.
+    pub fn show_at(self, ui: &mut Ui, rect: Rect, id: Id) -> Response {
+        let response = ui.interact(rect, id, Sense::click());
+        self.show_response(ui, rect, response)
+    }
+
+    fn show_response(self, ui: &mut Ui, rect: Rect, response: Response) -> Response {
         match self.variant {
-            Variant::Inactive { icon } => icon_toggle(ui, icon, self.size, self.padding),
+            Variant::Inactive { icon } => icon_toggle(ui, icon, rect, response, self.padding),
             Variant::Active {
                 inactive_icon,
                 active_icon,
                 active,
             } => {
                 let icon = if *active { active_icon } else { inactive_icon };
-                let response = icon_toggle(ui, icon, self.size, self.padding);
+                let response = icon_toggle(ui, icon, rect, response, self.padding);
                 if response.clicked() {
                     *active = !*active;
                 }
@@ -75,9 +81,14 @@ impl<'a> Widget for IconBtn<'a> {
     }
 }
 
-fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, size: Vec2, padding: f32) -> Response {
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+impl<'a> Widget for IconBtn<'a> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let (rect, response) = ui.allocate_exact_size(self.size, Sense::click());
+        self.show_response(ui, rect, response)
+    }
+}
 
+fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, rect: Rect, response: Response, padding: f32) -> Response {
     // Paint the button
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();

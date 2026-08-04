@@ -3,9 +3,12 @@ mod settings;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use egui::{CentralPanel, Color32, Frame, Id, Panel, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2};
+use egui::{
+    CentralPanel, Color32, Frame, Id, Panel, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
+};
+use segs_assets::icons;
 use segs_memory::MemoryExt;
-use segs_ui::{components::panel_header::PanelHeader, style::CtxStyleExt};
+use segs_ui::{components::panel_header::PanelHeader, style::CtxStyleExt, widgets::buttons::IconBtn};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -19,12 +22,17 @@ use crate::{
             widget_renderer::{show_snapping_guide, show_widget, show_widgets},
         },
         grid::Grid,
+        popups::GridSettingsPopup,
         views::ViewTrait,
         widgets::{WidgetTrait, WidgetVariant},
     },
 };
 
 const SELECTED_WIDGET_ID: &str = "selected_widget";
+const GRID_SETTINGS_VISIBLE_ID: &str = "configuration_grid_settings_visible";
+const GRID_SETTINGS_BUTTON_ID: &str = "configuration_grid_settings_button";
+const GRID_SETTINGS_BUTTON_SIZE: Vec2 = vec2(24., 24.);
+const GRID_SETTINGS_BUTTON_MARGIN: f32 = 4.;
 static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 
 /// View subtype representing the different configuration views available when
@@ -92,13 +100,12 @@ impl ViewTrait for ConfigurationView {
 fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
     show_snapping_guide(ui, grid);
 
-    if ui.allocate_rect(grid.rect, Sense::click()).clicked() {
-        set_selected_widget(ui, None);
-    }
+    let grid_response = ui.allocate_rect(grid.rect, Sense::click());
 
     let drag_in_progress = egui::DragAndDrop::has_payload_of_type::<WidgetDragPayload>(ui.ctx());
     let pointer = ui.ctx().pointer_interact_pos();
     let mut hovered_widget = None;
+    let mut widget_clicked = false;
 
     if !drag_in_progress {
         for widget in &appctx.layout.widgets {
@@ -107,6 +114,7 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
 
             if response.clicked() {
                 set_selected_widget(ui, Some(widget.id));
+                widget_clicked = true;
             }
 
             // Keep the pressed edge active when the pointer leaves the widget
@@ -193,6 +201,44 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
             set_selected_widget(ui, None);
         }
     }
+
+    let grid_settings_clicked = show_grid_settings_control(ui, appctx, grid);
+    if grid_response.clicked() && !widget_clicked && remove_requested.is_none() && !grid_settings_clicked {
+        set_selected_widget(ui, None);
+    }
+}
+
+/// Draws the grid settings button and its anchored popup.
+fn show_grid_settings_control(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) -> bool {
+    let button_rect = Rect::from_min_size(
+        pos2(
+            grid.rect.right() - GRID_SETTINGS_BUTTON_SIZE.x - GRID_SETTINGS_BUTTON_MARGIN,
+            grid.rect.top() + GRID_SETTINGS_BUTTON_MARGIN,
+        ),
+        GRID_SETTINGS_BUTTON_SIZE,
+    );
+    let response = IconBtn::new(icons::GridSettings)
+        .show_at(ui, button_rect, Id::new(GRID_SETTINGS_BUTTON_ID))
+        .on_hover_text("Grid Settings");
+
+    let mut visible: bool = ui.mem().get_temp_or_default(Id::new(GRID_SETTINGS_VISIBLE_ID));
+    if response.clicked() {
+        visible = !visible;
+        ui.ctx().request_repaint();
+    }
+
+    // Defer a newly opened popup to the next frame so the toggle click cannot be interpreted as an outside click.
+    if visible && !response.clicked() {
+        GridSettingsPopup::new(
+            &mut visible,
+            &mut appctx.layout.grid_settings,
+            response.rect.right_bottom(),
+        )
+        .show(ui);
+    }
+
+    ui.mem().insert_temp(Id::new(GRID_SETTINGS_VISIBLE_ID), visible);
+    response.clicked()
 }
 
 /// Draws and commits the active widget drag.

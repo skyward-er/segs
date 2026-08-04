@@ -92,6 +92,7 @@ pub mod svgs {
     pub static FUNCTION_SOLID: egui::ImageSource = include_svg!("svgs", "function_solid.svg");
     pub static GAUGE: egui::ImageSource = include_svg!("svgs", "gauge.svg");
     pub static GLOBE: egui::ImageSource = include_svg!("svgs", "globe.svg");
+    pub static GRID_SETTINGS: egui::ImageSource = include_svg!("svgs", "grid_settings.svg");
     pub static LAYOUT_GRID_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_grid_outline.svg");
     pub static LAYOUT_GRID_SOLID: egui::ImageSource = include_svg!("svgs", "layout_grid_solid.svg");
     pub static LAYOUT_OUTLINE: egui::ImageSource = include_svg!("svgs", "layout_outline.svg");
