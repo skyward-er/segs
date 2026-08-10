@@ -30,6 +30,10 @@ const SEARCH_CACHE_ID: &str = "layout_manager_search_cache";
 const SEARCH_INPUT_ID: &str = "layout_manager_search_input";
 const INLINE_EDIT_ID: &str = "layout_manager_inline_edit";
 const DELETE_CONFIRMATION_ID: &str = "layout_manager_delete_confirmation";
+const OPEN_FOLDER_TOOLTIP: &str = concat!(
+    "Changes made while the application is running won't appear and may be overwritten. ",
+    "A restart is required to reload layouts."
+);
 
 /// Identifies the catalog mutation performed by the shared inline name editor.
 #[derive(Clone, Debug)]
@@ -164,6 +168,7 @@ fn set_delete_confirmation(ui: &Ui, confirmation: Option<DeleteConfirmation>) {
 /// Defers actions from modal controls until after the modal has rendered.
 enum ManagerCommand {
     Open(String, Id),
+    OpenFolder(Id),
     Edit(String, Id),
     Duplicate(String, String),
     Rename(String, String),
@@ -264,17 +269,30 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                             }
                         });
                     ui.add_space(8.);
-                    if ui
-                        .add_enabled(edit.is_none(), Button::new("New Empty Layout"))
-                        .clicked()
-                    {
-                        edit = Some(InlineEdit {
-                            action: InlineEditAction::Create,
-                            value: String::new(),
-                            error: None,
-                            request_focus: true,
-                        });
-                    }
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add_enabled(edit.is_none(), Button::new("New Empty Layout"))
+                            .clicked()
+                        {
+                            edit = Some(InlineEdit {
+                                action: InlineEditAction::Create,
+                                value: String::new(),
+                                error: None,
+                                request_focus: true,
+                            });
+                        }
+
+                        let open_folder = ui.add_enabled(edit.is_none(), Button::new("Open Layouts Folder"));
+                        if open_folder.clicked() {
+                            command = Some(ManagerCommand::OpenFolder(open_folder.id));
+                        }
+                        let showing_error = show_control_error(ui, &open_folder);
+                        if open_folder.hovered() && !showing_error {
+                            Tooltip::for_widget(&open_folder).show(|ui| {
+                                ui.label(OPEN_FOLDER_TOOLTIP);
+                            });
+                        }
+                    });
                 });
 
                 separator_response = Some(ui.separator());
@@ -408,6 +426,12 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 if let Some(target) = activate(ui, layouts, slug, ViewTarget::Operator, owner) {
                     transition = Some(target);
                     should_close = true;
+                }
+            }
+            ManagerCommand::OpenFolder(owner) => {
+                clear_control_error(ui, owner);
+                if let Err(error) = open::that_detached(layouts.directory()) {
+                    set_control_error(ui, owner, error);
                 }
             }
             ManagerCommand::Edit(slug, owner) => {

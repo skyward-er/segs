@@ -15,6 +15,7 @@ eframe.workspace = true
 egui = { workspace = true, features = ["serde"] }
 enum_dispatch = "0.3.13"
 mimalloc = { version = "0.1.48", features = ["v3"] }
+open = "5.4.0"
 rand = "0.8.5"
 segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"

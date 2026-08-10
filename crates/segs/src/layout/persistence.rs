@@ -35,6 +35,11 @@ impl LayoutStore {
         }
     }
 
+    /// Returns the directory containing the layout catalog.
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
     /// Loads all valid JSON layouts and reports malformed entries as warnings.
     pub fn load_all(&self) -> Result<(Vec<Layout>, Vec<String>), LayoutStoreError> {
         fs::create_dir_all(&self.directory)?;

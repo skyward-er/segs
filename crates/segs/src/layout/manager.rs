@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use chrono::Utc;
@@ -103,6 +103,11 @@ impl LayoutManager {
     /// Iterates over saved layouts in slug order.
     pub fn layouts(&self) -> impl Iterator<Item = &Layout> {
         self.layouts.values()
+    }
+
+    /// Returns the directory containing the persisted layout catalog.
+    pub fn directory(&self) -> &Path {
+        self.store.directory()
     }
 
     /// Returns a saved layout by slug.

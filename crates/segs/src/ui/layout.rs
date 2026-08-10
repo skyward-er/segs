@@ -170,10 +170,10 @@ pub fn take_close_request(ui: &Ui) -> bool {
     ui.mem().remove_temp::<bool>(Id::new(CLOSE_REQUEST_ID)).unwrap_or(false)
 }
 
-/// Shows a stored error tooltip when it belongs to the supplied control.
-pub fn show_control_error(ui: &Ui, response: &Response) {
+/// Shows a stored error tooltip when it belongs to the supplied control and reports whether it was shown.
+pub fn show_control_error(ui: &Ui, response: &Response) -> bool {
     let Some(error) = control_error(ui).filter(|error| error.owner == response.id) else {
-        return;
+        return false;
     };
     Tooltip::always_open(
         ui.ctx().clone(),
@@ -184,6 +184,7 @@ pub fn show_control_error(ui: &Ui, response: &Response) {
     .show(|ui| {
         ui.colored_label(ui.visuals().error_fg_color, error.message);
     });
+    true
 }
 
 /// Returns whether the full layout manager is open.
