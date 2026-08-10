@@ -1,6 +1,7 @@
 mod app;
 mod args;
 mod dataflow;
+mod layout;
 mod ui;
 mod utils;
 
@@ -29,6 +30,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_icon(app_icon),
         ..Default::default()
     };
-    eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc, args)))))
+    eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc, args)?))))
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }

@@ -8,18 +8,20 @@ pub mod transport;
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 /// An opaque handler that uniquely represents a data stream.
 /// Adapters are responsible for generating a uniform key space based on the data source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DataKey(u64);
 
 /// An opaque handler that uniquely represents a source of data, such as a specific system or component.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceKey(u32);
 
 /// An opaque handler that uniquely represents a data stream coming from a specific source.
 /// This is the key that will be used to store and retrieve data in the central [`DataStore`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StreamKey {
     pub source_key: SourceKey,
     pub data_key: DataKey,

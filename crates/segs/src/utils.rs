@@ -10,6 +10,12 @@ pub fn get_memory_dirpath() -> PathBuf {
     project_dirs().data_dir().to_path_buf().join("metadata")
 }
 
+/// Returns the directory containing user-created layouts.
+#[inline]
+pub fn get_layouts_dirpath() -> PathBuf {
+    project_dirs().data_dir().to_path_buf().join("layouts")
+}
+
 // We use different directories for development and production to avoid
 // conflicts and ensure that we don't accidentally delete important data during
 // development.

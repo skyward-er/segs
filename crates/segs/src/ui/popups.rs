@@ -1,10 +1,14 @@
 #![allow(unused)]
 
+mod delete_confirmation;
 mod grid_settings;
+mod save_discard_confirmation;
 
-use egui::{Align2, Area, Frame, Id, Key::A, Pos2, Ui, UiBuilder, Vec2, emath::easing, vec2};
+use egui::{Align2, Area, Frame, Id, Key, Modifiers, Order, Pos2, Ui, UiBuilder, UiKind, Vec2, emath::easing, vec2};
 
+pub use delete_confirmation::DeleteConfirmationPopup;
 pub use grid_settings::GridSettingsPopup;
+pub use save_discard_confirmation::{SaveDiscardChoice, SaveDiscardConfirmationPopup};
 
 const POPUP_MARGIN: Vec2 = vec2(8., 8.);
 
@@ -59,6 +63,20 @@ impl<'a> Popup<'a> {
             ..
         } = self;
 
+        let popup_id = ui.id().with("_popup");
+        let area_id = ui.id().with("_area");
+
+        // Mirror egui popup memory so modals know a popup owns Escape and pointer input
+        if *enabled {
+            egui::Popup::open_id(ui.ctx(), popup_id);
+        } else if egui::Popup::is_id_open(ui.ctx(), popup_id) {
+            egui::Popup::close_id(ui.ctx(), popup_id);
+        }
+
+        if *enabled && ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape)) {
+            *enabled = false;
+        }
+
         let id = ui.id().with("_anim_visible");
         let visible_t = ui
             .ctx()
@@ -66,11 +84,14 @@ impl<'a> Popup<'a> {
 
         let pivot = pivot_pos + visible_t * get_offset_from_align(pivot_align);
         if visible_t > 0.3 {
-            let id = ui.id().with("_area");
+            // Ignore an opening click until the popup area existed in a previous frame
+            let was_open_last_frame = ui.ctx().read_response(area_id).is_some();
 
             let source_toggled_t = (visible_t - 0.2) / 0.8;
             let style = ui.style();
-            let res = Area::new(id)
+            let res = Area::new(area_id)
+                .kind(UiKind::Popup)
+                .order(Order::Foreground)
                 .pivot(pivot_align)
                 .fixed_pos(pivot)
                 .sizing_pass(force_sizing_pass)
@@ -93,13 +114,27 @@ impl<'a> Popup<'a> {
             if force_sizing_pass {
                 ui.ctx().request_discard("record popup size after forced sizing pass");
             }
+            let pointer_pressed_elsewhere = ui.input(|input| input.pointer.any_pressed())
+                && ui
+                    .ctx()
+                    .pointer_interact_pos()
+                    .is_some_and(|pointer| !res.rect.contains(pointer));
 
-            // Hide the popup if the user clicks outside of it
-            if res.clicked_elsewhere() {
+            // Hide only after the popup survived its opening frame
+            if should_close_popup(was_open_last_frame, res.should_close(), pointer_pressed_elsewhere) {
                 *enabled = false;
             }
         }
+
+        if !*enabled && egui::Popup::is_id_open(ui.ctx(), popup_id) {
+            egui::Popup::close_id(ui.ctx(), popup_id);
+        }
     }
+}
+
+/// Returns whether popup interaction should close the popup this frame.
+fn should_close_popup(was_open_last_frame: bool, close_requested: bool, pointer_pressed_elsewhere: bool) -> bool {
+    close_requested || (was_open_last_frame && pointer_pressed_elsewhere)
 }
 
 const AXIS_OFFSET: f32 = 7.;
@@ -117,4 +152,29 @@ fn get_offset_from_align(align: Align2) -> Vec2 {
         Align2::RIGHT_BOTTOM => (-AXIS_OFFSET, -AXIS_OFFSET),
     };
     vec2(x, y)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_close_popup;
+
+    #[test]
+    fn opening_pointer_press_does_not_immediately_close_popup() {
+        assert!(!should_close_popup(false, false, true));
+    }
+
+    #[test]
+    fn outside_pointer_press_closes_established_popup() {
+        assert!(should_close_popup(true, false, true));
+    }
+
+    #[test]
+    fn inside_pointer_press_keeps_popup_open() {
+        assert!(!should_close_popup(true, false, false));
+    }
+
+    #[test]
+    fn explicit_close_request_closes_popup() {
+        assert!(should_close_popup(false, true, false));
+    }
 }

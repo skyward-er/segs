@@ -9,7 +9,6 @@ use egui::{
 use segs_assets::icons;
 use segs_memory::MemoryExt;
 use segs_ui::{components::panel_header::PanelHeader, style::CtxStyleExt, widgets::buttons::IconBtn};
-use serde::{Deserialize, Serialize};
 
 use crate::{
     app::AppContext,
@@ -22,6 +21,7 @@ use crate::{
             widget_renderer::{show_snapping_guide, show_widget, show_widgets},
         },
         grid::Grid,
+        layout,
         popups::GridSettingsPopup,
         views::ViewTrait,
         widgets::{WidgetTrait, WidgetVariant},
@@ -37,7 +37,7 @@ static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 
 /// View subtype representing the different configuration views available when
 /// the user is in the Configuration mode.
-#[derive(Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ConfigurationView {}
 
 enum WidgetDragSource {
@@ -57,6 +57,9 @@ struct WidgetDragPayload {
 
 impl ViewTrait for ConfigurationView {
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
+        if appctx.layouts.active().is_none() {
+            return;
+        }
         let app_style = ui.app_style();
         let panel_frame = Frame::new().fill(app_style.main_panels_fill);
 
@@ -80,13 +83,18 @@ impl ViewTrait for ConfigurationView {
                 show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", |ui| {
                     let selected = selected_widget(ui);
                     let protocol = appctx.data_adapter.as_ref().map(|adapter| adapter.describe_protocol());
-                    let widget =
-                        selected.and_then(|id| appctx.layout.widgets.iter_mut().find(|widget| widget.id == id));
+                    let widget = selected.and_then(|id| {
+                        appctx
+                            .layouts
+                            .active_mut()
+                            .and_then(|layout| layout.widgets.iter_mut().find(|widget| widget.id == id))
+                    });
                     settings::show(ui, widget, protocol);
                 });
             });
 
-        let grid = Grid::new(ui.available_rect_before_wrap(), appctx.layout.grid_settings);
+        let grid_settings = appctx.layouts.active().expect("active layout checked").grid_settings;
+        let grid = Grid::new(ui.available_rect_before_wrap(), grid_settings);
 
         CentralPanel::default()
             .frame(Frame::new().fill(app_style.main_panels_fill))
@@ -108,7 +116,12 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
     let mut widget_clicked = false;
 
     if !drag_in_progress {
-        for widget in &appctx.layout.widgets {
+        for widget in &appctx
+            .layouts
+            .active()
+            .expect("configuration requires a layout")
+            .widgets
+        {
             let rect = grid.to_screen_rect(widget.grect);
             let response = ui.interact(rect, widget.id.with("edit_interaction"), Sense::click_and_drag());
 
@@ -166,7 +179,9 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
         show_widgets(
             ui,
             appctx
-                .layout
+                .layouts
+                .active()
+                .expect("configuration requires a layout")
                 .widgets
                 .iter()
                 .filter(|widget| Some(widget.id) != dragged_layout_widget),
@@ -177,7 +192,9 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
 
     let selected = selected_widget(ui);
     if let Some(widget) = appctx
-        .layout
+        .layouts
+        .active()
+        .expect("configuration requires a layout")
         .widgets
         .iter()
         .find(|widget| Some(widget.id) == selected && Some(widget.id) != dragged_layout_widget)
@@ -196,30 +213,56 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
     }
 
     if let Some(id) = remove_requested {
-        appctx.layout.remove_widget(id);
+        appctx
+            .layouts
+            .active_mut()
+            .expect("configuration requires a layout")
+            .remove_widget(id);
         if selected_widget(ui) == Some(id) {
             set_selected_widget(ui, None);
         }
     }
 
-    let grid_settings_clicked = show_grid_settings_control(ui, appctx, grid);
-    if grid_response.clicked() && !widget_clicked && remove_requested.is_none() && !grid_settings_clicked {
+    let layout_control_clicked = show_layout_controls(ui, appctx, grid);
+    if grid_response.clicked() && !widget_clicked && remove_requested.is_none() && !layout_control_clicked {
         set_selected_widget(ui, None);
     }
 }
 
 /// Draws the grid settings button and its anchored popup.
-fn show_grid_settings_control(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) -> bool {
-    let button_rect = Rect::from_min_size(
+fn show_layout_controls(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) -> bool {
+    let done_rect = Rect::from_min_size(
         pos2(
             grid.rect.right() - GRID_SETTINGS_BUTTON_SIZE.x - GRID_SETTINGS_BUTTON_MARGIN,
             grid.rect.top() + GRID_SETTINGS_BUTTON_MARGIN,
         ),
         GRID_SETTINGS_BUTTON_SIZE,
     );
+    let done_response = IconBtn::new(icons::Check)
+        .show_at(ui, done_rect, Id::new("configuration_done_editing_button"))
+        .on_hover_text("Done Editing");
+    if done_response.clicked() {
+        layout::request_done_editing(ui, &appctx.layouts);
+    }
+    layout::show_done_editing_prompt(ui, &mut appctx.layouts, &done_response);
+
+    let grid_rect = done_rect.translate(vec2(-GRID_SETTINGS_BUTTON_SIZE.x - GRID_SETTINGS_BUTTON_MARGIN, 0.));
     let response = IconBtn::new(icons::GridSettings)
-        .show_at(ui, button_rect, Id::new(GRID_SETTINGS_BUTTON_ID))
+        .show_at(ui, grid_rect, Id::new(GRID_SETTINGS_BUTTON_ID))
         .on_hover_text("Grid Settings");
+
+    let mut any_clicked = done_response.clicked() || response.clicked();
+    if appctx.layouts.is_dirty() {
+        let save_rect = grid_rect.translate(vec2(-GRID_SETTINGS_BUTTON_SIZE.x - GRID_SETTINGS_BUTTON_MARGIN, 0.));
+        let save_response = IconBtn::new(icons::Save)
+            .show_at(ui, save_rect, Id::new("configuration_save_layout_button"))
+            .on_hover_text("Save Layout");
+        if save_response.clicked() {
+            layout::save_active(ui, &mut appctx.layouts, save_response.id);
+        }
+        layout::show_control_error(ui, &save_response);
+        any_clicked |= save_response.clicked();
+    }
 
     let mut visible: bool = ui.mem().get_temp_or_default(Id::new(GRID_SETTINGS_VISIBLE_ID));
     if response.clicked() {
@@ -227,18 +270,22 @@ fn show_grid_settings_control(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid)
         ui.ctx().request_repaint();
     }
 
-    // Defer a newly opened popup to the next frame so the toggle click cannot be interpreted as an outside click.
+    // Defer a newly opened popup so the toggle click is not treated as an outside click
     if visible && !response.clicked() {
         GridSettingsPopup::new(
             &mut visible,
-            &mut appctx.layout.grid_settings,
+            &mut appctx
+                .layouts
+                .active_mut()
+                .expect("configuration requires a layout")
+                .grid_settings,
             response.rect.right_bottom(),
         )
         .show(ui);
     }
 
     ui.mem().insert_temp(Id::new(GRID_SETTINGS_VISIBLE_ID), visible);
-    response.clicked()
+    any_clicked
 }
 
 /// Draws and commits the active widget drag.
@@ -254,7 +301,14 @@ fn show_widget_drag(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
 
     let (preview_id, variant, show_floating_selection) = match &payload.source {
         WidgetDragSource::Layout(id) => {
-            let Some(widget) = appctx.layout.widgets.iter().find(|widget| widget.id == *id) else {
+            let Some(widget) = appctx
+                .layouts
+                .active()
+                .expect("configuration requires a layout")
+                .widgets
+                .iter()
+                .find(|widget| widget.id == *id)
+            else {
                 egui::DragAndDrop::clear_payload(ui.ctx());
                 return;
             };
@@ -288,8 +342,8 @@ fn show_widget_drag(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
 
     let over_grid = is_resize || grid.rect.contains(pointer);
     let drop_candidate = if over_grid {
-        // Snap only the drop target; keep the floating widget under the pointer.
-        // Paint the target first so the floating widget passes over its outline.
+        // Snap only the drop target while keeping the floating widget under the pointer
+        // Paint the target first so the floating widget passes over its outline
         let placement_rect = clamp_rect_to(raw_rect, grid.rect);
         // Use a fresh animation after each grid re-entry
         if !payload.snap_visible.swap(true, Ordering::Relaxed) {
@@ -323,17 +377,32 @@ fn show_widget_drag(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
         if let Some(grect) = drop_candidate {
             match &payload.source {
                 WidgetDragSource::Layout(id) => {
-                    if let Some(widget) = appctx.layout.widgets.iter_mut().find(|widget| widget.id == *id) {
+                    if let Some(widget) = appctx
+                        .layouts
+                        .active_mut()
+                        .expect("configuration requires a layout")
+                        .widgets
+                        .iter_mut()
+                        .find(|widget| widget.id == *id)
+                    {
                         widget.grect = grect;
                     }
                 }
                 WidgetDragSource::Gallery(variant) => {
-                    appctx.layout.add_widget(variant.clone(), grect);
+                    appctx
+                        .layouts
+                        .active_mut()
+                        .expect("configuration requires a layout")
+                        .add_widget(variant.clone(), grect);
                 }
             }
         } else if let WidgetDragSource::Layout(id) = payload.source {
             // Rejected layout drops delete the committed widget
-            appctx.layout.remove_widget(id);
+            appctx
+                .layouts
+                .active_mut()
+                .expect("configuration requires a layout")
+                .remove_widget(id);
             if selected_widget(ui) == Some(id) {
                 set_selected_widget(ui, None);
             }

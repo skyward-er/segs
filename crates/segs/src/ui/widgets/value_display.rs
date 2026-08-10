@@ -7,6 +7,7 @@ use std::{
 use egui::{FontFamily, FontId, Ui, Vec2, pos2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     dataflow::{DataStore, DataValue, StreamKey},
@@ -26,7 +27,7 @@ const AUTO_SIZE_MARGIN_RATIO: f32 = 0.05;
 const AUTO_SIZE_UPDATE_INTERVAL: Duration = Duration::from_millis(20);
 const AUTO_SIZE_CACHE_ID: &str = "value_display_auto_size";
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ValueDisplayWidget {
     label: String,
     stream: Option<StreamKey>,

@@ -1,14 +1,7 @@
-use egui::{Align, Frame, Id, Layout, Margin, Panel, Ui, Vec2};
-use segs_memory::MemoryExt;
+use egui::{Align, Frame, Layout, Margin, Panel, Ui, Vec2};
 use segs_ui::style::CtxStyleExt;
 
-use crate::ui::{
-    components::{
-        buttons,
-        mode_toggle::{ModeToggle, ViewMode},
-    },
-    views::VIEW_MODE_ID,
-};
+use crate::ui::components::buttons;
 
 pub fn show(ui: &mut Ui) {
     let stroke = ui.app_style().main_view_stroke;
@@ -36,7 +29,6 @@ pub fn show(ui: &mut Ui) {
 
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.set_width(middle_width);
-                    top_bar_middle_fn(ui);
                 });
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -52,13 +44,4 @@ pub fn show(ui: &mut Ui) {
     let rect = response.response.rect;
     let y = rect.bottom() - stroke.width * 0.5;
     ui.painter().hline(rect.x_range(), y, stroke);
-}
-
-fn top_bar_middle_fn(ui: &mut Ui) {
-    let id = Id::new(VIEW_MODE_ID);
-    let mut mode: ViewMode = ui.mem().get_temp_or_default(id);
-
-    ModeToggle::new(&mut mode).with_height(22.).with_width(300.).show(ui);
-
-    ui.mem().insert_temp(id, mode);
 }

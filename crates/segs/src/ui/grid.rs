@@ -1,20 +1,22 @@
 use egui::{Pos2, Rect, Vec2, vec2};
+use serde::{Deserialize, Serialize};
 
 /// A rect in grid space coordinates.
 /// Given in grid column and row count.
 ///
 /// Use [`Grid::to_screen_rect`] to turn it into a usable [`Rect`] for screen space calculations.
 /// A type-safe wrapper guarantees that grid rects don't get mixed up with screen space rects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GRect(Rect);
 
 impl GRect {
+    #[cfg(test)]
     pub fn new(rect: Rect) -> Self {
         Self(rect)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridSettings {
     pub cols: u32,
     pub rows: u32,

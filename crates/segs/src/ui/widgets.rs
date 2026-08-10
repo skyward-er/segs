@@ -4,6 +4,7 @@ use enum_dispatch::enum_dispatch;
 pub use value_display::ValueDisplayWidget;
 
 use egui::{Id, Ui, Vec2};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     dataflow::DataStore,
@@ -13,7 +14,7 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WidgetData {
     pub id: Id,
     /// Widget rect in grid space coordinates
@@ -24,7 +25,7 @@ pub struct WidgetData {
 }
 
 #[enum_dispatch(WidgetTrait)]
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WidgetVariant {
     ValueDisplay(ValueDisplayWidget),
 }

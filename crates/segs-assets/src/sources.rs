@@ -76,6 +76,7 @@ pub mod svgs {
     pub static CARET_DOWN_SOLID: egui::ImageSource = include_svg!("svgs", "caret_down_solid.svg");
     pub static CHARTS_OUTLINE: egui::ImageSource = include_svg!("svgs", "charts_outline.svg");
     pub static CHARTS_SOLID: egui::ImageSource = include_svg!("svgs", "charts_solid.svg");
+    pub static CHECK: egui::ImageSource = include_svg!("svgs", "check.svg");
     pub static CIRCLED_CROSS: egui::ImageSource = include_svg!("svgs", "circled_cross.svg");
     pub static CLOUD_DOWNLOAD: egui::ImageSource = include_svg!("svgs", "cloud_download.svg");
     pub static CLOUD_OUTLINE: egui::ImageSource = include_svg!("svgs", "cloud_outline.svg");
@@ -118,6 +119,7 @@ pub mod svgs {
     pub static RETICLE_SOLID: egui::ImageSource = include_svg!("svgs", "reticle_solid.svg");
     pub static RIGHT_PANEL_OUTLINE: egui::ImageSource = include_svg!("svgs", "right_panel_outline.svg");
     pub static RIGHT_PANEL_SOLID: egui::ImageSource = include_svg!("svgs", "right_panel_solid.svg");
+    pub static SAVE: egui::ImageSource = include_svg!("svgs", "save.svg");
     pub static SETTINGS_OUTLINE: egui::ImageSource = include_svg!("svgs", "settings_outline.svg");
     pub static SETTINGS_SOLID: egui::ImageSource = include_svg!("svgs", "settings_solid.svg");
     pub static SQUARE_ROTATED_SOLID: egui::ImageSource = include_svg!("svgs", "square_rotated_solid.svg");

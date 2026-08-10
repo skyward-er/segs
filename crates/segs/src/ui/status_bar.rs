@@ -11,6 +11,7 @@ use segs_ui::{
 
 use crate::app::AppContext;
 use crate::dataflow::transport::DataTransport::{Ethernet, Serial};
+use crate::ui::layout;
 use crate::ui::modals::SourceModal;
 
 /// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
@@ -69,6 +70,23 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         }
     }
     ui.mem().insert_temp(source_id, source_selection);
+
+    let layout_name = appctx
+        .layouts
+        .active()
+        .map_or("No layout selected", |layout| layout.name.as_str());
+    let layout_button = UnpaddedStatusBarButton::default()
+        .padded()
+        .add_icon(icons::Layout::outline())
+        .add_text(layout_name);
+    let layout_response = ui
+        .add(layout_button)
+        .on_hover_cursor(CursorIcon::PointingHand)
+        .on_hover_text("Open Layout Manager");
+    if layout_response.clicked() {
+        layout::request_open_manager(ui, &appctx.layouts);
+    }
+    layout::show_open_manager_prompt(ui, &mut appctx.layouts, &layout_response);
 }
 
 fn show_right_side(ui: &mut egui::Ui) {

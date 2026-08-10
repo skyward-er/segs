@@ -1,38 +1,43 @@
 pub mod configuration;
 pub mod operator;
+pub mod welcome;
 
 use egui::Ui;
 use enum_dispatch::enum_dispatch;
-use serde::{Deserialize, Serialize};
 
 use crate::app::AppContext;
 
-pub const VIEW_MODE_ID: &str = "view_mode";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewTarget {
+    Welcome,
+    Operator,
+    Configuration,
+}
 
-/// View represents what the user is currently looking at, imagine this as the
-/// index of a document, but instead of pages, we index over possible layouts of
-/// the UI. This is useful to keep track of which panels should be visible, and
-/// which should not, as well as to keep track of the state of each view.
 #[enum_dispatch(ViewTrait)]
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum View {
+    Welcome(welcome::WelcomeView),
     Configuration(configuration::ConfigurationView),
     Operator(operator::OperatorView),
 }
 
 #[enum_dispatch]
-trait ViewTrait {
+pub trait ViewTrait {
     fn show_main_view(&mut self, ui: &mut Ui, appctx: &mut AppContext);
 }
 
 impl View {
+    /// Shows the active application view.
     pub fn show(&mut self, ui: &mut Ui, appctx: &mut AppContext) {
         self.show_main_view(ui, appctx);
     }
-}
 
-impl Default for View {
-    fn default() -> Self {
-        Self::Configuration(configuration::ConfigurationView::default())
+    /// Creates the view associated with a requested transition target.
+    pub fn from_target(target: ViewTarget) -> Self {
+        match target {
+            ViewTarget::Welcome => Self::Welcome(welcome::WelcomeView),
+            ViewTarget::Operator => Self::Operator(operator::OperatorView),
+            ViewTarget::Configuration => Self::Configuration(configuration::ConfigurationView::default()),
+        }
     }
 }

@@ -11,15 +11,20 @@ license.workspace = true
 aho-corasick = "1.1.4"
 directories = "6.0.0"
 eframe.workspace = true
-egui.workspace = true
+egui = { workspace = true, features = ["serde"] }
 enum_dispatch = "0.3.13"
 mimalloc = { version = "0.1.48", features = ["v3"] }
+chrono.workspace = true
+rand.workspace = true
 segs-assets.path = "../segs-assets"
 segs-memory.path = "../segs-memory"
 segs-plot.path = "../segs-plot"
 segs-ui.path = "../segs-ui"
 segs-mavlink.path = "../segs-mavlink"
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 smallvec = "1.15.1"
+tempfile.workspace = true
+thiserror.workspace = true
 argh = "0.1.19"
 bitflags = "2.12.1"
