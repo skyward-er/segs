@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use chrono::Local;
 use egui::{
-    Align, Align2, Button, Frame, Id, Key, Layout, Margin, Modifiers, RichText, ScrollArea, Sense, Stroke, StrokeKind,
-    TextEdit, Tooltip, Ui, UiBuilder, Vec2,
+    Align, Align2, Button, Frame, Id, Key, Layout, Margin, Modifiers, Response, RichText, ScrollArea, Sense, Stroke,
+    StrokeKind, TextEdit, Tooltip, Ui, UiBuilder, Vec2,
     text::{CCursor, CCursorRange},
     vec2,
 };
@@ -27,6 +27,7 @@ const MANAGER_CONTENT_SIZE: Vec2 = vec2(680., 420.);
 const SELECTED_SLUG_ID: &str = "layout_manager_selected_slug";
 const SEARCH_QUERY_ID: &str = "layout_manager_search_query";
 const SEARCH_CACHE_ID: &str = "layout_manager_search_cache";
+const SEARCH_INPUT_ID: &str = "layout_manager_search_input";
 const INLINE_EDIT_ID: &str = "layout_manager_inline_edit";
 const DELETE_CONFIRMATION_ID: &str = "layout_manager_delete_confirmation";
 
@@ -204,12 +205,19 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
         .show(ui.ctx(), |ui| {
             let manager_content_top = ui.cursor().top();
             let mut separator_response = None;
+            let mut search_response = None;
             ui.allocate_ui_with_layout(MANAGER_CONTENT_SIZE, Layout::left_to_right(Align::Min), |ui| {
                 let content_height = ui.available_height();
                 ui.vertical(|ui| {
                     ui.set_width(270.);
                     ui.set_height(content_height);
-                    ui.add(TextEdit::singleline(&mut query).hint_text("Search layouts…"));
+                    search_response = Some(
+                        ui.add(
+                            TextEdit::singleline(&mut query)
+                                .id_salt(SEARCH_INPUT_ID)
+                                .hint_text("Search layouts…"),
+                        ),
+                    );
                     ui.add_space(6.);
                     let reserved_height = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
                     let list_height = (ui.available_height() - reserved_height).max(64.);
@@ -377,6 +385,10 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     separator_style.stroke,
                 );
             }
+
+            if let Some(search_response) = &search_response {
+                retain_search_focus(search_response, edit.is_some());
+            }
         });
 
     set_search_query(ui, query);
@@ -440,6 +452,13 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
     LayoutManagerModalResponse {
         should_close,
         transition,
+    }
+}
+
+/// Keeps ordinary modal keyboard input routed to search while yielding to name editors.
+fn retain_search_focus(search_response: &Response, inline_edit_active: bool) {
+    if !inline_edit_active {
+        search_response.request_focus();
     }
 }
 
@@ -677,7 +696,40 @@ fn metadata_row(ui: &mut Ui, label: &str, value: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{InlineEditIntent, cursor_at_text_end, inline_edit_intent};
+    use egui::TextEdit;
+
+    use super::{InlineEditIntent, cursor_at_text_end, inline_edit_intent, retain_search_focus};
+
+    #[test]
+    fn search_reclaims_focus_from_other_modal_controls() {
+        egui::__run_test_ui(|ui| {
+            let mut query = String::new();
+            let search = ui.add(TextEdit::singleline(&mut query));
+            let button = ui.button("Layout action");
+
+            button.request_focus();
+            retain_search_focus(&search, false);
+
+            assert!(search.has_focus());
+            assert!(!button.has_focus());
+        });
+    }
+
+    #[test]
+    fn search_yields_focus_to_an_inline_name_editor() {
+        egui::__run_test_ui(|ui| {
+            let mut query = String::new();
+            let mut name = String::new();
+            let search = ui.add(TextEdit::singleline(&mut query));
+            let name_editor = ui.add(TextEdit::singleline(&mut name));
+
+            name_editor.request_focus();
+            retain_search_focus(&search, true);
+
+            assert!(name_editor.has_focus());
+            assert!(!search.has_focus());
+        });
+    }
 
     #[test]
     fn inline_edit_keyboard_and_focus_intents_are_prioritized() {
