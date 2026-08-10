@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 
 use chrono::Utc;
 use rand::random;
@@ -24,12 +27,14 @@ pub enum LayoutManagerError {
     InvalidSlug(String),
 }
 
+/// Keeps the editable active layout alongside its last persisted state.
 #[derive(Debug, Clone)]
 struct ActiveLayout {
     working: Layout,
     saved: Layout,
 }
 
+/// Owns the saved-layout catalog, active working copy, and persistence operations.
 #[derive(Debug)]
 pub struct LayoutManager {
     store: LayoutStore,
@@ -46,7 +51,7 @@ impl LayoutManager {
         let store = LayoutStore::new(directory);
         let (loaded, mut warnings) = store.load_all()?;
         let mut layouts = BTreeMap::new();
-        let mut names = Vec::<String>::new();
+        let mut names = HashSet::<String>::new();
         for layout in loaded {
             // Ignore invalid entries without preventing the rest of the catalog from loading
             if validated_display_name(&layout.name).as_deref() != Ok(layout.name.as_str())
@@ -55,7 +60,7 @@ impl LayoutManager {
                 warnings.push(format!("{}: invalid layout slug.", layout.slug));
                 continue;
             }
-            if names.iter().any(|name| name == &layout.name) {
+            if names.contains(&layout.name) {
                 warnings.push(format!("{}: duplicate display name '{}'.", layout.slug, layout.name));
                 continue;
             }
@@ -63,7 +68,7 @@ impl LayoutManager {
                 warnings.push(format!("{}: duplicate layout slug.", layout.slug));
                 continue;
             }
-            names.push(layout.name.clone());
+            names.insert(layout.name.clone());
             layouts.insert(layout.slug.clone(), layout);
         }
 
@@ -334,11 +339,13 @@ mod tests {
 
     #[test]
     fn persists_renames_defaults_and_deletes() {
+        // Create a layout and verify that creation immediately persists its file
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         let slug = manager.create_empty("Flight Main").unwrap();
         assert!(directory.0.join(format!("{slug}.json")).exists());
 
+        // Rename the default layout and verify both its file and pending default update follow the new slug
         manager.set_default(Some(&slug)).unwrap();
         assert_eq!(manager.take_default_update(), Some(Some(slug.clone())));
         let renamed = manager.rename(&slug, "Flight Primary").unwrap();
@@ -347,6 +354,7 @@ mod tests {
         assert!(directory.0.join(format!("{renamed}.json")).exists());
         assert_eq!(manager.take_default_update(), Some(Some(renamed.clone())));
 
+        // Delete the active default and verify dependent in-memory state is cleared
         manager.delete(&renamed).unwrap();
         assert!(manager.active().is_none());
         assert_eq!(manager.take_default_update(), Some(None));
@@ -354,24 +362,31 @@ mod tests {
 
     #[test]
     fn rejects_exact_names_but_allows_case_variants() {
+        // Establish an existing display name in the catalog
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         let first = manager.create_empty("Flight").unwrap();
+
+        // Exact duplicate names should fail validation
         assert!(matches!(
             manager.create_empty("Flight"),
             Err(LayoutManagerError::Name(LayoutNameError::Duplicate(_)))
         ));
+
+        // Case variants remain distinct under the catalog's case-sensitive policy
         let second = manager.create_empty("flight").unwrap();
         assert_ne!(first, second);
     }
 
     #[test]
     fn loads_default_as_active_once() {
+        // Persist a layout that can be requested as the default on the next load
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         let slug = manager.create_empty("Default").unwrap();
         drop(manager);
 
+        // Reloading with that slug should select it as both the active and default layout
         let manager = LayoutManager::load(directory.0.clone(), Some(slug.clone())).unwrap();
         assert_eq!(manager.active_slug(), Some(slug.as_str()));
         assert_eq!(manager.default_slug(), Some(slug.as_str()));
@@ -379,10 +394,13 @@ mod tests {
 
     #[test]
     fn slug_generation_retries_collisions() {
+        // Reserve the first deterministic suffix in the in-memory catalog
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         let occupied = Layout::empty("Flight".into(), "flight-00000007".into());
         manager.layouts.insert(occupied.slug.clone(), occupied);
+
+        // The generator should reject the occupied suffix and accept the next value
         let mut suffixes = [7, 8].into_iter();
         assert_eq!(
             manager.new_slug_with_source("Flight", || suffixes.next().unwrap()),
@@ -392,6 +410,7 @@ mod tests {
 
     #[test]
     fn dirty_layout_can_be_discarded_or_saved() {
+        // Modify the active working copy, then verify discarding restores its saved baseline
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         manager.create_empty("Flight").unwrap();
@@ -401,6 +420,7 @@ mod tests {
         assert_eq!(manager.active().unwrap().grid_settings.cols, 8);
         assert!(!manager.is_dirty());
 
+        // Modify it again, save, and reload to verify the new baseline was persisted
         manager.active_mut().unwrap().grid_settings.rows = 15;
         manager.save_active().unwrap();
         assert!(!manager.is_dirty());
@@ -412,14 +432,46 @@ mod tests {
 
     #[test]
     fn malformed_layout_does_not_hide_valid_layouts() {
+        // Place one valid layout and one malformed JSON file in the catalog directory
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         manager.create_empty("Valid").unwrap();
         fs::write(directory.0.join("broken-deadbeef.json"), b"not json").unwrap();
         drop(manager);
 
+        // Loading should retain the valid entry and report the malformed file as a warning
         let manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         assert_eq!(manager.layouts().count(), 1);
         assert_eq!(manager.warnings().len(), 1);
+    }
+
+    #[test]
+    fn duplicate_names_do_not_hide_unrelated_layouts() {
+        // Persist two valid slugs with the same display name plus one unrelated layout
+        let directory = TestDirectory::new();
+        let store = LayoutStore::new(directory.0.clone());
+        store
+            .save(&Layout::empty("Duplicate".into(), "duplicate-00000001".into()))
+            .unwrap();
+        store
+            .save(&Layout::empty("Duplicate".into(), "duplicate-00000002".into()))
+            .unwrap();
+        store
+            .save(&Layout::empty("Independent".into(), "independent-00000003".into()))
+            .unwrap();
+
+        // Loading should keep one duplicate, preserve the unrelated layout, and warn about the rejected entry
+        let manager = LayoutManager::load(directory.0.clone(), None).unwrap();
+        let names = manager
+            .layouts()
+            .map(|layout| layout.name.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(names, HashSet::from(["Duplicate", "Independent"]));
+        assert!(
+            manager
+                .warnings()
+                .iter()
+                .any(|warning| warning.contains("duplicate display name"))
+        );
     }
 }

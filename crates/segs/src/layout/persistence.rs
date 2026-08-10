@@ -21,6 +21,7 @@ pub enum LayoutStoreError {
     SlugMismatch(String),
 }
 
+/// Reads and atomically writes layout files within one catalog directory.
 #[derive(Debug)]
 pub struct LayoutStore {
     directory: PathBuf,

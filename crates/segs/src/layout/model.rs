@@ -12,6 +12,7 @@ use crate::ui::{
 pub const CURRENT_LAYOUT_SCHEMA: u32 = 1;
 const ADDED_WIDGET_ID_NAMESPACE: &str = "layout_added_widget";
 
+/// Complete persisted representation of a named widget layout.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
     pub schema_version: u32,
@@ -133,9 +134,14 @@ mod tests {
 
     #[test]
     fn validates_and_normalizes_names() {
+        // Valid names should be trimmed while preserving their user-facing separators
         assert_eq!(validated_display_name("  Flight__ Main  ").unwrap(), "Flight__ Main");
+
+        // Filename normalization should collapse separators and append a fixed-width suffix
         assert_eq!(normalized_name("  Flight__ Main  "), "flight-main");
         assert_eq!(slug_with_suffix("Flight Main", 0x12ab), "flight-main-000012ab");
+
+        // Empty names and unsupported characters should report their specific validation failures
         assert!(matches!(validated_display_name(""), Err(LayoutNameError::Empty)));
         assert!(matches!(
             validated_display_name("Flight/Primary"),
@@ -145,18 +151,24 @@ mod tests {
 
     #[test]
     fn rename_preserves_suffix() {
+        // A valid existing slug should keep its random suffix under the normalized new name
         assert_eq!(
             renamed_slug("New Name", "old-name-deadbeef").as_deref(),
             Some("new-name-deadbeef")
         );
+
+        // A slug without the required suffix cannot be safely renamed
         assert!(renamed_slug("New Name", "invalid").is_none());
     }
 
     #[test]
     fn retries_widget_id_collisions() {
+        // Add the first widget with a deterministic identifier.
         let mut layout = Layout::empty("Test".into(), "test-00000001".into());
         let rect = GRect::new(Rect::from_min_size(pos2(0., 0.), vec2(1., 1.)));
         let first = layout.add_widget_with_id_source(ValueDisplayWidget::default().into(), rect, || 7);
+
+        // Reusing that value should retry until a distinct identifier is produced.
         let mut values = [7, 8].into_iter();
         let second =
             layout.add_widget_with_id_source(ValueDisplayWidget::default().into(), rect, || values.next().unwrap());
@@ -165,11 +177,13 @@ mod tests {
 
     #[test]
     fn complete_layout_round_trips_through_json() {
+        // Populate every persisted portion of a layout with non-default data.
         let mut layout = Layout::empty("Round Trip".into(), "round-trip-deadbeef".into());
         let rect = GRect::new(Rect::from_min_size(pos2(2., 3.), vec2(4., 5.)));
         layout.add_widget(ValueDisplayWidget::default().into(), rect);
         layout.grid_settings = GridSettings::new(12, 7);
 
+        // Serializing and deserializing should reproduce the complete layout exactly.
         let json = serde_json::to_string_pretty(&layout).unwrap();
         let restored: Layout = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, layout);

@@ -160,21 +160,25 @@ mod tests {
 
     #[test]
     fn opening_pointer_press_does_not_immediately_close_popup() {
+        // The pointer press that opened a not-yet-established popup should be ignored.
         assert!(!should_close_popup(false, false, true));
     }
 
     #[test]
     fn outside_pointer_press_closes_established_popup() {
+        // A later pointer press outside an established popup should dismiss it.
         assert!(should_close_popup(true, false, true));
     }
 
     #[test]
     fn inside_pointer_press_keeps_popup_open() {
+        // An established popup should remain open when no outside press or close request occurs.
         assert!(!should_close_popup(true, false, false));
     }
 
     #[test]
     fn explicit_close_request_closes_popup() {
+        // An explicit close request should dismiss even a popup without previous-frame state.
         assert!(should_close_popup(false, true, false));
     }
 }

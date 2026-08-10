@@ -7,6 +7,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::app::AppContext;
 
+/// Names a destination without constructing its stateful application view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewTarget {
     Welcome,
@@ -14,6 +15,7 @@ pub enum ViewTarget {
     Configuration,
 }
 
+/// Holds the state for whichever top-level application view is currently active.
 #[enum_dispatch(ViewTrait)]
 pub enum View {
     Welcome(welcome::WelcomeView),

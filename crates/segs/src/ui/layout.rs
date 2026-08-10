@@ -20,6 +20,7 @@ const CONTROL_ERROR_ID: &str = "layout_control_error";
 const TRANSITION_ID: &str = "layout_view_transition";
 const CLOSE_REQUEST_ID: &str = "layout_close_request";
 
+/// Records the operation to continue after unsaved changes are resolved.
 #[derive(Clone, Debug)]
 enum PendingAction {
     OpenManager,
@@ -27,12 +28,14 @@ enum PendingAction {
     Close,
 }
 
+/// Identifies which control owns the currently displayed dirty-layout prompt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DirtyPromptOwner {
     StatusBar,
     DoneEditing,
 }
 
+/// Retains a guarded action and save error while its confirmation popup is open.
 #[derive(Clone, Debug)]
 struct DirtyPrompt {
     owner: DirtyPromptOwner,
@@ -40,6 +43,7 @@ struct DirtyPrompt {
     error: Option<String>,
 }
 
+/// Associates a layout operation failure with the control that triggered it.
 #[derive(Clone, Debug)]
 struct ControlError {
     owner: Id,

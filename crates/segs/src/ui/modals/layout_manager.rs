@@ -1,5 +1,7 @@
 mod search;
 
+use std::sync::Arc;
+
 use chrono::Local;
 use egui::{
     Align, Align2, Button, Frame, Id, Key, Layout, Margin, Modifiers, RichText, ScrollArea, Sense, Stroke, StrokeKind,
@@ -24,9 +26,11 @@ const MANAGER_MODAL_ID: &str = "layout_manager_modal";
 const MANAGER_CONTENT_SIZE: Vec2 = vec2(680., 420.);
 const SELECTED_SLUG_ID: &str = "layout_manager_selected_slug";
 const SEARCH_QUERY_ID: &str = "layout_manager_search_query";
+const SEARCH_CACHE_ID: &str = "layout_manager_search_cache";
 const INLINE_EDIT_ID: &str = "layout_manager_inline_edit";
 const DELETE_CONFIRMATION_ID: &str = "layout_manager_delete_confirmation";
 
+/// Identifies the catalog mutation performed by the shared inline name editor.
 #[derive(Clone, Debug)]
 enum InlineEditAction {
     Create,
@@ -34,6 +38,7 @@ enum InlineEditAction {
     Rename { source: String },
 }
 
+/// Persists inline editor input and errors across frames.
 #[derive(Clone, Debug)]
 struct InlineEdit {
     action: InlineEditAction,
@@ -42,6 +47,7 @@ struct InlineEdit {
     request_focus: bool,
 }
 
+/// Retains a pending deletion and any persistence error while its popup is open.
 #[derive(Clone, Debug)]
 struct DeleteConfirmation {
     slug: String,
@@ -109,6 +115,22 @@ fn set_search_query(ui: &Ui, query: String) {
     ui.mem().insert_temp(Id::new(SEARCH_QUERY_ID), query);
 }
 
+/// Returns the latest matching cached search or replaces the single cache entry.
+fn cached_search(ui: &Ui, layouts: &LayoutManager, query: &str) -> (Arc<search::CachedSearch>, bool) {
+    let cached = ui.mem().get_temp(Id::new(SEARCH_CACHE_ID));
+    let (cached, recomputed) = search::resolve_cached_search(cached, layouts.layouts(), query);
+    if recomputed {
+        ui.mem().insert_temp(Id::new(SEARCH_CACHE_ID), cached.clone());
+    }
+    (cached, recomputed)
+}
+
+/// Clears search results after a successful catalog mutation.
+fn invalidate_search_cache(ui: &Ui) {
+    ui.mem()
+        .remove_temp::<Arc<search::CachedSearch>>(Id::new(SEARCH_CACHE_ID));
+}
+
 /// Returns the active inline naming operation.
 fn inline_edit(ui: &Ui) -> Option<InlineEdit> {
     ui.mem().get_temp(Id::new(INLINE_EDIT_ID))
@@ -138,6 +160,7 @@ fn set_delete_confirmation(ui: &Ui, confirmation: Option<DeleteConfirmation>) {
     }
 }
 
+/// Defers actions from modal controls until after the modal has rendered.
 enum ManagerCommand {
     Open(String, Id),
     Edit(String, Id),
@@ -146,6 +169,7 @@ enum ManagerCommand {
     ToggleDefault(String, Id),
 }
 
+/// Describes whether the inline editor should remain open, cancel, or submit.
 #[derive(Debug, PartialEq, Eq)]
 enum InlineEditIntent {
     Continue,
@@ -162,18 +186,17 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
     let mut selected = selected_slug(ui);
     let mut edit = inline_edit(ui);
     let mut pending_delete = delete_confirmation(ui);
-    let results = search::search(layouts.layouts(), &query)
-        .into_iter()
-        .map(|result| (result.layout.slug.clone(), result.layout.name.clone()))
-        .collect::<Vec<_>>();
-    if selected
-        .as_ref()
-        .is_none_or(|selected| !results.iter().any(|(slug, _)| slug == selected))
+    let (cached_search, search_recomputed) = cached_search(ui, layouts, &query);
+    let results = &cached_search.results;
+    if selected.is_none()
+        || (search_recomputed
+            && selected
+                .as_ref()
+                .is_some_and(|selected| !results.iter().any(|result| &result.slug == selected)))
     {
-        selected = results.first().map(|(slug, _)| slug.clone());
+        selected = results.first().map(|result| result.slug.clone());
     }
 
-    let selected_layout = selected.as_deref().and_then(|slug| layouts.layout(slug)).cloned();
     let modal_frame = Frame::popup(ui.style());
     let modal_inner_margin = modal_frame.inner_margin;
     let response = Modal::new(Id::new(MANAGER_MODAL_ID), "Layout Manager")
@@ -195,7 +218,8 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                         .min_scrolled_height(list_height)
                         .auto_shrink([true, false])
                         .show(ui, |ui| {
-                            for (slug, name) in &results {
+                            for result in results {
+                                let slug = &result.slug;
                                 let renaming = matches!(
                                     edit.as_ref().map(|edit| &edit.action),
                                     Some(InlineEditAction::Rename { source }) if source == slug
@@ -206,7 +230,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                                         should_close = true;
                                     }
                                 } else {
-                                    show_layout_row(ui, layouts, slug, name, &mut selected);
+                                    show_layout_row(ui, layouts, slug, &result.name, &mut selected);
                                 }
                             }
 
@@ -249,40 +273,38 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 ui.vertical(|ui| {
                     ui.set_width(380.);
                     ui.set_height(content_height);
-                    let Some(layout) = selected_layout else {
-                        ui.heading("Select a layout");
+                    let Some((slug, name, created_at, modified_at, widget_count, grid_cols, grid_rows)) =
+                        selected.as_deref().and_then(|slug| layouts.layout(slug)).map(|layout| {
+                            (
+                                layout.slug.clone(),
+                                layout.name.clone(),
+                                layout
+                                    .created_at
+                                    .with_timezone(&Local)
+                                    .format("%Y-%m-%d %H:%M")
+                                    .to_string(),
+                                layout
+                                    .modified_at
+                                    .with_timezone(&Local)
+                                    .format("%Y-%m-%d %H:%M")
+                                    .to_string(),
+                                layout.widgets.len(),
+                                layout.grid_settings.cols,
+                                layout.grid_settings.rows,
+                            )
+                        })
+                    else {
+                        ui.heading(RichText::new("No layout selected").weak());
                         return;
                     };
 
-                    let slug = layout.slug;
-                    let name = layout.name;
                     ui.heading(&name);
                     ui.monospace(format!("{slug}.json"));
                     ui.add_space(8.);
-                    metadata_row(
-                        ui,
-                        "Created",
-                        &layout
-                            .created_at
-                            .with_timezone(&Local)
-                            .format("%Y-%m-%d %H:%M")
-                            .to_string(),
-                    );
-                    metadata_row(
-                        ui,
-                        "Modified",
-                        &layout
-                            .modified_at
-                            .with_timezone(&Local)
-                            .format("%Y-%m-%d %H:%M")
-                            .to_string(),
-                    );
-                    metadata_row(ui, "Widgets", &layout.widgets.len().to_string());
-                    metadata_row(
-                        ui,
-                        "Grid",
-                        &format!("{} × {}", layout.grid_settings.cols, layout.grid_settings.rows),
-                    );
+                    metadata_row(ui, "Created", &created_at);
+                    metadata_row(ui, "Modified", &modified_at);
+                    metadata_row(ui, "Widgets", &widget_count.to_string());
+                    metadata_row(ui, "Grid", &format!("{grid_cols} × {grid_rows}"));
 
                     ui.add_space(16.);
                     ui.horizontal(|ui| {
@@ -552,13 +574,16 @@ fn show_inline_editor(
         InlineEditAction::Rename { source } => layouts.rename(source, &name),
     };
     match result {
-        Ok(slug) => match current.action {
-            InlineEditAction::Create | InlineEditAction::Duplicate { .. } => Some(ViewTarget::Configuration),
-            InlineEditAction::Rename { .. } => {
-                *selected = Some(slug);
-                None
+        Ok(slug) => {
+            invalidate_search_cache(ui);
+            match current.action {
+                InlineEditAction::Create | InlineEditAction::Duplicate { .. } => Some(ViewTarget::Configuration),
+                InlineEditAction::Rename { .. } => {
+                    *selected = Some(slug);
+                    None
+                }
             }
-        },
+        }
         Err(error) => {
             current.error = Some(InlineEditError::Store(error.to_string()));
             current.request_focus = true;
@@ -607,6 +632,7 @@ fn show_delete_popup(
         let was_active = layouts.active_slug() == Some(slug);
         match layouts.delete(slug) {
             Ok(()) => {
+                invalidate_search_cache(ui);
                 *selected = layouts.layouts().next().map(|layout| layout.slug.clone());
                 if was_active {
                     return Some(ViewTarget::Welcome);
@@ -655,12 +681,19 @@ mod tests {
 
     #[test]
     fn inline_edit_keyboard_and_focus_intents_are_prioritized() {
+        // With no terminating input, the editor should remain active.
         assert_eq!(inline_edit_intent(false, false, false), InlineEditIntent::Continue);
+
+        // Escape should take priority over simultaneous submission or focus loss.
         assert_eq!(inline_edit_intent(true, true, true), InlineEditIntent::Cancel);
+
+        // Enter should be recorded as an explicit submission even when focus is also lost.
         assert_eq!(
             inline_edit_intent(false, true, true),
             InlineEditIntent::Submit { explicit: true }
         );
+
+        // Focus loss alone should request an implicit submission.
         assert_eq!(
             inline_edit_intent(false, false, true),
             InlineEditIntent::Submit { explicit: false }
@@ -669,7 +702,10 @@ mod tests {
 
     #[test]
     fn duplicate_cursor_uses_the_end_of_the_complete_value() {
+        // ASCII duplicate names should place the cursor after the complete suggested value.
         assert_eq!(cursor_at_text_end("Flight Copy").index, 11);
+
+        // Cursor placement should count characters rather than UTF-8 bytes.
         assert_eq!(cursor_at_text_end("Café Copy").index, 9);
     }
 }
