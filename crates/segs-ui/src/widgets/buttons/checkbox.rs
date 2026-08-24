@@ -4,12 +4,17 @@ use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widg
 
 use crate::style::CtxStyleExt;
 
+/// A selectable check indicator.
 pub struct Checkbox<'a> {
     flag: &'a mut bool,
     builder: UiBuilder,
 }
 
 impl<'a> Checkbox<'a> {
+    /// Default checkbox size.
+    pub const SIZE: egui::Vec2 = vec2(15., 15.);
+
+    /// Creates a checkbox bound to the provided flag.
     pub fn new(flag: &'a mut bool) -> Checkbox<'a> {
         Checkbox {
             flag,
@@ -21,18 +26,24 @@ impl<'a> Checkbox<'a> {
         self.builder = self.builder.id_salt(id);
         self
     }
+
+    /// Paints a checkbox at the given rectangle.
+    pub fn show_at(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response) -> Response {
+        show_checkbox(ui, active, rect, response)
+    }
 }
 
 impl Widget for Checkbox<'_> {
     fn ui(self, ui: &mut Ui) -> Response {
-        ui.scope_builder(self.builder, |ui| add_checkbox(ui, self.flag)).inner
+        ui.scope_builder(self.builder, |ui| {
+            let (rect, response) = ui.allocate_exact_size(Self::SIZE, Sense::click());
+            Self::show_at(ui, self.flag, rect, response)
+        })
+        .inner
     }
 }
 
-fn add_checkbox(ui: &mut Ui, active: &mut bool) -> Response {
-    let size = vec2(15.0, 15.0);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-
+fn show_checkbox(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response) -> Response {
     if ui.is_rect_visible(rect) {
         let id = response.id;
 

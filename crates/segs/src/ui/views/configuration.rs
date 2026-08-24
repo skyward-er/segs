@@ -75,14 +75,17 @@ impl ViewTrait for ConfigurationView {
             });
 
         Panel::right("configuration_widget_settings")
-            .default_size(200.)
+            .default_size(220.)
             .min_size(180.)
             .max_size(300.)
             .frame(panel_frame)
             .show_inside(ui, |ui| {
                 show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", |ui| {
                     let selected = selected_widget(ui);
-                    let protocol = appctx.data_adapter.as_ref().map(|adapter| adapter.describe_protocol());
+                    let protocol = appctx
+                        .data_adapter
+                        .as_ref()
+                        .map(|adapter| (adapter.describe_protocol(), adapter.token()));
                     let widget = selected.and_then(|id| {
                         appctx
                             .layouts

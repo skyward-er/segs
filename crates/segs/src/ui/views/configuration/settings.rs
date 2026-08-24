@@ -1,17 +1,21 @@
 mod stream_selector;
 
 use egui::{ComboBox, Grid, Ui};
-use segs_ui::widgets::{UiWidgetExt, text::TextEdit};
+use segs_ui::widgets::{Separator, UiWidgetExt, text::TextEdit};
 
 use crate::{
-    dataflow::protocol::ProtocolDescriptor,
+    dataflow::{adapter::DataAdapterInstanceToken, protocol::ProtocolDescriptor},
     ui::{
         widget_settings::{WidgetDataSetting, WidgetSetting},
         widgets::{WidgetData, WidgetTrait},
     },
 };
 
-pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, protocol: Option<&ProtocolDescriptor>) {
+pub fn show(
+    ui: &mut Ui,
+    widget: Option<&mut WidgetData>,
+    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
+) {
     let Some(widget) = widget else {
         ui.weak("Select a widget to edit its settings.");
         return;
@@ -28,7 +32,8 @@ pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, protocol: Option<&Prot
 
         let settings = widget.variant.settings();
         if has_data_settings && !settings.is_empty() {
-            ui.separator();
+            let horizontal_margin = ui.spacing().window_margin.leftf();
+            ui.add(Separator::default().grow(horizontal_margin));
         }
 
         if settings.is_empty() {
@@ -41,7 +46,11 @@ pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, protocol: Option<&Prot
     });
 }
 
-fn show_data_settings(ui: &mut Ui, settings: Vec<WidgetDataSetting<'_>>, protocol: Option<&ProtocolDescriptor>) {
+fn show_data_settings(
+    ui: &mut Ui,
+    settings: Vec<WidgetDataSetting<'_>>,
+    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
+) {
     for setting in settings {
         let setting_id = setting.id();
         ui.push_id(setting_id, |ui| match setting {

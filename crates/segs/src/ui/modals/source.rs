@@ -17,7 +17,7 @@ use crate::{
     dataflow::{
         adapter::{
             AdapterType::{self, MAVLink},
-            DataAdapter,
+            DataAdapter, DataAdapterInstance,
         },
         mapping::DataMapping,
         mavlink_adapter::MavlinkAdapter,
@@ -112,7 +112,7 @@ impl<'a> SourceModal<'a> {
                                 (Some(transport), Some(mapping)) => {
                                     match MavlinkAdapter::new(ui.ctx().clone(), transport, mapping) {
                                         Ok(adapter) => {
-                                            appctx.data_adapter = Some(Box::new(adapter));
+                                            appctx.data_adapter = Some(DataAdapterInstance::new(adapter));
                                             connect_error = false;
                                             ui.close();
                                         }

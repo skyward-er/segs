@@ -6,7 +6,7 @@ use segs_memory::MemoryExt;
 use segs_ui::style::{AppStyle, setup_style};
 
 use crate::args::AppArgs;
-use crate::dataflow::adapter::AdapterType;
+use crate::dataflow::adapter::{AdapterType, DataAdapterInstance};
 use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
 use crate::layout::{LayoutManager, LayoutManagerError};
 use crate::ui::views::{View, ViewTarget};
@@ -22,7 +22,7 @@ pub struct App {
 
 pub struct AppContext {
     pub data_store: DataStore,
-    pub data_adapter: Option<Box<dyn DataAdapter>>,
+    pub data_adapter: Option<DataAdapterInstance>,
     pub layouts: LayoutManager,
 }
 
@@ -49,7 +49,7 @@ impl App {
                 println!("Loading MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
                 let adapter =
                     MavlinkAdapter::new(ctx.clone(), transport, mapping).expect("Failed to create MAVLink adapter");
-                Some(Box::new(adapter) as Box<dyn DataAdapter>)
+                Some(DataAdapterInstance::new(adapter))
             }
             _ => None,
         };

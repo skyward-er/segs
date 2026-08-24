@@ -1,4 +1,9 @@
-use std::time::Instant;
+use std::{
+    hash::{Hash, Hasher},
+    ops::{Deref, DerefMut},
+    sync::Arc,
+    time::Instant,
+};
 
 use argh::FromArgValue;
 use serde::{Deserialize, Serialize};
@@ -90,5 +95,66 @@ impl Default for Stats {
 pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {
     match adapter {
         AdapterType::MAVLink => MavlinkAdapter::get_mapping_sources(),
+    }
+}
+
+/// Owns one installed adapter together with its lifecycle identity.
+///
+/// Derived UI state and caches must be invalidated when an adapter is replaced,
+/// even when the replacement exposes an identical protocol. This wrapper creates
+/// that identity alongside the adapter so callers cannot forget to update it.
+pub struct DataAdapterInstance {
+    adapter: Box<dyn DataAdapter>,
+    token: DataAdapterInstanceToken,
+}
+
+impl DataAdapterInstance {
+    /// Wraps an adapter as a newly installed instance.
+    pub fn new(adapter: impl DataAdapter + 'static) -> Self {
+        Self {
+            adapter: Box::new(adapter),
+            token: DataAdapterInstanceToken(Arc::new(())),
+        }
+    }
+
+    /// Returns the identity used to associate derived state with this instance.
+    pub fn token(&self) -> &DataAdapterInstanceToken {
+        &self.token
+    }
+}
+
+impl Deref for DataAdapterInstance {
+    type Target = dyn DataAdapter;
+
+    fn deref(&self) -> &Self::Target {
+        self.adapter.as_ref()
+    }
+}
+
+impl DerefMut for DataAdapterInstance {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.adapter.as_mut()
+    }
+}
+
+/// Cloneable identity for one installed adapter lifecycle.
+///
+/// Identity follows an allocation shared by all clones, avoiding timestamps,
+/// global counters, and manually maintained revisions. Retaining a clone also
+/// prevents its address from being reused while derived cached state is alive.
+#[derive(Clone, Debug)]
+pub struct DataAdapterInstanceToken(Arc<()>);
+
+impl PartialEq for DataAdapterInstanceToken {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for DataAdapterInstanceToken {}
+
+impl Hash for DataAdapterInstanceToken {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.0).hash(state);
     }
 }

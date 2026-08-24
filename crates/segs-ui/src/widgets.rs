@@ -1,10 +1,12 @@
 pub mod atoms;
 pub mod buttons;
+mod expandable_selector;
 pub mod labels;
 mod separator;
 pub mod text;
 
 use egui::Response;
+pub use expandable_selector::ExpandableSelector;
 use segs_assets::icons::Icon;
 pub use separator::Separator;
 
