@@ -7,7 +7,7 @@ use segs_ui::style::{AppStyle, setup_style};
 
 use crate::args::AppArgs;
 use crate::dataflow::adapter::{AdapterType, DataAdapterInstance};
-use crate::dataflow::{DataStore, adapter::DataAdapter, mavlink_adapter::MavlinkAdapter};
+use crate::dataflow::{DataStore, adapter::DataAdapter, skyward_mavlink_adapter::SkywardMavlinkAdapter};
 use crate::layout::{LayoutManager, LayoutManagerError};
 use crate::ui::views::{View, ViewTarget};
 use crate::ui::{layout, status_bar, top_bar};
@@ -45,10 +45,10 @@ impl App {
         let mut data_store = DataStore::new();
 
         let data_adapter = match (args.transport, args.adapter, args.mapping) {
-            (Some(transport), Some(AdapterType::MAVLink), Some(mapping)) => {
-                println!("Loading MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
-                let adapter =
-                    MavlinkAdapter::new(ctx.clone(), transport, mapping).expect("Failed to create MAVLink adapter");
+            (Some(transport), Some(AdapterType::SkywardMavlink), Some(mapping)) => {
+                println!("Loading Skyward MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
+                let adapter = SkywardMavlinkAdapter::new(ctx.clone(), transport, mapping)
+                    .expect("Failed to create Skyward MAVLink adapter");
                 Some(DataAdapterInstance::new(adapter))
             }
             _ => None,

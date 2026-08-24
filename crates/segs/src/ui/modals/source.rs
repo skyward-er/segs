@@ -16,11 +16,11 @@ use crate::{
     app::AppContext,
     dataflow::{
         adapter::{
-            AdapterType::{self, MAVLink},
+            AdapterType::{self, SkywardMavlink},
             DataAdapter, DataAdapterInstance,
         },
         mapping::DataMapping,
-        mavlink_adapter::MavlinkAdapter,
+        skyward_mavlink_adapter::SkywardMavlinkAdapter,
         transport::{DataTransport, TransportType},
     },
     ui::components::value_edits,
@@ -45,7 +45,7 @@ impl<'a> SourceModal<'a> {
         let transport_id = ui.id().with("_transport_id");
         let error_id = ui.id().with("_error_id");
 
-        let mut adapter_sel = ui.mem().get_perm_or_default(adapter_id);
+        let mut adapter_sel: AdapterType = ui.mem().get_perm_or_default(adapter_id);
         let mut mapping_sel: String = ui.mem().get_perm_or_default(mapping_id);
         let mut transport_sel = ui.mem().get_perm_or_default(transport_id);
         let mut connect_error = ui.mem().get_temp_or_default(error_id);
@@ -55,9 +55,10 @@ impl<'a> SourceModal<'a> {
                 ui.horizontal(|ui| {
                     ui.label("Adapter");
                     egui::ComboBox::from_id_salt(ui.id().with("_adapter_combobox"))
-                        .selected_text(format!("{:?}", adapter_sel))
+                        .selected_text(adapter_sel.to_string())
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut adapter_sel, AdapterType::MAVLink, "MAVLink");
+                            let adapter = AdapterType::SkywardMavlink;
+                            ui.selectable_value(&mut adapter_sel, adapter, adapter.to_string());
                         });
                 });
 
@@ -108,9 +109,9 @@ impl<'a> SourceModal<'a> {
 
                     if ui.add(Button::new("Connect").frame(!connected)).clicked() && !connected {
                         match adapter_sel {
-                            MAVLink => match (transport, mapping) {
+                            SkywardMavlink => match (transport, mapping) {
                                 (Some(transport), Some(mapping)) => {
-                                    match MavlinkAdapter::new(ui.ctx().clone(), transport, mapping) {
+                                    match SkywardMavlinkAdapter::new(ui.ctx().clone(), transport, mapping) {
                                         Ok(adapter) => {
                                             appctx.data_adapter = Some(DataAdapterInstance::new(adapter));
                                             connect_error = false;

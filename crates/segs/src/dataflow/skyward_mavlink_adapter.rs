@@ -17,9 +17,9 @@ use crate::dataflow::protocol::{FieldDescriptor, ProtocolDescriptor, SourceDescr
 use crate::dataflow::transport::DataTransport;
 use crate::dataflow::{DataKey, DataPoint, DataStore, DataStream, DataType, SourceKey, StreamKey};
 
-/// Adapter implementation for MAVLink protocol.
+/// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
-pub struct MavlinkAdapter {
+pub struct SkywardMavlinkAdapter {
     transport: DataTransport,
     mapping: DataMapping,
     stop_flag: Arc<AtomicBool>,
@@ -29,7 +29,7 @@ pub struct MavlinkAdapter {
     created_at: Instant,
 }
 
-impl DataAdapter for MavlinkAdapter {
+impl DataAdapter for SkywardMavlinkAdapter {
     fn get_mapping_sources() -> Vec<MappingDescriptor>
     where
         Self: Sized,
@@ -167,7 +167,7 @@ impl DataAdapter for MavlinkAdapter {
     }
 }
 
-impl Drop for MavlinkAdapter {
+impl Drop for SkywardMavlinkAdapter {
     fn drop(&mut self) {
         self.stop_flag.store(true, Ordering::Relaxed);
     }

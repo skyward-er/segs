@@ -2,8 +2,8 @@
 
 pub mod adapter;
 pub mod mapping;
-pub mod mavlink_adapter;
 pub mod protocol;
+pub mod skyward_mavlink_adapter;
 pub mod transport;
 
 use std::collections::HashMap;

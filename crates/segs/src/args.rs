@@ -34,7 +34,7 @@ struct CliArgs {
     #[argh(option)]
     send_socket: Option<SocketAddrV4>,
 
-    /// data adapter used for processing incoming data (mavlink)
+    /// data adapter used for processing incoming data (e.g. "skyward-mavlink")
     #[argh(option)]
     adapter: Option<AdapterType>,
 
@@ -83,11 +83,11 @@ pub fn parse_args() -> Result<AppArgs, Box<dyn std::error::Error>> {
 
     // Validate adapter arguments
     match cli_args.adapter {
-        Some(AdapterType::MAVLink) => {
-            args.adapter = Some(AdapterType::MAVLink);
+        Some(AdapterType::SkywardMavlink) => {
+            args.adapter = Some(AdapterType::SkywardMavlink);
             // Ensure a mapping file is provided if an adapter was specified
             let Some(mapping_file) = cli_args.mapping_file else {
-                return Err("Error: MAVLink adapter selected but no mapping file provided.".into());
+                return Err("Error: Skyward MAVLink adapter selected but no mapping file provided.".into());
             };
             args.mapping = Some(DataMapping::LocalFile(mapping_file));
         }

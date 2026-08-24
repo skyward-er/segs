@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     hash::{Hash, Hasher},
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -11,17 +12,25 @@ use serde::{Deserialize, Serialize};
 use crate::dataflow::{
     DataStore,
     mapping::{DataMapping, MappingDescriptor},
-    mavlink_adapter::MavlinkAdapter,
     protocol::ProtocolDescriptor,
+    skyward_mavlink_adapter::SkywardMavlinkAdapter,
     transport::DataTransport,
 };
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromArgValue)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromArgValue)]
 pub enum AdapterType {
     #[default]
-    #[argh(name = "mavlink")]
-    MAVLink,
+    #[argh(name = "skyward-mavlink")]
+    SkywardMavlink,
     // Future adapter types can be added here
+}
+
+impl fmt::Display for AdapterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SkywardMavlink => f.write_str("Skyward MAVLink"),
+        }
+    }
 }
 
 /// Trait that defines the interface for data adapters, which are responsible for receiving raw data from various
@@ -80,7 +89,7 @@ pub struct Stats {
     pub errors: u32,
 }
 
-// TODO: stub implementation, remove once properly implemented with real data in mavlink adapter
+// TODO: stub implementation, remove once properly implemented with real data in Skyward MAVLink adapter
 impl Default for Stats {
     fn default() -> Self {
         Self {
@@ -94,7 +103,7 @@ impl Default for Stats {
 
 pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {
     match adapter {
-        AdapterType::MAVLink => MavlinkAdapter::get_mapping_sources(),
+        AdapterType::SkywardMavlink => SkywardMavlinkAdapter::get_mapping_sources(),
     }
 }
 
