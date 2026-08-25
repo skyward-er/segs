@@ -419,7 +419,7 @@ fn show_disabled_widget(
     id: Id,
     rect: Rect,
     variant: &WidgetVariant,
-    data_store: &mut crate::dataflow::DataStore,
+    data_store: &mut crate::dataflow::store::DataStore,
 ) {
     ui.scope(|ui| {
         ui.disable();

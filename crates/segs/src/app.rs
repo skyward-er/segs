@@ -7,7 +7,7 @@ use segs_ui::style::{AppStyle, setup_style};
 
 use crate::args::AppArgs;
 use crate::dataflow::adapter::{AdapterType, DataAdapterInstance};
-use crate::dataflow::{DataStore, adapter::DataAdapter, skyward_mavlink_adapter::SkywardMavlinkAdapter};
+use crate::dataflow::{adapter::DataAdapter, skyward_mavlink_adapter::SkywardMavlinkAdapter, store::DataStore};
 use crate::layout::{LayoutManager, LayoutManagerError};
 use crate::ui::views::{View, ViewTarget};
 use crate::ui::{layout, status_bar, top_bar};
@@ -72,7 +72,10 @@ impl App {
 impl eframe::App for App {
     fn logic(&mut self, _ctx: &Context, _frame: &mut Frame) {
         if let Some(ref mut adapter) = self.context.data_adapter {
-            adapter.process_incoming(&mut self.context.data_store);
+            let data_store = &mut self.context.data_store;
+
+            adapter.process_incoming(data_store);
+            adapter.process_outgoing(data_store);
         }
     }
 

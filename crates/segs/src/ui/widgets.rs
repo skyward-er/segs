@@ -7,7 +7,7 @@ use egui::{Id, Ui, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dataflow::DataStore,
+    dataflow::store::DataStore,
     ui::{
         grid::GRect,
         widget_settings::{WidgetDataSetting, WidgetSetting},

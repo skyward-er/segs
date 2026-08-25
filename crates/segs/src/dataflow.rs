@@ -4,9 +4,10 @@ pub mod adapter;
 pub mod mapping;
 pub mod protocol;
 pub mod skyward_mavlink_adapter;
+pub mod store;
 pub mod transport;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +19,15 @@ pub struct DataKey(u64);
 /// An opaque handler that uniquely represents a source of data, such as a specific system or component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceKey(u32);
+
+/// An opaque handler that uniquely represents a command.
+/// Commands send structured data to remote systems through adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CommandKey(u64);
+
+/// A protocol-independent identifier for a command sequence in the central datastore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CommandId(u64);
 
 /// An opaque handler that uniquely represents a data stream coming from a specific source.
 /// This is the key that will be used to store and retrieve data in the central [`DataStore`].
@@ -39,14 +49,24 @@ impl StreamKey {
 
 #[derive(Debug, Clone, Copy)]
 pub struct DataPoint<T> {
+    /// Floating-point timestamp in seconds
     pub timestamp: f64,
     pub value: T,
 }
 
 #[derive(Debug)]
 pub enum DataType {
-    F64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
     I64,
+    F32,
+    F64,
+    Bool,
     String,
 }
 
@@ -67,54 +87,44 @@ impl DataStream {
     }
 }
 
+#[derive(Debug)]
 pub enum DataValue {
-    F64(f64),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    I8(i8),
+    I16(i16),
+    I32(i32),
     I64(i64),
+    F32(f32),
+    F64(f64),
     Bool(bool),
     String(String),
 }
 
+pub enum CommandStatus {
+    /// The command is pending response.
+    Pending,
+    /// The command was completed successfully.
+    Completed,
+    /// The command was rejected by the target.
+    Rejected,
+    /// The command encountered a local error.
+    LocalError,
+}
+
 /// Command type stored as key-value pairs for maximum flexibility of representation.
-pub type Command = HashMap<DataKey, DataValue>;
+pub struct Command {
+    pub key: CommandKey,
+    pub target: SourceKey,
+    pub timestamp: SystemTime,
+    pub fields: HashMap<DataKey, DataValue>,
+}
 
 pub struct CommandSequence {
-    source: SourceKey,
-    request: Command,
-    response: Vec<Command>,
-}
-
-/// Central data store that holds all processed data streams, raw messages, and command sequences.
-///
-/// Data adapters will update this store with new data points as they are processed.
-/// UI will read from this store to display information to the user.
-#[derive(Default)]
-pub struct DataStore {
-    pub streams: HashMap<StreamKey, DataStream>,
-    pub commands: Vec<CommandSequence>,
-}
-
-impl DataStore {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Ensures the fixed sample stream used by widget gallery previews exists.
-    pub fn ensure_mock_stream(&mut self) {
-        self.streams.entry(StreamKey::mock()).or_insert_with(|| {
-            DataStream::F64(vec![DataPoint {
-                timestamp: 0.,
-                value: 42.,
-            }])
-        });
-    }
-
-    /// Returns the complete stream associated with `key`.
-    pub fn stream(&self, key: StreamKey) -> Option<&DataStream> {
-        self.streams.get(&key)
-    }
-
-    /// Returns the most recent value in the stream associated with `key`.
-    pub fn latest(&self, key: StreamKey) -> Option<DataValue> {
-        self.stream(key).and_then(DataStream::last)
-    }
+    pub id: CommandId,
+    pub status: CommandStatus,
+    pub request: Command,
+    pub responses: Vec<Command>,
 }

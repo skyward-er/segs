@@ -3,19 +3,26 @@ use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind::{Interrupted, TimedOut, WouldBlock};
 use std::iter::zip;
+use std::num::Wrapping;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc, mpsc::Receiver};
+use std::sync::{Arc, mpsc, mpsc::Receiver, mpsc::Sender};
 use std::thread;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use segs_mavlink::connection::{Connection, MavConnection};
-use segs_mavlink::{MavFrame, MavProfile, MavType, MessageReadError, MsgField};
+use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, MavlinkVersion, MessageReadError, MsgField};
 
 use crate::dataflow::adapter::{DataAdapter, Status};
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
-use crate::dataflow::protocol::{FieldDescriptor, ProtocolDescriptor, SourceDescriptor};
+use crate::dataflow::protocol::{CommandDescriptor, FieldDescriptor, ProtocolDescriptor, SourceDescriptor};
 use crate::dataflow::transport::DataTransport;
-use crate::dataflow::{DataKey, DataPoint, DataStore, DataStream, DataType, SourceKey, StreamKey};
+use crate::dataflow::{
+    Command, DataKey, DataPoint, DataStream, DataType, DataValue, SourceKey, StreamKey, store::DataStore,
+};
+use crate::dataflow::{CommandId, CommandKey, CommandSequence, CommandStatus};
+
+/// Component ID used for telemetry messages. All other values are used for command request-response correlation.
+const TELEMETRY_COMPONENT_ID: u8 = 0;
 
 /// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -24,7 +31,21 @@ pub struct SkywardMavlinkAdapter {
     mapping: DataMapping,
     stop_flag: Arc<AtomicBool>,
     incoming: Receiver<MavFrame>,
+    outgoing: Sender<OutgoingCommand>,
+    send_failures: Receiver<SendFailure>,
+    /// Outgoing packet sequence number.
+    packet_sequence: Wrapping<u8>,
+    /// Maps custom MAVLink component IDs to stable datastore command IDs.
+    pending: PendingCommandSlots,
     profile: Arc<MavProfile>,
+    /// The MAVLink message ID used for ACK responses, cached from the MAVLink XML profile.
+    ack_message_id: u32,
+    /// The MAVLink message ID used for WACK responses, cached from the MAVLink XML profile.
+    wack_message_id: u32,
+    /// The MAVLink message ID used for NACK responses, cached from the MAVLink XML profile.
+    nack_message_id: u32,
+    /// Cached protocol descriptor
+    /// TODO: move caching logic to [DataAdapterInstance]
     protocol: ProtocolDescriptor,
     created_at: Instant,
 }
@@ -49,9 +70,22 @@ impl DataAdapter for SkywardMavlinkAdapter {
             _ => return Err("Unsupported definition source method".into()),
         };
 
-        let (tx, rx) = mpsc::channel();
+        // Cache message IDs for ACK/WACK/NACK messages for faster lookup
+        let Some(ack_message_id) = profile.messages.values().find(|m| m.name == "ACK_TM").map(|m| m.id) else {
+            return Err("Unsupported MAVLink profile: ACK_TM not found".into());
+        };
+        let Some(wack_message_id) = profile.messages.values().find(|m| m.name == "WACK_TM").map(|m| m.id) else {
+            return Err("Unsupported MAVLink profile: WACK_TM not found".into());
+        };
+        let Some(nack_message_id) = profile.messages.values().find(|m| m.name == "NACK_TM").map(|m| m.id) else {
+            return Err("Unsupported MAVLink profile: NACK_TM not found".into());
+        };
+
+        let (incoming_tx, incoming_rx) = mpsc::channel::<MavFrame>();
+        let (outgoing_tx, outgoing_rx) = mpsc::channel::<OutgoingCommand>();
+        let (send_failure_tx, send_failure_rx) = mpsc::channel::<SendFailure>();
+
         let stop_flag = Arc::new(AtomicBool::new(false));
-        let thread_stop_flag = stop_flag.clone();
 
         let connection = match &transport {
             DataTransport::Ethernet {
@@ -60,16 +94,24 @@ impl DataAdapter for SkywardMavlinkAdapter {
             } => Connection::udp(recv_socket, send_socket.clone(), profile.clone())?,
             DataTransport::Serial { tty, baud_rate } => Connection::serial(tty.clone(), *baud_rate, profile.clone())?,
         };
-        let protocol = make_protocol_descriptor(&profile);
+        let connection = Arc::new(connection);
 
+        let rx_conn = connection.clone();
+        let rx_stop_flag = stop_flag.clone();
+        let rx_ctx = ctx.clone();
+        // RX thread: receives incoming MAVLink frames and notifies the UI to update
         thread::spawn(move || {
-            while !thread_stop_flag.load(Ordering::Relaxed) {
-                match connection.recv_frame() {
+            while !rx_stop_flag.load(Ordering::Relaxed) {
+                // Receive the frame
+                match rx_conn.recv_frame() {
                     Ok(frame) => {
-                        let Ok(_) = tx.send(frame) else {
+                        // Send the frame to the incoming channel
+                        let Ok(_) = incoming_tx.send(frame) else {
                             break; // Receiver has been dropped, exit the thread
                         };
-                        ctx.request_repaint_of(egui::ViewportId::ROOT) // Notify the UI to update with new data
+
+                        // Notify the UI to update with new data
+                        rx_ctx.request_repaint_of(egui::ViewportId::ROOT)
                     }
                     Err(MessageReadError::Io(e)) => match e.kind() {
                         WouldBlock | TimedOut | Interrupted => continue, // retry
@@ -82,13 +124,45 @@ impl DataAdapter for SkywardMavlinkAdapter {
             }
         });
 
+        let tx_conn = connection.clone();
+        let tx_ctx = ctx.clone();
+        // TX thread: sends outgoing MAVLink frames and notifies the UI of errors
+        thread::spawn(move || {
+            // Get the next outgoing frame
+            while let Ok(outgoing) = outgoing_rx.recv() {
+                // Send the frame out
+                let result = tx_conn.send_frame(outgoing.frame);
+
+                // Notify the UI of send errors
+                if let Err(error) = result {
+                    eprintln!("Failed to send MAVLink message: {error}");
+
+                    let failure = SendFailure {
+                        pending_slot: outgoing.pending_slot,
+                        command_id: outgoing.command_id,
+                    };
+                    if send_failure_tx.send(failure).is_err() {
+                        break;
+                    }
+                    tx_ctx.request_repaint_of(egui::ViewportId::ROOT);
+                }
+            }
+        });
+
         Ok(Self {
             transport,
             mapping,
             stop_flag,
-            incoming: rx,
+            incoming: incoming_rx,
+            outgoing: outgoing_tx,
+            send_failures: send_failure_rx,
+            packet_sequence: Wrapping(0),
+            pending: PendingCommandSlots::default(),
+            protocol: make_protocol_descriptor(&profile),
             profile,
-            protocol,
+            ack_message_id,
+            wack_message_id,
+            nack_message_id,
             created_at: Instant::now(),
         })
     }
@@ -98,63 +172,97 @@ impl DataAdapter for SkywardMavlinkAdapter {
     }
 
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool {
-        let mut i = 0;
+        let mut processed = 0;
 
-        for MavFrame { header, message, .. } in self.incoming.try_iter() {
-            let timestamp = Instant::now().duration_since(self.created_at).as_secs_f64();
-
-            let message_info = self
-                .profile
-                .messages
-                .get(&message.id)
-                .expect("Message with unknown ID wasn't caught by the parser, this should never happen");
-
-            for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
-                let stream_key = StreamKey {
-                    source_key: SourceKey(header.system_id as u32),
-                    data_key: compute_data_key(message.id, i as u32, &field_info.name),
-                };
-
-                // TODO: need a way to distinguish between stream and command
-                let stream = match data_store.streams.entry(stream_key) {
-                    Entry::Occupied(e) => e.into_mut(),
-                    Entry::Vacant(e) => {
-                        // Create the new stream since it doesn't exist yet
-                        let new_stream = match field {
-                            MsgField::Int8(_)
-                            | MsgField::Int16(_)
-                            | MsgField::Int32(_)
-                            | MsgField::Int64(_)
-                            | MsgField::UInt8(_)
-                            | MsgField::UInt16(_)
-                            | MsgField::UInt32(_)
-                            | MsgField::UInt64(_) => DataStream::I64(Vec::new()),
-                            MsgField::Float(_) | MsgField::Double(_) => DataStream::F64(Vec::new()),
-                            MsgField::CharArray(_) => DataStream::String(Vec::new()),
-                            _ => {
-                                eprintln!(
-                                    "Unsupported field type for field {} in message ID {}",
-                                    field_info.name, message.id
-                                );
-                                continue;
-                            }
-                        };
-                        e.insert(new_stream)
-                    }
-                };
-
-                if !insert_field_to_stream(field, stream, timestamp) {
-                    eprintln!(
-                        "Type mismatch for field {} in message ID {}",
-                        field_info.name, message.id
-                    );
-                }
+        // Receive the message from the RX thread
+        while let Ok(frame) = self.incoming.try_recv() {
+            // Skyward MAVLink dialect differentiates between telemetry and command messages by component ID
+            match frame.header.component_id == TELEMETRY_COMPONENT_ID {
+                true => self.handle_message(frame, data_store),
+                false => self.handle_command(frame, data_store),
             }
 
-            i += 1;
+            processed += 1;
         }
 
-        i > 0
+        processed > 0
+    }
+
+    fn process_outgoing(&mut self, data_store: &mut DataStore) {
+        // Process any send failures from the RX thread
+        while let Ok(failure) = self.send_failures.try_recv() {
+            if self.pending.get(failure.pending_slot) != Some(failure.command_id) {
+                continue; // No matching command in the pending slot, skip
+            }
+            // Update the command status
+            data_store.command_sequence_mut(failure.command_id).status = CommandStatus::LocalError;
+            self.pending.release(failure.pending_slot);
+        }
+
+        loop {
+            let mut pending_slot = 0;
+            
+            // Try to acquire a pending slot for the command
+            let Some(command_sequence) = data_store.next_outgoing_command_if(|command| {
+                match self.pending.acquire(command.id) {
+                    Some(slot) => {
+                        pending_slot = slot;
+                        true
+                    }
+                    None => false,
+                }
+            }) else {
+                return; // No more commands to process
+            };
+
+            let command = &command_sequence.request;
+            let command_id = command_sequence.id;
+
+            // Retrieve the message info for the command
+            let id = command.key.0 as u32;
+            let Some(message_info) = self.profile.messages.get(&id) else {
+                self.pending.release(pending_slot);
+                command_sequence.status = CommandStatus::LocalError;
+                eprintln!("Missing serialization info for message ID {id}, skipping");
+                continue;
+            };
+
+            // Construct the MAVLink message
+            let message = match command_to_mav_message(&command, message_info) {
+                Ok(message) => message,
+                Err(err) => {
+                    self.pending.release(pending_slot);
+                    command_sequence.status = CommandStatus::LocalError;
+                    eprintln!("Failed to construct MAVLink message ID {id}: {err}");
+                    continue;
+                }
+            };
+
+            // Use the pending slot ID for correlating responses with a specific request
+            // The component ID in the MAVLink header is used for this purpose in the Skyward dialect
+            let header = MavHeader {
+                system_id: command.target.0 as u8,
+                component_id: pending_slot,
+                sequence: self.packet_sequence.0,
+            };
+            self.packet_sequence += 1;
+
+            let outgoing = OutgoingCommand {
+                frame: MavFrame {
+                    version: MavlinkVersion::V1,
+                    header,
+                    message,
+                },
+                pending_slot,
+                command_id,
+            };
+
+            // Send the command to the TX thread
+            if let Err(_) = self.outgoing.send(outgoing) {
+                self.pending.release(pending_slot);
+                command_sequence.status = CommandStatus::LocalError;
+            }
+        }
     }
 
     fn status(&self) -> Status {
@@ -170,6 +278,115 @@ impl DataAdapter for SkywardMavlinkAdapter {
 impl Drop for SkywardMavlinkAdapter {
     fn drop(&mut self) {
         self.stop_flag.store(true, Ordering::Relaxed);
+    }
+}
+
+impl SkywardMavlinkAdapter {
+    fn handle_command(&mut self, frame: MavFrame, data_store: &mut DataStore) {
+        let MavFrame { header, message, .. } = frame;
+
+        let pending_slot = header.component_id;
+        let Some(command_id) = self.pending.get(pending_slot) else {
+            eprintln!("Received command response with invalid pending slot {pending_slot}");
+            return;
+        };
+
+        let command_sequence = data_store.command_sequence_mut(command_id);
+        // Handle ACK/WACK/NACK messages as special command status updates
+        if self.update_sequence_status(command_sequence, message.id) {
+            self.pending.release(pending_slot);
+            return;
+        }
+
+        let target = command_sequence.request.target;
+        let Some(message_info) = self.profile.messages.get(&message.id) else {
+            eprintln!(
+                "Cannot parse message with unknown ID {}, is the MAVLink profile correct?",
+                message.id
+            );
+            return;
+        };
+
+        match command_from_mav_message(message, message_info, target) {
+            Ok(response) => {
+                command_sequence.responses.push(response);
+            }
+            Err(error) => {
+                eprintln!("Failed to process response for command {}: {error}", command_id.0);
+            }
+        }
+        self.pending.release(pending_slot);
+    }
+
+    fn handle_message(&mut self, frame: MavFrame, data_store: &mut DataStore) {
+        let MavFrame { header, message, .. } = frame;
+
+        let timestamp = Instant::now().duration_since(self.created_at).as_secs_f64();
+
+        let Some(message_info) = self.profile.messages.get(&message.id) else {
+            eprintln!(
+                "Cannot parse message with unknown ID {}, is the MAVLink profile correct?",
+                message.id
+            );
+            return;
+        };
+
+        for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
+            let stream_key = StreamKey {
+                source_key: SourceKey(header.system_id as u32),
+                data_key: compute_data_key(message.id, i as u32, &field_info.name),
+            };
+
+            let stream = match data_store.streams.entry(stream_key) {
+                Entry::Occupied(e) => e.into_mut(),
+                Entry::Vacant(e) => {
+                    // Create the new stream since it doesn't exist yet
+                    let new_stream = match field {
+                        MsgField::Int8(_)
+                        | MsgField::Int16(_)
+                        | MsgField::Int32(_)
+                        | MsgField::Int64(_)
+                        | MsgField::UInt8(_)
+                        | MsgField::UInt16(_)
+                        | MsgField::UInt32(_)
+                        | MsgField::UInt64(_) => DataStream::I64(Vec::new()),
+                        MsgField::Float(_) | MsgField::Double(_) => DataStream::F64(Vec::new()),
+                        MsgField::CharArray(_) => DataStream::String(Vec::new()),
+                        _ => {
+                            eprintln!(
+                                "Unsupported field type for field {} in message ID {}",
+                                field_info.name, message.id
+                            );
+                            continue;
+                        }
+                    };
+                    e.insert(new_stream)
+                }
+            };
+
+            if !insert_field_to_stream(field, stream, timestamp) {
+                eprintln!(
+                    "Type mismatch for field {} in message ID {}",
+                    field_info.name, message.id
+                );
+            }
+        }
+    }
+
+    /// Updates the status of a command sequence on ACK/WACK/NACK messages.
+    ///
+    /// Returns `true` if the status was updated to a final state.
+    /// No more future responses are expected and associated resources may be released.
+    fn update_sequence_status(&self, command_sequence: &mut CommandSequence, message_id: u32) -> bool {
+        if message_id == self.ack_message_id || message_id == self.wack_message_id {
+            command_sequence.status = CommandStatus::Completed;
+            true
+        } else if message_id == self.nack_message_id {
+            command_sequence.status = CommandStatus::Rejected;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -246,7 +463,8 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
     true
 }
 
-fn mavtype_to_datatype(mav: MavType) -> DataType {
+/// Maps the `MavType` to the corresponding `DataType` for use in the stream interface.
+fn mavtype_to_stream_datatype(mav: MavType) -> DataType {
     match mav {
         MavType::Char
         | MavType::UInt8
@@ -259,8 +477,133 @@ fn mavtype_to_datatype(mav: MavType) -> DataType {
         | MavType::Int64 => DataType::I64,
         MavType::Float | MavType::Double => DataType::F64,
         MavType::CharArray(_) => DataType::String,
-        _ => unimplemented!("Non-primitive MavTypes are not supported"),
+        _ => unimplemented!("MAVLink {mav:?} type is not supported for stream type"),
     }
+}
+
+/// Maps the `MavType` to the corresponding `DataType` for use in the command interface.
+fn mavtype_to_command_datatype(mav: MavType) -> DataType {
+    match mav {
+        MavType::UInt8 | MavType::Char => DataType::U8,
+        MavType::UInt16 => DataType::U16,
+        MavType::UInt32 => DataType::U32,
+        MavType::UInt64 => DataType::U64,
+        MavType::Int8 => DataType::I8,
+        MavType::Int16 => DataType::I16,
+        MavType::Int32 => DataType::I32,
+        MavType::Int64 => DataType::I64,
+        MavType::Float => DataType::F32,
+        MavType::Double => DataType::F64,
+        MavType::CharArray(_) => DataType::String,
+        _ => unimplemented!("MAVLink {mav:?} type is not supported for command type"),
+    }
+}
+
+fn command_to_mav_message(command: &Command, message_info: &segs_mavlink::MessageInfo) -> Result<MavMessage, String> {
+    let fields = message_info
+        .fields
+        .iter()
+        .enumerate()
+        // Map each field to a `Result`
+        // Allows collecting `Ok` values into a `Vec` or returning `Err` if any are invalid
+        .map(|(i, field)| {
+            let data_key = compute_data_key(message_info.id, i as u32, &field.name);
+            let value = command
+                .fields
+                .get(&data_key)
+                .ok_or_else(|| format!("Missing value for field '{}'", field.name))?;
+
+            data_value_to_msg_field(value, &field.mavtype)
+                .map_err(|error| format!("Invalid value for field '{}': {error}", field.name))
+        })
+        // `Result`'s `FromIterator` collects every `Ok` value into the `Vec`
+        // If any `Err` is encountered (see above), that `Err` is returned
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(MavMessage {
+        id: message_info.id,
+        fields,
+    })
+}
+
+/// Converts a correlated MAVLink response into the protocol-independent command representation.
+fn command_from_mav_message(
+    message: MavMessage,
+    message_info: &segs_mavlink::MessageInfo,
+    target: SourceKey,
+) -> Result<Command, String> {
+    let fields = zip(message.fields, &message_info.fields)
+        .enumerate()
+        .map(|(index, (field, field_info))| {
+            let key = compute_data_key(message_info.id, index as u32, &field_info.name);
+            msg_field_to_data_value(field).map(|value| (key, value))
+        })
+        .collect::<Result<_, _>>()?;
+
+    Ok(Command {
+        key: CommandKey(message.id as u64),
+        timestamp: SystemTime::now(),
+        target,
+        fields,
+    })
+}
+
+fn msg_field_to_data_value(field: MsgField) -> Result<DataValue, String> {
+    match field {
+        MsgField::UInt8(value) => Ok(DataValue::U8(value)),
+        MsgField::UInt16(value) => Ok(DataValue::U16(value)),
+        MsgField::UInt32(value) => Ok(DataValue::U32(value)),
+        MsgField::UInt64(value) => Ok(DataValue::U64(value)),
+        MsgField::Int8(value) => Ok(DataValue::I8(value)),
+        MsgField::Int16(value) => Ok(DataValue::I16(value)),
+        MsgField::Int32(value) => Ok(DataValue::I32(value)),
+        MsgField::Int64(value) => Ok(DataValue::I64(value)),
+        MsgField::Char(value) => u8::try_from(u32::from(value))
+            .map(DataValue::U8)
+            .map_err(|_| format!("Character {value:?} does not fit in a MAVLink byte")),
+        MsgField::Float(value) => Ok(DataValue::F32(value)),
+        MsgField::Double(value) => Ok(DataValue::F64(value)),
+        MsgField::CharArray(value) => Ok(DataValue::String(value)),
+        MsgField::Array(_) => Err("MAVLink array fields are not supported in command responses".into()),
+    }
+}
+
+/// Maps the `DataValue` to the corresponding `MsgField` based on the `MavType`.
+fn data_value_to_msg_field(value: &DataValue, mav_type: &MavType) -> Result<MsgField, String> {
+    let field = match (value, mav_type) {
+        (DataValue::U8(value), MavType::UInt8) => MsgField::UInt8(*value),
+        (DataValue::U16(value), MavType::UInt16) => MsgField::UInt16(*value),
+        (DataValue::U32(value), MavType::UInt32) => MsgField::UInt32(*value),
+        (DataValue::U64(value), MavType::UInt64) => MsgField::UInt64(*value),
+        (DataValue::I8(value), MavType::Int8) => MsgField::Int8(*value),
+        (DataValue::I16(value), MavType::Int16) => MsgField::Int16(*value),
+        (DataValue::I32(value), MavType::Int32) => MsgField::Int32(*value),
+        (DataValue::I64(value), MavType::Int64) => MsgField::Int64(*value),
+        (DataValue::F32(value), MavType::Float) => MsgField::Float(*value),
+        (DataValue::F64(value), MavType::Double) => MsgField::Double(*value),
+        (DataValue::U8(value), MavType::Char) => MsgField::Char(char::from(*value)),
+        (DataValue::String(value), MavType::CharArray(length)) => {
+            if value.len() > *length {
+                return Err(format!(
+                    "String is {} bytes long, but the MAVLink field allows at most {length}",
+                    value.len()
+                ));
+            }
+
+            let mut value = value.clone();
+            value.extend(std::iter::repeat_n('\0', *length - value.len()));
+            MsgField::CharArray(value)
+        }
+        (_, MavType::Array(_, _)) => return Err("MAVLink array fields are not supported".into()),
+        _ => {
+            return Err(format!(
+                "Data type {:?} does not match the MAVLink field type {:?}",
+                value, mav_type
+            ));
+        }
+    };
+
+    Ok(field)
 }
 
 fn compute_data_key(message_id: u32, field_id: u32, field_name: &str) -> DataKey {
@@ -276,6 +619,7 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
     let messages = profile
         .messages
         .values()
+        .filter(|message| message.name.ends_with("_TM"))
         .map(|message| {
             let fields = message
                 .fields
@@ -283,7 +627,7 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
                 .enumerate()
                 .map(|(i, field)| FieldDescriptor::Field {
                     name: field.name.clone(),
-                    field_type: mavtype_to_datatype(field.mavtype.clone()),
+                    field_type: mavtype_to_stream_datatype(field.mavtype.clone()),
                     data_key: compute_data_key(message.id, i as u32, &field.name),
                 })
                 .collect();
@@ -292,6 +636,33 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
                 name: message.name.clone(),
                 fields,
             }
+        })
+        .collect();
+
+    let commands = profile
+        .messages
+        .values()
+        .filter(|message| message.name.ends_with("_TC"))
+        .map(|message| {
+            let fields = message
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, field)| FieldDescriptor::Field {
+                    name: field.name.clone(),
+                    field_type: mavtype_to_command_datatype(field.mavtype.clone()),
+                    data_key: compute_data_key(message.id, i as u32, &field.name),
+                })
+                .collect();
+            // Message IDs should be enough to uniquely identify commands
+            let key = CommandKey(message.id as u64);
+            let desc = CommandDescriptor {
+                name: message.name.clone(),
+                key,
+                fields,
+            };
+
+            (key, desc)
         })
         .collect();
 
@@ -311,5 +682,296 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
         })
         .unwrap_or_default();
 
-    ProtocolDescriptor { messages, sources }
+    ProtocolDescriptor {
+        messages,
+        commands,
+        sources,
+    }
+}
+
+/// Adapter-local state for pending commands, tracking which command sequence IDs are in use.
+struct PendingCommandSlots {
+    slots: [Option<CommandId>; 256],
+    next_sequence: u8,
+}
+
+impl Default for PendingCommandSlots {
+    fn default() -> Self {
+        Self {
+            slots: [None; 256],
+            next_sequence: 1,
+        }
+    }
+}
+
+impl PendingCommandSlots {
+    fn acquire(&mut self, command_id: CommandId) -> Option<u8> {
+        let mut sequence = self.next_sequence;
+
+        // Find the next free slot
+        while self.slots[sequence as usize].is_some() {
+            sequence = Self::advance(sequence);
+            if sequence == self.next_sequence {
+                return None;
+            }
+        }
+
+        //
+        self.slots[sequence as usize] = Some(command_id);
+        self.next_sequence = Self::advance(sequence);
+        Some(sequence)
+    }
+
+    fn release(&mut self, sequence: u8) {
+        self.slots[sequence as usize] = None;
+    }
+
+    fn get(&self, sequence: u8) -> Option<CommandId> {
+        self.slots[sequence as usize].clone()
+    }
+
+    fn advance(sequence: u8) -> u8 {
+        sequence.checked_add(1).unwrap_or(1)
+    }
+}
+
+struct OutgoingCommand {
+    frame: MavFrame,
+    pending_slot: u8,
+    command_id: CommandId,
+}
+
+#[derive(Clone, Copy)]
+struct SendFailure {
+    pending_slot: u8,
+    command_id: CommandId,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    fn test_command() -> Command {
+        Command {
+            key: CommandKey(1),
+            target: SourceKey(1),
+            timestamp: SystemTime::now(),
+            fields: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn correlation_slots_allocate_sequentially_and_wrap_without_using_zero() {
+        let mut slots = PendingCommandSlots::default();
+
+        for expected in 1..=u8::MAX {
+            let command_id = CommandId(u64::from(expected));
+            let allocated = slots.acquire(command_id).unwrap();
+            assert_eq!(allocated, expected);
+            assert_eq!(slots.get(allocated), Some(command_id));
+            slots.release(allocated);
+            assert_eq!(slots.get(allocated), None);
+        }
+
+        assert_eq!(slots.acquire(CommandId(256)), Some(1));
+        assert_eq!(slots.get(TELEMETRY_COMPONENT_ID), None);
+    }
+
+    #[test]
+    fn correlation_slots_skip_active_ids_and_report_exhaustion() {
+        let mut slots = PendingCommandSlots::default();
+        slots.slots[1] = Some(CommandId(1000));
+
+        assert_eq!(slots.acquire(CommandId(1001)), Some(2));
+
+        let mut full = PendingCommandSlots::default();
+        for id in 0..u8::MAX {
+            full.acquire(CommandId(u64::from(id))).unwrap();
+        }
+        // All slots should be taken, so allocation should fail
+        assert_eq!(full.acquire(CommandId(256)), None);
+
+        full.release(42);
+        assert_eq!(full.acquire(CommandId(257)), Some(42));
+        assert_eq!(full.get(42), Some(CommandId(257)));
+    }
+
+    #[test]
+    fn acquired_slots_are_unavailable_until_released() {
+        let mut slots = PendingCommandSlots::default();
+
+        assert_eq!(slots.acquire(CommandId(1)), Some(1));
+        assert_eq!(slots.get(1), Some(CommandId(1)));
+        assert_eq!(slots.acquire(CommandId(2)), Some(2));
+        slots.release(1);
+        slots.next_sequence = 1;
+        assert_eq!(slots.acquire(CommandId(3)), Some(1));
+        assert_eq!(slots.get(1), Some(CommandId(3)));
+    }
+
+    #[test]
+    fn command_datatypes_preserve_mavlink_scalar_widths() {
+        assert!(matches!(mavtype_to_command_datatype(MavType::UInt8), DataType::U8));
+        assert!(matches!(mavtype_to_command_datatype(MavType::UInt16), DataType::U16));
+        assert!(matches!(mavtype_to_command_datatype(MavType::UInt32), DataType::U32));
+        assert!(matches!(mavtype_to_command_datatype(MavType::UInt64), DataType::U64));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Int8), DataType::I8));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Int16), DataType::I16));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Int32), DataType::I32));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Int64), DataType::I64));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Float), DataType::F32));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Double), DataType::F64));
+        assert!(matches!(mavtype_to_command_datatype(MavType::Char), DataType::U8));
+        assert!(matches!(
+            mavtype_to_command_datatype(MavType::CharArray(4)),
+            DataType::String
+        ));
+    }
+
+    #[test]
+    fn stream_datatypes_normalization() {
+        assert!(matches!(mavtype_to_stream_datatype(MavType::UInt8), DataType::I64));
+        assert!(matches!(mavtype_to_stream_datatype(MavType::Int32), DataType::I64));
+        assert!(matches!(mavtype_to_stream_datatype(MavType::Float), DataType::F64));
+        assert!(matches!(mavtype_to_stream_datatype(MavType::Double), DataType::F64));
+    }
+
+    #[test]
+    fn converts_every_supported_command_scalar() {
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::U8(1), &MavType::UInt8).unwrap(),
+            MsgField::UInt8(1)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::U16(2), &MavType::UInt16).unwrap(),
+            MsgField::UInt16(2)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::U32(3), &MavType::UInt32).unwrap(),
+            MsgField::UInt32(3)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::U64(4), &MavType::UInt64).unwrap(),
+            MsgField::UInt64(4)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::I8(-1), &MavType::Int8).unwrap(),
+            MsgField::Int8(-1)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::I16(-2), &MavType::Int16).unwrap(),
+            MsgField::Int16(-2)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::I32(-3), &MavType::Int32).unwrap(),
+            MsgField::Int32(-3)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::I64(-4), &MavType::Int64).unwrap(),
+            MsgField::Int64(-4)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::F32(1.5), &MavType::Float).unwrap(),
+            MsgField::Float(1.5)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::F64(2.5), &MavType::Double).unwrap(),
+            MsgField::Double(2.5)
+        );
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::U8(b'A'), &MavType::Char).unwrap(),
+            MsgField::Char('A')
+        );
+    }
+
+    #[test]
+    fn fixed_length_strings_are_padded_and_oversized_values_are_rejected() {
+        assert_eq!(
+            data_value_to_msg_field(&DataValue::String("TC".into()), &MavType::CharArray(4)).unwrap(),
+            MsgField::CharArray("TC\0\0".into())
+        );
+        assert!(data_value_to_msg_field(&DataValue::String("TOO LONG".into()), &MavType::CharArray(4)).is_err());
+    }
+
+    #[test]
+    fn mismatched_and_unsupported_values_are_rejected() {
+        assert!(data_value_to_msg_field(&DataValue::U16(1), &MavType::UInt8).is_err());
+        assert!(data_value_to_msg_field(&DataValue::Bool(true), &MavType::UInt8).is_err());
+        assert!(data_value_to_msg_field(&DataValue::U8(1), &MavType::Array(Box::new(MavType::UInt8), 2)).is_err());
+    }
+
+    #[test]
+    fn command_conversion_uses_profile_order_and_requires_every_field() {
+        let mut message = segs_mavlink::MessageInfo {
+            id: 42,
+            name: "ORDERED_TC".into(),
+            ..Default::default()
+        };
+        message.fields.push(Default::default());
+        message.fields[0].name = "first".into();
+        message.fields[0].mavtype = MavType::UInt8;
+        message.fields.push(Default::default());
+        message.fields[1].name = "second".into();
+        message.fields[1].mavtype = MavType::Int16;
+
+        let first_key = compute_data_key(message.id, 0, "first");
+        let second_key = compute_data_key(message.id, 1, "second");
+        let mut fields = HashMap::new();
+        fields.insert(second_key, DataValue::I16(-2));
+        fields.insert(first_key, DataValue::U8(1));
+        let mut command = Command {
+            key: CommandKey(message.id as u64),
+            timestamp: SystemTime::now(),
+            target: SourceKey(7),
+            fields,
+        };
+
+        assert_eq!(
+            command_to_mav_message(&command, &message).unwrap(),
+            MavMessage {
+                id: message.id,
+                fields: vec![MsgField::UInt8(1), MsgField::Int16(-2)],
+            }
+        );
+
+        command.fields.remove(&first_key);
+        assert!(command_to_mav_message(&command, &message).is_err());
+    }
+
+    #[test]
+    fn correlated_response_conversion_preserves_command_value_types() {
+        let mut message_info = segs_mavlink::MessageInfo {
+            id: 24,
+            name: "RESPONSE_TM".into(),
+            ..Default::default()
+        };
+        message_info.fields.push(Default::default());
+        message_info.fields[0].name = "count".into();
+        message_info.fields[0].mavtype = MavType::UInt16;
+        message_info.fields.push(Default::default());
+        message_info.fields[1].name = "value".into();
+        message_info.fields[1].mavtype = MavType::Float;
+
+        let response = command_from_mav_message(
+            MavMessage {
+                id: 24,
+                fields: vec![MsgField::UInt16(12), MsgField::Float(3.5)],
+            },
+            &message_info,
+            SourceKey(7),
+        )
+        .unwrap();
+
+        assert_eq!(response.target, SourceKey(7));
+        assert!(matches!(
+            response.fields.get(&compute_data_key(24, 0, "count")),
+            Some(DataValue::U16(12))
+        ));
+        assert!(matches!(
+            response.fields.get(&compute_data_key(24, 1, "value")),
+            Some(DataValue::F32(value)) if *value == 3.5
+        ));
+    }
 }

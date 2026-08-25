@@ -10,7 +10,7 @@ use argh::FromArgValue;
 use serde::{Deserialize, Serialize};
 
 use crate::dataflow::{
-    DataStore,
+    store::DataStore,
     mapping::{DataMapping, MappingDescriptor},
     protocol::ProtocolDescriptor,
     skyward_mavlink_adapter::SkywardMavlinkAdapter,
@@ -71,6 +71,9 @@ pub trait DataAdapter {
     ///
     /// Returns true if new data was processed, false otherwise.
     fn process_incoming(&mut self, data_store: &mut DataStore) -> bool;
+
+    /// Process outgoing data from the data store.
+    fn process_outgoing(&mut self, data_store: &mut DataStore);
 
     fn status(&self) -> Status;
 }

@@ -1,16 +1,25 @@
-use crate::dataflow::{DataKey, DataType, SourceKey};
+use std::collections::HashMap;
+
+use crate::dataflow::{CommandKey, DataKey, DataType, SourceKey};
 
 /// Describes one structure or selectable field in a protocol hierarchy.
 #[derive(Debug)]
 pub enum FieldDescriptor {
     /// A named structure containing nested descriptors.
     Structure { name: String, fields: Vec<FieldDescriptor> },
-    /// A selectable field mapped to a data stream.
     Field {
         name: String,
         field_type: DataType,
         data_key: DataKey,
     },
+}
+
+/// Describes a command that can be sent to remote systems through adapters.
+#[derive(Debug)]
+pub struct CommandDescriptor {
+    pub name: String,
+    pub key: CommandKey,
+    pub fields: Vec<FieldDescriptor>,
 }
 
 /// Describes one selectable data source.
@@ -24,5 +33,6 @@ pub struct SourceDescriptor {
 #[derive(Debug)]
 pub struct ProtocolDescriptor {
     pub messages: Vec<FieldDescriptor>,
+    pub commands: HashMap<CommandKey, CommandDescriptor>,
     pub sources: Vec<SourceDescriptor>,
 }

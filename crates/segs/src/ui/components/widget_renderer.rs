@@ -2,7 +2,7 @@ use egui::{CornerRadius, Id, Rect, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2}
 use segs_ui::style::CtxStyleExt;
 
 use crate::{
-    dataflow::DataStore,
+    dataflow::store::DataStore,
     ui::{
         grid::Grid,
         widgets::{WidgetData, WidgetTrait, WidgetVariant},
