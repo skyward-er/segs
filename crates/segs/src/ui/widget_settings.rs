@@ -1,3 +1,6 @@
+// TODO: remove when ComboBox is used
+#![allow(unused)]
+
 use crate::dataflow::StreamKey;
 
 /// One selectable value displayed by a widget settings combobox.

@@ -10,7 +10,7 @@ use segs_ui::style::CtxStyleExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dataflow::{store::DataStore, DataValue, StreamKey},
+    dataflow::{DataValue, StreamKey, store::DataStore},
     ui::{
         widget_settings::{WidgetDataSetting, WidgetSetting},
         widgets::WidgetTrait,

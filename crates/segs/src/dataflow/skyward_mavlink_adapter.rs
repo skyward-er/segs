@@ -201,17 +201,17 @@ impl DataAdapter for SkywardMavlinkAdapter {
 
         loop {
             let mut pending_slot = 0;
-            
+
             // Try to acquire a pending slot for the command
-            let Some(command_sequence) = data_store.next_outgoing_command_if(|command| {
-                match self.pending.acquire(command.id) {
+            let Some(command_sequence) =
+                data_store.next_outgoing_command_if(|command| match self.pending.acquire(command.id) {
                     Some(slot) => {
                         pending_slot = slot;
                         true
                     }
                     None => false,
-                }
-            }) else {
+                })
+            else {
                 return; // No more commands to process
             };
 

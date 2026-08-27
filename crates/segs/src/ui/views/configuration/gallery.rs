@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use egui::{Id, Sense, Ui, Vec2, vec2};
 
 use crate::{
-    dataflow::{store::DataStore, StreamKey},
+    dataflow::{StreamKey, store::DataStore},
     ui::{
         components::widget_renderer::show_widget,
         widgets::{WidgetTrait, WidgetVariant},

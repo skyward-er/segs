@@ -10,10 +10,10 @@ use argh::FromArgValue;
 use serde::{Deserialize, Serialize};
 
 use crate::dataflow::{
-    store::DataStore,
     mapping::{DataMapping, MappingDescriptor},
     protocol::ProtocolDescriptor,
     skyward_mavlink_adapter::SkywardMavlinkAdapter,
+    store::DataStore,
     transport::DataTransport,
 };
 
