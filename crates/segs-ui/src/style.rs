@@ -51,7 +51,7 @@ impl Style {
             is_dark: true,
             main_view_fill: MAIN_VIEW_DARK,
             main_panels_fill: PANEL_DARK,
-            main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_DARK),
+            main_view_stroke: Stroke::new(1_f32, MAIN_VIEW_STROKE_DARK),
             left_bar: LeftBarMenuStyle::dark(),
             mode_toggle: ModeToggleStyle::dark(),
             widgets: WidgetStyles::dark(),
@@ -68,7 +68,7 @@ impl Style {
             is_dark: false,
             main_view_fill: MAIN_VIEW_LIGHT,
             main_panels_fill: PANEL_LIGHT,
-            main_view_stroke: Stroke::new(1., MAIN_VIEW_STROKE_LIGHT),
+            main_view_stroke: Stroke::new(1_f32, MAIN_VIEW_STROKE_LIGHT),
             left_bar: LeftBarMenuStyle::light(),
             mode_toggle: ModeToggleStyle::light(),
             widgets: WidgetStyles::light(),
@@ -291,7 +291,7 @@ fn override_dark_style(style: &mut egui::Style) {
     style.visuals.panel_fill = BACKGROUND_DARK;
 
     // Customizing popup frames
-    style.visuals.window_stroke = Stroke::new(1., POPUP_STROKE_DARK);
+    style.visuals.window_stroke = Stroke::new(1_f32, POPUP_STROKE_DARK);
     style.visuals.window_fill = FOREGROUND_DARK;
     style.visuals.popup_shadow = Shadow {
         offset: [1, 2],
@@ -310,7 +310,7 @@ fn override_light_style(style: &mut egui::Style) {
     style.visuals.panel_fill = BACKGROUND_LIGHT;
 
     // Customizing popup frames
-    style.visuals.window_stroke = Stroke::new(1., POPUP_STROKE_LIGHT);
+    style.visuals.window_stroke = Stroke::new(1_f32, POPUP_STROKE_LIGHT);
     style.visuals.window_fill = FOREGROUND_LIGHT;
     style.visuals.popup_shadow = Shadow {
         offset: [1, 2],

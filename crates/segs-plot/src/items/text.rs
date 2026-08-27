@@ -99,7 +99,7 @@ impl PlotItem for Text {
             shapes.push(Shape::rect_stroke(
                 rect.expand(1.0),
                 1.0,
-                Stroke::new(0.5, color),
+                Stroke::new(0.5_f32, color),
                 egui::StrokeKind::Outside,
             ));
         }

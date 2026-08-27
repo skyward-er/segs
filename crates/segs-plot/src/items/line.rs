@@ -24,7 +24,7 @@ impl HLine {
         Self {
             base: PlotItemBase::new(name.into()),
             y: y.into(),
-            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             style: LineStyle::Solid,
         }
     }
@@ -159,7 +159,7 @@ impl VLine {
         Self {
             base: PlotItemBase::new(name.into()),
             x: x.into(),
-            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             style: LineStyle::Solid,
         }
     }

@@ -262,7 +262,7 @@ impl BoxElem {
             spread,
             box_width: 0.25,
             whisker_width: 0.15,
-            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             fill: Color32::TRANSPARENT,
         }
     }

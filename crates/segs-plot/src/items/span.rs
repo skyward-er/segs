@@ -44,7 +44,7 @@ impl Span {
             axis: Axis::X,
             range: range.into(),
             fill: Color32::TRANSPARENT,
-            border_stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            border_stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             border_style: LineStyle::Solid,
             label_align: Align2::CENTER_TOP,
         }

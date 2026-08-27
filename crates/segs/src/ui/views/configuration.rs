@@ -435,7 +435,7 @@ fn show_rejected_tint(ui: &Ui, rect: Rect) {
     ui.painter().rect_stroke(
         rect,
         1.,
-        Stroke::new(1.5, error.gamma_multiply(0.8)),
+        Stroke::new(1.5_f32, error.gamma_multiply(0.8)),
         StrokeKind::Middle,
     );
 }

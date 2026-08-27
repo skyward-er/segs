@@ -30,8 +30,8 @@ impl<'a> Line<'a> {
         Self {
             base: PlotItemBase::new(name.into()),
             series: series.into(),
-            stroke: Stroke::new(1.5, Color32::TRANSPARENT), /* Note: a stroke of 1.0 (or less) can look bad on
-                                                             * low-dpi-screens */
+            stroke: Stroke::new(1.5_f32, Color32::TRANSPARENT), /* Note: a stroke of 1.0 (or less) can look bad on
+                                                                 * low-dpi-screens */
             fill: None,
             fill_alpha: DEFAULT_FILL_ALPHA,
             gradient_color: None,

@@ -162,7 +162,7 @@ impl PlotItem for PlotImage {
             .collect();
             shapes.push(Shape::closed_line(
                 outline,
-                Stroke::new(1.0, ui.visuals().strong_text_color()),
+                Stroke::new(1.0_f32, ui.visuals().strong_text_color()),
             ));
         }
     }

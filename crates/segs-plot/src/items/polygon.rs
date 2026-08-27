@@ -25,7 +25,7 @@ impl<'a> Polygon<'a> {
         Self {
             base: PlotItemBase::new(name.into()),
             series: series.into(),
-            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             fill_color: None,
             style: LineStyle::Solid,
         }

@@ -543,7 +543,7 @@ fn show_inline_editor(
         Frame::new()
             .inner_margin(Margin::symmetric(4, 2))
             .fill(ui.visuals().text_edit_bg_color())
-            .stroke(Stroke::new(1., ui.visuals().error_fg_color))
+            .stroke(Stroke::new(1_f32, ui.visuals().error_fg_color))
     });
     let mut editor = TextEdit::singleline(&mut current.value)
         .id_salt("layout_inline_name")
@@ -571,7 +571,7 @@ fn show_inline_editor(
         ui.painter().rect_stroke(
             response.rect,
             ui.visuals().widgets.inactive.corner_radius,
-            Stroke::new(1., ui.visuals().error_fg_color),
+            Stroke::new(1_f32, ui.visuals().error_fg_color),
             StrokeKind::Inside,
         );
         Tooltip::always_open(

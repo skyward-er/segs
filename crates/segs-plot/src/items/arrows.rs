@@ -97,7 +97,7 @@ impl PlotItem for Arrows<'_> {
             base,
             ..
         } = self;
-        let stroke = Stroke::new(if base.highlight { 2.0 } else { 1.0 }, *color);
+        let stroke = Stroke::new(if base.highlight { 2.0_f32 } else { 1.0_f32 }, *color);
         origins
             .points()
             .iter()

@@ -260,7 +260,7 @@ impl Bar {
             name: Default::default(),
             base_offset: None,
             bar_width: 0.5,
-            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0_f32, Color32::TRANSPARENT),
             fill: Color32::TRANSPARENT,
         }
     }
