@@ -101,13 +101,20 @@ impl MavMessage {
     }
 
     pub fn ser(self, version: MavlinkVersion, bytes: &mut [u8]) -> usize {
-        let mut buf = &mut *bytes;
-        for field in self.fields {
-            field.ser(&mut buf);
-        }
+        let written = {
+            let mut buf = &mut *bytes;
+            let initial_remaining = buf.remaining_mut();
+
+            for field in self.fields {
+                field.ser(&mut buf);
+            }
+
+            initial_remaining - buf.remaining_mut()
+        };
+
         match version {
-            MavlinkVersion::V1 => bytes.len(),
-            MavlinkVersion::V2 => remove_trailing_zeroes(bytes),
+            MavlinkVersion::V1 => written,
+            MavlinkVersion::V2 => remove_trailing_zeroes(&bytes[..written]),
         }
     }
 }
