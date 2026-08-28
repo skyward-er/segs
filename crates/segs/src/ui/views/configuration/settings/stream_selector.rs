@@ -74,7 +74,7 @@ pub fn show(
         ui.weak("No data sources available.");
         return;
     }
-    if protocol.messages.is_empty() {
+    if protocol.stream_messages.is_empty() {
         ui.weak("No streams available.");
         return;
     }
@@ -412,7 +412,7 @@ fn descriptor_index(
     }
 
     // A new wrapper token always denotes a newly installed adapter
-    let index = Arc::new(DescriptorIndex::build(&protocol.messages));
+    let index = Arc::new(DescriptorIndex::build(protocol));
     ui.mem().insert_temp(
         id,
         CachedDescriptorIndex {

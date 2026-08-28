@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::dataflow::{DataKey, protocol::FieldDescriptor};
+use crate::dataflow::{
+    DataKey,
+    protocol::{FieldDescriptor, ProtocolDescriptor},
+};
 
 /// Identifies whether an indexed row groups descendants or selects a field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,14 +79,25 @@ pub struct DescriptorIndex {
 }
 
 impl DescriptorIndex {
-    /// Builds the index from a protocol descriptor hierarchy.
-    pub fn build(descriptors: &[FieldDescriptor]) -> Self {
+    /// Builds the stream index from the protocol descriptor.
+    pub fn build(protocol: &ProtocolDescriptor) -> Self {
         let mut index = Self {
             nodes: Vec::new(),
             field_paths: HashMap::new(),
         };
         let mut path = Vec::new();
-        index.push_descriptors(descriptors, 0, None, &mut path);
+        for key in &protocol.stream_messages {
+            let Some(message) = protocol.message_schemas.get(key) else {
+                continue;
+            };
+
+            // Each message is a top-level row containing its schema fields
+            let message_index = index.push_structure(&message.name, 0, None);
+            path.push(message.name.clone());
+            index.push_descriptors(&message.fields, 1, Some(message_index), &mut path);
+            path.pop();
+            index.close_structure(message_index);
+        }
         index
     }
 
@@ -193,14 +207,7 @@ impl DescriptorIndex {
             match descriptor {
                 FieldDescriptor::Structure { name, fields } => {
                     // Insert the structure before its contiguous descendants
-                    let index = self.nodes.len();
-                    self.nodes.push(IndexedNode {
-                        name: name.clone(),
-                        normalized_name: name.to_lowercase(),
-                        depth,
-                        parent,
-                        kind: IndexedNodeKind::Structure { subtree_end: index + 1 },
-                    });
+                    let index = self.push_structure(name, depth, parent);
 
                     // Extend the ancestor context while indexing child fields
                     path.push(name.clone());
@@ -208,9 +215,7 @@ impl DescriptorIndex {
                     path.pop();
 
                     // Close the half-open subtree range after all descendants
-                    self.nodes[index].kind = IndexedNodeKind::Structure {
-                        subtree_end: self.nodes.len(),
-                    };
+                    self.close_structure(index);
                 }
                 FieldDescriptor::Field { name, data_key, .. } => {
                     // Build the display path from active ancestors and this field
@@ -232,6 +237,26 @@ impl DescriptorIndex {
             }
         }
     }
+
+    /// Inserts an open structure row and returns its node index.
+    fn push_structure(&mut self, name: &str, depth: usize, parent: Option<usize>) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(IndexedNode {
+            name: name.to_owned(),
+            normalized_name: name.to_lowercase(),
+            depth,
+            parent,
+            kind: IndexedNodeKind::Structure { subtree_end: index + 1 },
+        });
+        index
+    }
+
+    /// Closes a structure's contiguous descendant range.
+    fn close_structure(&mut self, index: usize) {
+        self.nodes[index].kind = IndexedNodeKind::Structure {
+            subtree_end: self.nodes.len(),
+        };
+    }
 }
 
 /// Normalizes a user query for matching and cache comparison.
@@ -241,8 +266,10 @@ fn normalize_query(query: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
-    use crate::dataflow::{DataType, StreamKey};
+    use crate::dataflow::{DataType, MessageKey, StreamKey, protocol::MessageDescriptor};
 
     /// Creates a field descriptor for hierarchy filtering tests.
     fn field(name: &str) -> FieldDescriptor {
@@ -254,28 +281,43 @@ mod tests {
     }
 
     /// Creates a nested descriptor hierarchy for filtering tests.
-    fn descriptors() -> Vec<FieldDescriptor> {
-        vec![
-            FieldDescriptor::Structure {
-                name: "Flight".into(),
-                fields: vec![
-                    FieldDescriptor::Structure {
-                        name: "Timing".into(),
-                        fields: vec![field("Timestamp"), field("Sequence")],
-                    },
-                    field("Roll"),
-                ],
-            },
-            FieldDescriptor::Structure {
-                name: "GPS".into(),
-                fields: vec![field("Timestamp"), field("Latitude")],
-            },
-        ]
+    fn protocol() -> ProtocolDescriptor {
+        let flight = MessageKey::new(1);
+        let gps = MessageKey::new(2);
+        let message_schemas = HashMap::from([
+            (
+                flight,
+                MessageDescriptor {
+                    name: "Flight".into(),
+                    fields: vec![
+                        FieldDescriptor::Structure {
+                            name: "Timing".into(),
+                            fields: vec![field("Timestamp"), field("Sequence")],
+                        },
+                        field("Roll"),
+                    ],
+                },
+            ),
+            (
+                gps,
+                MessageDescriptor {
+                    name: "GPS".into(),
+                    fields: vec![field("Timestamp"), field("Latitude")],
+                },
+            ),
+        ]);
+
+        ProtocolDescriptor {
+            message_schemas,
+            stream_messages: vec![flight, gps],
+            command_messages: Vec::new(),
+            sources: Vec::new(),
+        }
     }
 
     #[test]
     fn filtering_retains_ancestors_and_expands_structure_matches() {
-        let index = DescriptorIndex::build(&descriptors());
+        let index = DescriptorIndex::build(&protocol());
 
         let field_rows = index.filtered_rows(" TIMESTAMP ");
         let field_names = field_rows

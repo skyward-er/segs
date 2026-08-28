@@ -14,12 +14,12 @@ use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, Mavlink
 
 use crate::dataflow::adapter::{DataAdapter, Status};
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
-use crate::dataflow::protocol::{CommandDescriptor, FieldDescriptor, ProtocolDescriptor, SourceDescriptor};
+use crate::dataflow::protocol::{FieldDescriptor, MessageDescriptor, ProtocolDescriptor, SourceDescriptor};
 use crate::dataflow::transport::DataTransport;
 use crate::dataflow::{
     Command, DataKey, DataPoint, DataStream, DataType, DataValue, SourceKey, StreamKey, store::DataStore,
 };
-use crate::dataflow::{CommandId, CommandKey, CommandSequence, CommandStatus};
+use crate::dataflow::{CommandId, CommandSequence, CommandStatus, MessageKey};
 
 /// Component ID used for telemetry messages. All other values are used for command request-response correlation.
 const TELEMETRY_COMPONENT_ID: u8 = 0;
@@ -463,26 +463,8 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
     true
 }
 
-/// Maps the `MavType` to the corresponding `DataType` for use in the stream interface.
-fn mavtype_to_stream_datatype(mav: MavType) -> DataType {
-    match mav {
-        MavType::Char
-        | MavType::UInt8
-        | MavType::UInt16
-        | MavType::UInt32
-        | MavType::UInt64
-        | MavType::Int8
-        | MavType::Int16
-        | MavType::Int32
-        | MavType::Int64 => DataType::I64,
-        MavType::Float | MavType::Double => DataType::F64,
-        MavType::CharArray(_) => DataType::String,
-        _ => unimplemented!("MAVLink {mav:?} type is not supported for stream type"),
-    }
-}
-
-/// Maps the `MavType` to the corresponding `DataType` for use in the command interface.
-fn mavtype_to_command_datatype(mav: MavType) -> DataType {
+/// Maps the `MavType` to the exact decoded `DataType` used by canonical message schemas.
+fn mavtype_to_datatype(mav: MavType) -> DataType {
     match mav {
         MavType::UInt8 | MavType::Char => DataType::U8,
         MavType::UInt16 => DataType::U16,
@@ -495,7 +477,7 @@ fn mavtype_to_command_datatype(mav: MavType) -> DataType {
         MavType::Float => DataType::F32,
         MavType::Double => DataType::F64,
         MavType::CharArray(_) => DataType::String,
-        _ => unimplemented!("MAVLink {mav:?} type is not supported for command type"),
+        _ => unimplemented!("MAVLink {mav:?} type is not supported in message schemas"),
     }
 }
 
@@ -541,7 +523,7 @@ fn command_from_mav_message(
         .collect::<Result<_, _>>()?;
 
     Ok(Command {
-        key: CommandKey(message.id as u64),
+        key: MessageKey(message.id as u64),
         timestamp: SystemTime::now(),
         target,
         fields,
@@ -616,10 +598,12 @@ fn compute_data_key(message_id: u32, field_id: u32, field_name: &str) -> DataKey
 }
 
 fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
-    let messages = profile
-        .messages
-        .values()
-        .filter(|message| message.name.ends_with("_TM"))
+    // Build each stream-visible or sendable schema exactly once
+    let mut messages = profile.messages.values().collect::<Vec<_>>();
+    messages.sort_by(|left, right| left.name.cmp(&right.name));
+
+    let message_schemas = messages
+        .iter()
         .map(|message| {
             let fields = message
                 .fields
@@ -627,43 +611,31 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
                 .enumerate()
                 .map(|(i, field)| FieldDescriptor::Field {
                     name: field.name.clone(),
-                    field_type: mavtype_to_stream_datatype(field.mavtype.clone()),
+                    field_type: mavtype_to_datatype(field.mavtype.clone()),
                     data_key: compute_data_key(message.id, i as u32, &field.name),
                 })
                 .collect();
+            let key = MessageKey(message.id as u64);
 
-            FieldDescriptor::Structure {
+            let descriptor = MessageDescriptor {
                 name: message.name.clone(),
-                fields,
-            }
-        })
-        .collect();
-
-    let commands = profile
-        .messages
-        .values()
-        .filter(|message| message.name.ends_with("_TC"))
-        .map(|message| {
-            let fields = message
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(i, field)| FieldDescriptor::Field {
-                    name: field.name.clone(),
-                    field_type: mavtype_to_command_datatype(field.mavtype.clone()),
-                    data_key: compute_data_key(message.id, i as u32, &field.name),
-                })
-                .collect();
-            // Message IDs should be enough to uniquely identify commands
-            let key = CommandKey(message.id as u64);
-            let desc = CommandDescriptor {
-                name: message.name.clone(),
-                key,
                 fields,
             };
 
-            (key, desc)
+            (key, descriptor)
         })
+        .collect();
+
+    // Roles contain references and preserve the canonical name ordering
+    let stream_messages = messages
+        .iter()
+        .filter(|message| !message.name.ends_with("_TC"))
+        .map(|message| MessageKey(message.id as u64))
+        .collect();
+    let command_messages = messages
+        .iter()
+        .filter(|message| message.name.ends_with("_TC"))
+        .map(|message| MessageKey(message.id as u64))
         .collect();
 
     let sources = profile
@@ -683,8 +655,9 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
         .unwrap_or_default();
 
     ProtocolDescriptor {
-        messages,
-        commands,
+        message_schemas,
+        stream_messages,
+        command_messages,
         sources,
     }
 }
@@ -749,13 +722,13 @@ struct SendFailure {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use super::*;
 
     fn test_command() -> Command {
         Command {
-            key: CommandKey(1),
+            key: MessageKey(1),
             target: SourceKey(1),
             timestamp: SystemTime::now(),
             fields: HashMap::new(),
@@ -812,30 +785,84 @@ mod tests {
     }
 
     #[test]
-    fn command_datatypes_preserve_mavlink_scalar_widths() {
-        assert!(matches!(mavtype_to_command_datatype(MavType::UInt8), DataType::U8));
-        assert!(matches!(mavtype_to_command_datatype(MavType::UInt16), DataType::U16));
-        assert!(matches!(mavtype_to_command_datatype(MavType::UInt32), DataType::U32));
-        assert!(matches!(mavtype_to_command_datatype(MavType::UInt64), DataType::U64));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Int8), DataType::I8));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Int16), DataType::I16));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Int32), DataType::I32));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Int64), DataType::I64));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Float), DataType::F32));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Double), DataType::F64));
-        assert!(matches!(mavtype_to_command_datatype(MavType::Char), DataType::U8));
-        assert!(matches!(
-            mavtype_to_command_datatype(MavType::CharArray(4)),
-            DataType::String
-        ));
+    fn canonical_datatypes_preserve_mavlink_scalar_widths() {
+        assert!(matches!(mavtype_to_datatype(MavType::UInt8), DataType::U8));
+        assert!(matches!(mavtype_to_datatype(MavType::UInt16), DataType::U16));
+        assert!(matches!(mavtype_to_datatype(MavType::UInt32), DataType::U32));
+        assert!(matches!(mavtype_to_datatype(MavType::UInt64), DataType::U64));
+        assert!(matches!(mavtype_to_datatype(MavType::Int8), DataType::I8));
+        assert!(matches!(mavtype_to_datatype(MavType::Int16), DataType::I16));
+        assert!(matches!(mavtype_to_datatype(MavType::Int32), DataType::I32));
+        assert!(matches!(mavtype_to_datatype(MavType::Int64), DataType::I64));
+        assert!(matches!(mavtype_to_datatype(MavType::Float), DataType::F32));
+        assert!(matches!(mavtype_to_datatype(MavType::Double), DataType::F64));
+        assert!(matches!(mavtype_to_datatype(MavType::Char), DataType::U8));
+        assert!(matches!(mavtype_to_datatype(MavType::CharArray(4)), DataType::String));
     }
 
     #[test]
-    fn stream_datatypes_normalization() {
-        assert!(matches!(mavtype_to_stream_datatype(MavType::UInt8), DataType::I64));
-        assert!(matches!(mavtype_to_stream_datatype(MavType::Int32), DataType::I64));
-        assert!(matches!(mavtype_to_stream_datatype(MavType::Float), DataType::F64));
-        assert!(matches!(mavtype_to_stream_datatype(MavType::Double), DataType::F64));
+    fn protocol_descriptor_reuses_exact_schemas_through_sorted_roles() {
+        let message = |id, name: &str, mavtype| {
+            let mut message = segs_mavlink::MessageInfo {
+                id,
+                name: name.into(),
+                ..Default::default()
+            };
+            message.fields.push(Default::default());
+            message.fields[0].name = "value".into();
+            message.fields[0].mavtype = mavtype;
+            message
+        };
+        let profile = MavProfile {
+            enums: BTreeMap::new(),
+            messages: BTreeMap::from([
+                (1, message(1, "ZETA_TM", MavType::UInt8)),
+                (2, message(2, "ALPHA_TM", MavType::Float)),
+                (3, message(3, "BETA_TC", MavType::UInt16)),
+                (4, message(4, "ALPHA_TC", MavType::Double)),
+                (5, message(5, "UNSUFFIXED", MavType::Int32)),
+            ]),
+        };
+
+        let descriptor = make_protocol_descriptor(&profile);
+        let stream_names = descriptor
+            .stream_messages
+            .iter()
+            .filter_map(|key| descriptor.message_schemas.get(key).map(|message| message.name.as_str()))
+            .collect::<Vec<_>>();
+        let sendable_names = descriptor
+            .command_messages
+            .iter()
+            .filter_map(|key| descriptor.message_schemas.get(key).map(|message| message.name.as_str()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(descriptor.message_schemas.len(), 5);
+        assert_eq!(stream_names, ["ALPHA_TM", "UNSUFFIXED", "ZETA_TM"]);
+        assert_eq!(sendable_names, ["ALPHA_TC", "BETA_TC"]);
+        assert!(matches!(
+            descriptor
+                .message_schemas
+                .get(&MessageKey(1))
+                .unwrap()
+                .fields
+                .as_slice(),
+            [FieldDescriptor::Field {
+                field_type: DataType::U8,
+                ..
+            }]
+        ));
+        assert!(matches!(
+            descriptor
+                .message_schemas
+                .get(&MessageKey(2))
+                .unwrap()
+                .fields
+                .as_slice(),
+            [FieldDescriptor::Field {
+                field_type: DataType::F32,
+                ..
+            }]
+        ));
     }
 
     #[test]
@@ -922,7 +949,7 @@ mod tests {
         fields.insert(second_key, DataValue::I16(-2));
         fields.insert(first_key, DataValue::U8(1));
         let mut command = Command {
-            key: CommandKey(message.id as u64),
+            key: MessageKey(message.id as u64),
             timestamp: SystemTime::now(),
             target: SourceKey(7),
             fields,

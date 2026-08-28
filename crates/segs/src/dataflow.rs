@@ -20,10 +20,15 @@ pub struct DataKey(u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceKey(u32);
 
-/// An opaque handler that uniquely represents a command.
-/// Commands send structured data to remote systems through adapters.
+/// An opaque handler that uniquely represents a protocol message schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct CommandKey(u64);
+pub struct MessageKey(u64);
+
+impl MessageKey {
+    pub(crate) const fn new(value: u64) -> Self {
+        Self(value)
+    }
+}
 
 /// A protocol-independent identifier for a command sequence in the central datastore.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -116,7 +121,7 @@ pub enum CommandStatus {
 
 /// Command type stored as key-value pairs for maximum flexibility of representation.
 pub struct Command {
-    pub key: CommandKey,
+    pub key: MessageKey,
     pub target: SourceKey,
     pub timestamp: SystemTime,
     pub fields: HashMap<DataKey, DataValue>,

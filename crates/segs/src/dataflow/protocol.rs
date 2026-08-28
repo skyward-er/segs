@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use crate::dataflow::{CommandKey, DataKey, DataType, SourceKey};
+use crate::dataflow::{DataKey, DataType, MessageKey, SourceKey};
 
-/// Describes one structure or selectable field in a protocol hierarchy.
+/// Describes one structure or field in a message schema.
 #[derive(Debug)]
 pub enum FieldDescriptor {
     /// A named structure containing nested descriptors.
     Structure { name: String, fields: Vec<FieldDescriptor> },
+    /// A named value decoded with the given exact type.
     Field {
         name: String,
         field_type: DataType,
@@ -14,11 +15,10 @@ pub enum FieldDescriptor {
     },
 }
 
-/// Describes a command that can be sent to remote systems through adapters.
+/// Describes the canonical schema of one protocol message.
 #[derive(Debug)]
-pub struct CommandDescriptor {
+pub struct MessageDescriptor {
     pub name: String,
-    pub key: CommandKey,
     pub fields: Vec<FieldDescriptor>,
 }
 
@@ -29,10 +29,15 @@ pub struct SourceDescriptor {
     pub key: SourceKey,
 }
 
-/// Describes the sources and message hierarchy exposed by a data adapter.
+/// Describes the canonical messages and their protocol roles exposed by a data adapter.
 #[derive(Debug)]
 pub struct ProtocolDescriptor {
-    pub messages: Vec<FieldDescriptor>,
-    pub commands: HashMap<CommandKey, CommandDescriptor>,
+    /// Canonical message schemas keyed by their protocol-independent identity.
+    pub message_schemas: HashMap<MessageKey, MessageDescriptor>,
+    /// Ordered identities of messages whose fields can be selected as data streams.
+    pub stream_messages: Vec<MessageKey>,
+    /// Ordered identities of command messages that can be sent to a target.
+    pub command_messages: Vec<MessageKey>,
+    /// Selectable target data sources.
     pub sources: Vec<SourceDescriptor>,
 }
