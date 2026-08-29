@@ -1,3 +1,4 @@
+pub mod command_panel;
 pub mod components;
 pub mod grid;
 pub mod layout;

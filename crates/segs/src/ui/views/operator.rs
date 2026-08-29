@@ -5,8 +5,7 @@ use crate::{
 use egui::{CentralPanel, Frame};
 use segs_ui::style::CtxStyleExt;
 
-/// View subtype representing the different operator views available when the
-/// user is in the Operator mode.
+/// View state for operating the active layout.
 #[derive(Default)]
 pub struct OperatorView;
 

@@ -7,7 +7,7 @@ pub mod skyward_mavlink_adapter;
 pub mod store;
 pub mod transport;
 
-use std::{collections::HashMap, time::SystemTime};
+use std::{collections::HashMap, fmt, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,12 +23,6 @@ pub struct SourceKey(u32);
 /// An opaque handler that uniquely represents a protocol message schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MessageKey(u64);
-
-impl MessageKey {
-    pub(crate) const fn new(value: u64) -> Self {
-        Self(value)
-    }
-}
 
 /// A protocol-independent identifier for a command sequence in the central datastore.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -75,6 +69,25 @@ pub enum DataType {
     String,
 }
 
+impl fmt::Display for DataType {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::F32 => "f32",
+            Self::F64 => "f64",
+            Self::Bool => "bool",
+            Self::String => "string",
+        })
+    }
+}
+
 pub enum DataStream {
     F64(Vec<DataPoint<f64>>),
     I64(Vec<DataPoint<i64>>),
@@ -119,6 +132,17 @@ pub enum CommandStatus {
     LocalError,
 }
 
+impl fmt::Display for CommandStatus {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Pending => "Pending",
+            Self::Completed => "Completed",
+            Self::Rejected => "Rejected",
+            Self::LocalError => "Local error",
+        })
+    }
+}
+
 /// Command type stored as key-value pairs for maximum flexibility of representation.
 pub struct Command {
     pub key: MessageKey,
@@ -132,4 +156,14 @@ pub struct CommandSequence {
     pub status: CommandStatus,
     pub request: Command,
     pub responses: Vec<Command>,
+}
+
+/// Testing module exposing functionality that would otherwise be private.
+#[cfg(test)]
+pub mod testing {
+    use super::MessageKey;
+
+    pub const fn message_key(value: u64) -> MessageKey {
+        MessageKey(value)
+    }
 }

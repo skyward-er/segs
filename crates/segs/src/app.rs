@@ -10,7 +10,7 @@ use crate::dataflow::adapter::{AdapterType, DataAdapterInstance};
 use crate::dataflow::{adapter::DataAdapter, skyward_mavlink_adapter::SkywardMavlinkAdapter, store::DataStore};
 use crate::layout::{LayoutManager, LayoutManagerError};
 use crate::ui::views::{View, ViewTarget};
-use crate::ui::{layout, status_bar, top_bar};
+use crate::ui::{command_panel, layout, status_bar, top_bar};
 use crate::utils::get_layouts_dirpath;
 
 const DEFAULT_LAYOUT_SLUG_ID: &str = "default_layout_slug";
@@ -92,6 +92,7 @@ impl eframe::App for App {
 
         status_bar::show(ui, &mut self.context);
         top_bar::show(ui);
+        command_panel::show(ui, &mut self.context);
         self.view.show(ui, &mut self.context);
         layout::show_overlays(ui, &mut self.context.layouts);
 

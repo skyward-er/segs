@@ -269,7 +269,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::dataflow::{DataType, MessageKey, StreamKey, protocol::MessageDescriptor};
+    use crate::dataflow::{DataType, StreamKey, protocol::MessageDescriptor, testing::message_key};
 
     /// Creates a field descriptor for hierarchy filtering tests.
     fn field(name: &str) -> FieldDescriptor {
@@ -282,8 +282,8 @@ mod tests {
 
     /// Creates a nested descriptor hierarchy for filtering tests.
     fn protocol() -> ProtocolDescriptor {
-        let flight = MessageKey::new(1);
-        let gps = MessageKey::new(2);
+        let flight = message_key(1);
+        let gps = message_key(2);
         let message_schemas = HashMap::from([
             (
                 flight,

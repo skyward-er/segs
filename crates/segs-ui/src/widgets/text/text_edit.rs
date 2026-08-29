@@ -84,6 +84,7 @@ pub struct TextEdit<'t> {
     clip_text: bool,
     char_limit: usize,
     return_key: Option<KeyboardShortcut>,
+    background_fill: Option<Color32>,
 }
 
 impl WidgetWithState for TextEdit<'_> {
@@ -143,6 +144,7 @@ impl<'t> TextEdit<'t> {
             clip_text: false,
             char_limit: usize::MAX,
             return_key: Some(KeyboardShortcut::new(Modifiers::NONE, Key::Enter)),
+            background_fill: None,
         }
     }
 
@@ -342,6 +344,12 @@ impl<'t> TextEdit<'t> {
         self
     }
 
+    /// Overrides the interaction-dependent background fill.
+    pub(super) fn background_fill(mut self, fill: Color32) -> Self {
+        self.background_fill = Some(fill);
+        self
+    }
+
     /// Set the horizontal align of the inner text.
     #[inline]
     pub fn horizontal_align(mut self, align: Align) -> Self {
@@ -403,6 +411,7 @@ impl TextEdit<'_> {
     /// ```
     pub fn show(self, ui: &mut Ui) -> TextEditOutput {
         let is_mutable = self.text.is_mutable();
+        let background_fill = self.background_fill;
         let where_to_put_background = ui.painter().add(Shape::Noop);
         let output = self.show_content(ui);
 
@@ -411,10 +420,12 @@ impl TextEdit<'_> {
         let active_t = ui.ctx().animate_bool(id.with("_active_t"), output.response.has_focus());
 
         let style = &ui.app_style().text_edit;
-        let background_color = style
-            .inactive_fill
-            .lerp_to_gamma(style.hover_fill, hover_t)
-            .lerp_to_gamma(style.active_fill, active_t);
+        let background_color = background_fill.unwrap_or_else(|| {
+            style
+                .inactive_fill
+                .lerp_to_gamma(style.hover_fill, hover_t)
+                .lerp_to_gamma(style.active_fill, active_t)
+        });
         let frame_rect = output.response.rect.expand(0.5);
         let shape = if is_mutable {
             epaint::RectShape::new(frame_rect, 3, background_color, Stroke::NONE, StrokeKind::Inside)
@@ -449,6 +460,7 @@ impl TextEdit<'_> {
             clip_text,
             char_limit,
             return_key,
+            background_fill: _,
         } = self;
 
         let text_color = text_color

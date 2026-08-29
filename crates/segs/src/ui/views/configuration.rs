@@ -38,7 +38,7 @@ static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 /// View subtype representing the different configuration views available when
 /// the user is in the Configuration mode.
 #[derive(Default)]
-pub struct ConfigurationView {}
+pub struct ConfigurationView;
 
 enum WidgetDragSource {
     Layout(Id),

@@ -173,8 +173,8 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
         let dir = direction.to_direction();
         let side = dir.side(align);
 
-        // We use the maximum available size to fit the available space to the panel.
-        let max_size = ui.max_rect().size();
+        // Bound the panes to the space left by surrounding panels
+        let max_size = ui.available_size();
         let layout = side.get_layout();
         ui.allocate_ui_with_layout(max_size, layout, |ui| {
             // We set the item spacing to zero to ensure that there is no gap between the
@@ -397,12 +397,15 @@ impl<'a, D: DirectionTrait> PanelUI<'a, D> {
         };
 
         let Panel { frame } = self.sides[pane_index];
-        self.ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| {
-            frame.show(ui, |ui| {
-                ui.set_min_size(ui.available_size());
-                add_contents(ui);
-            })
-        });
+        self.ui.scope_builder(
+            UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)),
+            |ui| {
+                frame.show(ui, |ui| {
+                    ui.set_min_size(ui.available_size());
+                    add_contents(ui);
+                })
+            },
+        );
         self
     }
 }
@@ -643,5 +646,44 @@ impl Side {
             (Direction::Vertical, Alignment::LeftTop) => CursorIcon::ResizeNorth,
             (Direction::Vertical, Alignment::RightBottom) => CursorIcon::ResizeSouth,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+
+    use super::*;
+
+    static INIT_MEMORY: Once = Once::new();
+
+    #[test]
+    fn panel_stays_within_the_remaining_ui_rect() {
+        INIT_MEMORY.call_once(|| {
+            let path = std::env::temp_dir().join(format!("segs-ui-tests-{}", std::process::id()));
+            segs_memory::init_memory(path).expect("test memory must initialize");
+        });
+
+        egui::__run_test_ui(|ui| {
+            ui.add_space(40.);
+            let available_rect = ui.available_rect_before_wrap();
+            let mut collapsed = true;
+            let mut main_rect = None;
+            let mut main_direction = None;
+
+            ResizablePanel::horizontal_left()
+                .collapsed(&mut collapsed)
+                .show(ui, |panes| {
+                    panes.show_right(|ui| {
+                        main_rect = Some(ui.max_rect());
+                        main_direction = Some(ui.layout().main_dir);
+                    });
+                });
+
+            let main_rect = main_rect.expect("collapsed panel must show its main pane");
+            assert!(main_rect.min.y >= available_rect.min.y);
+            assert!(main_rect.max.y <= available_rect.max.y);
+            assert_eq!(main_direction, Some(egui::Direction::TopDown));
+        });
     }
 }

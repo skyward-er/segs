@@ -11,8 +11,8 @@ use segs_ui::{
 
 use crate::app::AppContext;
 use crate::dataflow::transport::DataTransport::{Ethernet, Serial};
-use crate::ui::layout;
 use crate::ui::modals::SourceModal;
+use crate::ui::{command_panel, layout};
 
 /// Shows the status bar as a bottom panel of the application window, displaying information and controls relevant to
 /// the current state of the application.
@@ -24,7 +24,9 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
         .show_inside(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6., 0.);
-                ui.with_layout(Layout::left_to_right(Align::Min), |ui| show_left_side(ui, appctx));
+                ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                    show_left_side(ui, appctx);
+                });
                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| show_right_side(ui));
             });
         });
@@ -70,6 +72,19 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         }
     }
     ui.mem().insert_temp(source_id, source_selection);
+
+    let icon = if command_panel::is_open(ui) {
+        icons::Terminal2::solid()
+    } else {
+        icons::Terminal2::outline()
+    };
+    let button = UnpaddedStatusBarButton::default()
+        .padded()
+        .add_icon(icon)
+        .add_text("Commands");
+    if ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked() {
+        command_panel::toggle(ui);
+    }
 
     let layout_name = appctx
         .layouts

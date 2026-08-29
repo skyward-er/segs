@@ -79,6 +79,8 @@ pub const TEXT_EDIT_HOVER_FILL_DARK: Color32 = Color32::from_rgb(40, 40, 40);
 pub const TEXT_EDIT_HOVER_FILL_LIGHT: Color32 = Color32::from_rgb(214, 214, 214);
 pub const TEXT_EDIT_ACTIVE_FILL_DARK: Color32 = Color32::from_rgb(54, 54, 54);
 pub const TEXT_EDIT_ACTIVE_FILL_LIGHT: Color32 = Color32::from_rgb(200, 200, 200);
+pub const TEXT_EDIT_INVALID_FILL_DARK: Color32 = Color32::from_rgb(66, 30, 30);
+pub const TEXT_EDIT_INVALID_FILL_LIGHT: Color32 = Color32::from_rgb(242, 205, 205);
 
 // -----------------------------------------------------------------------------
 // Shadow Colors
@@ -106,4 +108,13 @@ pub const ACCENT_FILL_DARK: Color32 = Color32::from_rgb(0, 132, 255);
 pub const ACCENT_FILL_LIGHT: Color32 = Color32::from_rgb(232, 157, 86);
 // ---- Confirmation Color (e.g. for confirmation states) ----------------------
 pub const CONFIRMATION_FILL_DARK: Color32 = Color32::from_rgb(23, 150, 87);
-pub const CONFIRMATION_FILL_LIGHT: Color32 = Color32::from_rgb(88, 232, 160);
+pub const CONFIRMATION_FILL_LIGHT: Color32 = Color32::from_rgb(89, 201, 134);
+// ---- Neutral Fill (e.g. for pending or informational states) ----------------
+pub const NEUTRAL_FILL_DARK: Color32 = Color32::from_rgb(75, 75, 75);
+pub const NEUTRAL_FILL_LIGHT: Color32 = Color32::from_rgb(210, 210, 210);
+// ---- Error Fill (e.g. for failed or destructive states) ---------------------
+pub const ERROR_FILL_DARK: Color32 = Color32::from_rgb(190, 50, 50);
+pub const ERROR_FILL_LIGHT: Color32 = Color32::from_rgb(247, 104, 97);
+// ---- Error Foreground (e.g. for error text and icons) ------------------------
+pub const ERROR_FG_DARK: Color32 = Color32::from_rgb(230, 115, 115);
+pub const ERROR_FG_LIGHT: Color32 = Color32::from_rgb(150, 35, 35);

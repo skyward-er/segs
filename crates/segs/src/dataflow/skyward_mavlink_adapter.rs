@@ -7,7 +7,7 @@ use std::num::Wrapping;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc, mpsc::Receiver, mpsc::Sender};
 use std::thread;
-use std::time::{Instant, SystemTime};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, MavlinkVersion, MessageReadError, MsgField};
@@ -23,6 +23,8 @@ use crate::dataflow::{CommandId, CommandSequence, CommandStatus, MessageKey};
 
 /// Component ID used for telemetry messages. All other values are used for command request-response correlation.
 const TELEMETRY_COMPONENT_ID: u8 = 0;
+const TC_MESSAGE_SUFFIX: &str = "_TC";
+const TC_TIMESTAMP_FIELD: &str = "timestamp";
 
 /// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -285,9 +287,20 @@ impl SkywardMavlinkAdapter {
     fn handle_command(&mut self, frame: MavFrame, data_store: &mut DataStore) {
         let MavFrame { header, message, .. } = frame;
 
+        let Some(message_info) = self.profile.messages.get(&message.id) else {
+            eprintln!(
+                "Cannot parse message with unknown ID {}, is the MAVLink profile correct?",
+                message.id
+            );
+            return;
+        };
+
         let pending_slot = header.component_id;
         let Some(command_id) = self.pending.get(pending_slot) else {
-            eprintln!("Received command response with invalid pending slot {pending_slot}");
+            eprintln!(
+                "Received command response {} ({}) with invalid pending slot {pending_slot}",
+                message_info.name, message.id
+            );
             return;
         };
 
@@ -299,13 +312,6 @@ impl SkywardMavlinkAdapter {
         }
 
         let target = command_sequence.request.target;
-        let Some(message_info) = self.profile.messages.get(&message.id) else {
-            eprintln!(
-                "Cannot parse message with unknown ID {}, is the MAVLink profile correct?",
-                message.id
-            );
-            return;
-        };
 
         match command_from_mav_message(message, message_info, target) {
             Ok(response) => {
@@ -315,7 +321,6 @@ impl SkywardMavlinkAdapter {
                 eprintln!("Failed to process response for command {}: {error}", command_id.0);
             }
         }
-        self.pending.release(pending_slot);
     }
 
     fn handle_message(&mut self, frame: MavFrame, data_store: &mut DataStore) {
@@ -455,7 +460,7 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
         (MsgField::CharArray(value), DataStream::String(inner_stream)) => {
             inner_stream.push(DataPoint {
                 timestamp,
-                value: value,
+                value: truncate_c_string(value),
             });
         }
         _ => return false,
@@ -489,6 +494,10 @@ fn command_to_mav_message(command: &Command, message_info: &segs_mavlink::Messag
         // Map each field to a `Result`
         // Allows collecting `Ok` values into a `Vec` or returning `Err` if any are invalid
         .map(|(i, field)| {
+            if is_managed_tc_timestamp(message_info, &field.name) {
+                return Ok(system_time_to_mav_field(SystemTime::now(), &field.mavtype));
+            }
+
             let data_key = compute_data_key(message_info.id, i as u32, &field.name);
             let value = command
                 .fields
@@ -506,6 +515,34 @@ fn command_to_mav_message(command: &Command, message_info: &segs_mavlink::Messag
         id: message_info.id,
         fields,
     })
+}
+
+/// Returns `true` if the field is a command timestamp.
+///
+/// Command timestamps are managed internally by the adapter and will not be included in the protocol descriptor.
+fn is_managed_tc_timestamp(message_info: &segs_mavlink::MessageInfo, field_name: &str) -> bool {
+    message_info.name.ends_with(TC_MESSAGE_SUFFIX) && field_name == TC_TIMESTAMP_FIELD
+}
+
+fn system_time_to_mav_field(timestamp: SystemTime, mav_type: &MavType) -> MsgField {
+    let seconds = timestamp.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+
+    match mav_type {
+        MavType::UInt8MavlinkVersion | MavType::UInt8 => MsgField::UInt8(seconds as u8),
+        MavType::UInt16 => MsgField::UInt16(seconds as u16),
+        MavType::UInt32 => MsgField::UInt32(seconds as u32),
+        MavType::UInt64 => MsgField::UInt64(seconds),
+        MavType::Int8 => MsgField::Int8(seconds as i8),
+        MavType::Int16 => MsgField::Int16(seconds as i16),
+        MavType::Int32 => MsgField::Int32(seconds as i32),
+        MavType::Int64 => MsgField::Int64(seconds as i64),
+        MavType::Float => MsgField::Float(seconds as f32),
+        MavType::Double => MsgField::Double(seconds as f64),
+        MavType::Char => MsgField::Char(char::from(seconds as u8)),
+        MavType::CharArray(_) | MavType::Array(_, _) => {
+            unreachable!("Skyward TC timestamps must use a numeric MAVLink type")
+        }
+    }
 }
 
 /// Converts a correlated MAVLink response into the protocol-independent command representation.
@@ -545,9 +582,16 @@ fn msg_field_to_data_value(field: MsgField) -> Result<DataValue, String> {
             .map_err(|_| format!("Character {value:?} does not fit in a MAVLink byte")),
         MsgField::Float(value) => Ok(DataValue::F32(value)),
         MsgField::Double(value) => Ok(DataValue::F64(value)),
-        MsgField::CharArray(value) => Ok(DataValue::String(value)),
+        MsgField::CharArray(value) => Ok(DataValue::String(truncate_c_string(value))),
         MsgField::Array(_) => Err("MAVLink array fields are not supported in command responses".into()),
     }
+}
+
+fn truncate_c_string(mut value: String) -> String {
+    if let Some(terminator) = value.find('\0') {
+        value.truncate(terminator);
+    }
+    value
 }
 
 /// Maps the `DataValue` to the corresponding `MsgField` based on the `MavType`.
@@ -609,6 +653,7 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
                 .fields
                 .iter()
                 .enumerate()
+                .filter(|(_, field)| !is_managed_tc_timestamp(message, &field.name))
                 .map(|(i, field)| FieldDescriptor::Field {
                     name: field.name.clone(),
                     field_type: mavtype_to_datatype(field.mavtype.clone()),
@@ -629,12 +674,12 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
     // Roles contain references and preserve the canonical name ordering
     let stream_messages = messages
         .iter()
-        .filter(|message| !message.name.ends_with("_TC"))
+        .filter(|message| !message.name.ends_with(TC_MESSAGE_SUFFIX))
         .map(|message| MessageKey(message.id as u64))
         .collect();
     let command_messages = messages
         .iter()
-        .filter(|message| message.name.ends_with("_TC"))
+        .filter(|message| message.name.ends_with(TC_MESSAGE_SUFFIX))
         .map(|message| MessageKey(message.id as u64))
         .collect();
 
@@ -813,13 +858,21 @@ mod tests {
             message.fields[0].mavtype = mavtype;
             message
         };
+        let mut alpha_tm = message(2, "ALPHA_TM", MavType::Float);
+        alpha_tm.fields.push(Default::default());
+        alpha_tm.fields[1].name = TC_TIMESTAMP_FIELD.into();
+        alpha_tm.fields[1].mavtype = MavType::UInt32;
+        let mut alpha_tc = message(4, "ALPHA_TC", MavType::Double);
+        alpha_tc.fields.push(Default::default());
+        alpha_tc.fields[1].name = TC_TIMESTAMP_FIELD.into();
+        alpha_tc.fields[1].mavtype = MavType::UInt32;
         let profile = MavProfile {
             enums: BTreeMap::new(),
             messages: BTreeMap::from([
                 (1, message(1, "ZETA_TM", MavType::UInt8)),
-                (2, message(2, "ALPHA_TM", MavType::Float)),
+                (2, alpha_tm),
                 (3, message(3, "BETA_TC", MavType::UInt16)),
-                (4, message(4, "ALPHA_TC", MavType::Double)),
+                (4, alpha_tc),
                 (5, message(5, "UNSUFFIXED", MavType::Int32)),
             ]),
         };
@@ -858,8 +911,27 @@ mod tests {
                 .unwrap()
                 .fields
                 .as_slice(),
+            [
+                FieldDescriptor::Field {
+                    field_type: DataType::F32,
+                    ..
+                },
+                FieldDescriptor::Field {
+                    name,
+                    field_type: DataType::U32,
+                    ..
+                }
+            ] if name == TC_TIMESTAMP_FIELD
+        ));
+        assert!(matches!(
+            descriptor
+                .message_schemas
+                .get(&MessageKey(4))
+                .unwrap()
+                .fields
+                .as_slice(),
             [FieldDescriptor::Field {
-                field_type: DataType::F32,
+                field_type: DataType::F64,
                 ..
             }]
         ));
@@ -968,6 +1040,41 @@ mod tests {
     }
 
     #[test]
+    fn command_conversion_populates_managed_tc_timestamp() {
+        let mut message = segs_mavlink::MessageInfo {
+            id: 43,
+            name: "TIMED_TC".into(),
+            ..Default::default()
+        };
+        message.fields.push(Default::default());
+        message.fields[0].name = TC_TIMESTAMP_FIELD.into();
+        message.fields[0].mavtype = MavType::UInt64;
+        message.fields.push(Default::default());
+        message.fields[1].name = "value".into();
+        message.fields[1].mavtype = MavType::UInt8;
+
+        let before = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let command = Command {
+            key: MessageKey(message.id as u64),
+            timestamp: SystemTime::now(),
+            target: SourceKey(7),
+            fields: HashMap::from([(compute_data_key(message.id, 1, "value"), DataValue::U8(9))]),
+        };
+        let converted = command_to_mav_message(&command, &message).unwrap();
+        let after = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        assert!(matches!(
+            converted.fields.as_slice(),
+            [MsgField::UInt64(timestamp), MsgField::UInt8(9)]
+                if (before..=after).contains(timestamp)
+        ));
+        assert_eq!(
+            system_time_to_mav_field(UNIX_EPOCH + std::time::Duration::from_secs(257), &MavType::UInt8),
+            MsgField::UInt8(1)
+        );
+    }
+
+    #[test]
     fn correlated_response_conversion_preserves_command_value_types() {
         let mut message_info = segs_mavlink::MessageInfo {
             id: 24,
@@ -980,11 +1087,18 @@ mod tests {
         message_info.fields.push(Default::default());
         message_info.fields[1].name = "value".into();
         message_info.fields[1].mavtype = MavType::Float;
+        message_info.fields.push(Default::default());
+        message_info.fields[2].name = "sensor_name".into();
+        message_info.fields[2].mavtype = MavType::CharArray(24);
 
         let response = command_from_mav_message(
             MavMessage {
                 id: 24,
-                fields: vec![MsgField::UInt16(12), MsgField::Float(3.5)],
+                fields: vec![
+                    MsgField::UInt16(12),
+                    MsgField::Float(3.5),
+                    MsgField::CharArray("AS5047D_LEFT\0\0\0f\u{14}\u{d0}".into()),
+                ],
             },
             &message_info,
             SourceKey(7),
@@ -1000,5 +1114,31 @@ mod tests {
             response.fields.get(&compute_data_key(24, 1, "value")),
             Some(DataValue::F32(value)) if *value == 3.5
         ));
+        assert!(matches!(
+            response.fields.get(&compute_data_key(24, 2, "sensor_name")),
+            Some(DataValue::String(value)) if value == "AS5047D_LEFT"
+        ));
+    }
+
+    #[test]
+    fn char_array_stream_values_use_c_string_termination() {
+        let mut stream = DataStream::String(Vec::new());
+
+        assert!(insert_field_to_stream(
+            MsgField::CharArray("AS5047D_LEFT\0\0garbage".into()),
+            &mut stream,
+            1.,
+        ));
+        assert!(insert_field_to_stream(
+            MsgField::CharArray("FULL_LENGTH".into()),
+            &mut stream,
+            2.,
+        ));
+
+        let DataStream::String(points) = stream else {
+            unreachable!()
+        };
+        assert_eq!(points[0].value, "AS5047D_LEFT");
+        assert_eq!(points[1].value, "FULL_LENGTH");
     }
 }

@@ -38,6 +38,12 @@ pub struct Style {
     pub accent_fill: Color32,
     /// A good color for confirmation states
     pub confirmation_fill: Color32,
+    /// Background color for pending, inactive, or informational states.
+    pub neutral_fill: Color32,
+    /// Background color for failed, rejected, or destructive states.
+    pub error_fill: Color32,
+    /// Foreground color for error text and icons.
+    pub error_fg_color: Color32,
     // ---- Stack-related states ----------------
     // These fields are relative to the position
     // in the ui traversal stack
@@ -59,6 +65,9 @@ impl Style {
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_DARK,
             accent_fill: ACCENT_FILL_DARK,
             confirmation_fill: CONFIRMATION_FILL_DARK,
+            neutral_fill: NEUTRAL_FILL_DARK,
+            error_fill: ERROR_FILL_DARK,
+            error_fg_color: ERROR_FG_DARK,
             current_background_fill: BACKGROUND_DARK,
         }
     }
@@ -76,6 +85,9 @@ impl Style {
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_LIGHT,
             accent_fill: ACCENT_FILL_LIGHT,
             confirmation_fill: CONFIRMATION_FILL_LIGHT,
+            neutral_fill: NEUTRAL_FILL_LIGHT,
+            error_fill: ERROR_FILL_LIGHT,
+            error_fg_color: ERROR_FG_LIGHT,
             current_background_fill: BACKGROUND_LIGHT,
         }
     }
@@ -231,6 +243,8 @@ pub struct TextEditStyle {
     pub inactive_fill: Color32,
     pub hover_fill: Color32,
     pub active_fill: Color32,
+    /// Background fill used by validated text inputs with an active error.
+    pub invalid_fill: Color32,
 }
 
 impl TextEditStyle {
@@ -239,6 +253,7 @@ impl TextEditStyle {
             inactive_fill: TEXT_EDIT_INACTIVE_FILL_DARK,
             hover_fill: TEXT_EDIT_HOVER_FILL_DARK,
             active_fill: TEXT_EDIT_ACTIVE_FILL_DARK,
+            invalid_fill: TEXT_EDIT_INVALID_FILL_DARK,
         }
     }
 
@@ -247,6 +262,7 @@ impl TextEditStyle {
             inactive_fill: TEXT_EDIT_INACTIVE_FILL_LIGHT,
             hover_fill: TEXT_EDIT_HOVER_FILL_LIGHT,
             active_fill: TEXT_EDIT_ACTIVE_FILL_LIGHT,
+            invalid_fill: TEXT_EDIT_INVALID_FILL_LIGHT,
         }
     }
 }
