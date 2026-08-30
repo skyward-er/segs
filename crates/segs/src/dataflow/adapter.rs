@@ -62,11 +62,6 @@ pub trait DataAdapter {
     /// descriptor can be used to subscribe to that stream in the central data store for a specific source.
     fn describe_protocol(&self) -> &ProtocolDescriptor;
 
-    /// Prepare the data store with any necessary initial structure or metadata before processing begins.
-    fn prepare_data_store(&self, _data_store: &mut DataStore) {
-        // Default implementation does nothing, can be overridden by specific adapters if needed
-    }
-
     /// Process incoming data and update the data store.
     ///
     /// Returns true if new data was processed, false otherwise.
@@ -104,6 +99,25 @@ impl Default for Stats {
     }
 }
 
+pub fn try_new(
+    adapter_type: Option<AdapterType>,
+    transport: Option<DataTransport>,
+    mapping: Option<DataMapping>,
+    ctx: egui::Context,
+) -> Option<Box<dyn DataAdapter>> {
+    match (adapter_type, transport, mapping) {
+        (Some(AdapterType::SkywardMavlink), Some(transport), Some(mapping)) => {
+            println!("Loading Skyward MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
+            Some(Box::new(
+                SkywardMavlinkAdapter::new(ctx, transport, mapping)
+                    .inspect_err(|e| println!("Failed to load Skyward MAVLink adapter: {e}"))
+                    .ok()?,
+            ))
+        }
+        _ => None,
+    }
+}
+
 pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {
     match adapter {
         AdapterType::SkywardMavlink => SkywardMavlinkAdapter::get_mapping_sources(),
@@ -122,9 +136,9 @@ pub struct DataAdapterInstance {
 
 impl DataAdapterInstance {
     /// Wraps an adapter as a newly installed instance.
-    pub fn new(adapter: impl DataAdapter + 'static) -> Self {
+    pub fn new(adapter: Box<dyn DataAdapter>) -> Self {
         Self {
-            adapter: Box::new(adapter),
+            adapter,
             token: DataAdapterInstanceToken(Arc::new(())),
         }
     }

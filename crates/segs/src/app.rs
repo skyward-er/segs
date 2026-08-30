@@ -6,8 +6,8 @@ use segs_memory::MemoryExt;
 use segs_ui::style::{AppStyle, setup_style};
 
 use crate::args::AppArgs;
-use crate::dataflow::adapter::{AdapterType, DataAdapterInstance};
-use crate::dataflow::{adapter::DataAdapter, skyward_mavlink_adapter::SkywardMavlinkAdapter, store::DataStore};
+use crate::dataflow::adapter::{self, DataAdapterInstance};
+use crate::dataflow::store::DataStore;
 use crate::layout::{LayoutManager, LayoutManagerError};
 use crate::ui::views::{View, ViewTarget};
 use crate::ui::{command_panel, layout, status_bar, top_bar};
@@ -42,21 +42,9 @@ impl App {
             View::from_target(ViewTarget::Welcome)
         };
 
-        let mut data_store = DataStore::new();
-
-        let data_adapter = match (args.transport, args.adapter, args.mapping) {
-            (Some(transport), Some(AdapterType::SkywardMavlink), Some(mapping)) => {
-                println!("Loading Skyward MAVLink adapter\n\tTransport: {transport:?}\n\tMapping: {mapping:?}");
-                let adapter = SkywardMavlinkAdapter::new(ctx.clone(), transport, mapping)
-                    .expect("Failed to create Skyward MAVLink adapter");
-                Some(DataAdapterInstance::new(adapter))
-            }
-            _ => None,
-        };
-
-        if let Some(ref adapter) = data_adapter {
-            adapter.prepare_data_store(&mut data_store);
-        }
+        let data_store = DataStore::new();
+        let data_adapter = adapter::try_new(args.adapter, args.transport, args.mapping, ctx.clone())
+            .map(|adapter| DataAdapterInstance::new(adapter));
 
         Ok(Self {
             view,

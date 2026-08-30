@@ -113,7 +113,7 @@ impl<'a> SourceModal<'a> {
                                 (Some(transport), Some(mapping)) => {
                                     match SkywardMavlinkAdapter::new(ui.ctx().clone(), transport, mapping) {
                                         Ok(adapter) => {
-                                            appctx.data_adapter = Some(DataAdapterInstance::new(adapter));
+                                            appctx.data_adapter = Some(DataAdapterInstance::new(Box::new(adapter)));
                                             connect_error = false;
                                             ui.close();
                                         }
