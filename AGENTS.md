@@ -11,6 +11,8 @@ SEGS (Skyward Enhanced Ground Software) is a Rust 2024 workspace for a configura
 
 Keep changes within the crate that owns the behavior. Use workspace dependencies when a dependency is shared, and preserve existing public interfaces unless the request requires changing them.
 
+Within the `segs` crate, do not use `pub(crate)`. Use other visibility modifiers (`pub`, `pub(super)`) when they are appropriate.
+
 # Code placement
 
 When adding code to an existing module, preserve its purpose-first ordering. Keep the items that define and implement the module's primary responsibility at the top, and do not insert helpers or secondary types above them. Place inherent implementations after the primary trait implementations, then supporting functions and private types, with tests last. For example, the Skyward MAVLink adapter starts with `SkywardMavlinkAdapter` and its `DataAdapter` implementation because that is the module's main purpose, followed by the inherent `SkywardMavlinkAdapter` implementation, helper functions, supporting types, and tests. Match the existing module's equivalent hierarchy rather than applying this exact item order mechanically.
