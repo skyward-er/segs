@@ -112,6 +112,9 @@ pub const CONFIRMATION_FILL_LIGHT: Color32 = Color32::from_rgb(89, 201, 134);
 // ---- Neutral Fill (e.g. for pending or informational states) ----------------
 pub const NEUTRAL_FILL_DARK: Color32 = Color32::from_rgb(75, 75, 75);
 pub const NEUTRAL_FILL_LIGHT: Color32 = Color32::from_rgb(210, 210, 210);
+// ---- Local Error Fill -------------------------------------------------------
+pub const LOCAL_ERROR_FILL_DARK: Color32 = Color32::from_rgb(79, 70, 229);
+pub const LOCAL_ERROR_FILL_LIGHT: Color32 = Color32::from_rgb(165, 180, 252);
 // ---- Error Fill (e.g. for failed or destructive states) ---------------------
 pub const ERROR_FILL_DARK: Color32 = Color32::from_rgb(190, 50, 50);
 pub const ERROR_FILL_LIGHT: Color32 = Color32::from_rgb(247, 104, 97);

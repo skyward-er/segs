@@ -384,7 +384,7 @@ impl SkywardMavlinkAdapter {
     /// No more future responses are expected and associated resources may be released.
     fn update_sequence_status(&self, command_sequence: &mut CommandSequence, message_id: u32) -> bool {
         if message_id == self.ack_message_id || message_id == self.wack_message_id {
-            command_sequence.status = CommandStatus::Completed;
+            command_sequence.status = CommandStatus::Success;
             true
         } else if message_id == self.nack_message_id {
             command_sequence.status = CommandStatus::Rejected;

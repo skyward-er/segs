@@ -125,7 +125,7 @@ pub enum CommandStatus {
     /// The command is pending response.
     Pending,
     /// The command was completed successfully.
-    Completed,
+    Success,
     /// The command was rejected by the target.
     Rejected,
     /// The command encountered a local error.
@@ -136,7 +136,7 @@ impl fmt::Display for CommandStatus {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Pending => "Pending",
-            Self::Completed => "Completed",
+            Self::Success => "Success",
             Self::Rejected => "Rejected",
             Self::LocalError => "Local error",
         })

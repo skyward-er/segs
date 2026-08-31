@@ -36,10 +36,12 @@ pub struct Style {
     pub shadow_fill: Color32,
     /// Color used for accents/highlights
     pub accent_fill: Color32,
-    /// A good color for confirmation states
-    pub confirmation_fill: Color32,
+    /// A good color for success states
+    pub success_fill: Color32,
     /// Background color for pending, inactive, or informational states.
     pub neutral_fill: Color32,
+    /// Background color for failures detected by the local application.
+    pub local_error_fill: Color32,
     /// Background color for failed, rejected, or destructive states.
     pub error_fill: Color32,
     /// Foreground color for error text and icons.
@@ -64,8 +66,9 @@ impl Style {
             text_edit: TextEditStyle::dark(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_DARK,
             accent_fill: ACCENT_FILL_DARK,
-            confirmation_fill: CONFIRMATION_FILL_DARK,
+            success_fill: CONFIRMATION_FILL_DARK,
             neutral_fill: NEUTRAL_FILL_DARK,
+            local_error_fill: LOCAL_ERROR_FILL_DARK,
             error_fill: ERROR_FILL_DARK,
             error_fg_color: ERROR_FG_DARK,
             current_background_fill: BACKGROUND_DARK,
@@ -84,8 +87,9 @@ impl Style {
             text_edit: TextEditStyle::light(),
             shadow_fill: SHADOW_STRONG_ON_BACKGROUND_LIGHT,
             accent_fill: ACCENT_FILL_LIGHT,
-            confirmation_fill: CONFIRMATION_FILL_LIGHT,
+            success_fill: CONFIRMATION_FILL_LIGHT,
             neutral_fill: NEUTRAL_FILL_LIGHT,
+            local_error_fill: LOCAL_ERROR_FILL_LIGHT,
             error_fill: ERROR_FILL_LIGHT,
             error_fg_color: ERROR_FG_LIGHT,
             current_background_fill: BACKGROUND_LIGHT,

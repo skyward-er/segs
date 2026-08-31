@@ -46,7 +46,7 @@ fn add_toggle(ui: &mut Ui, active: &mut bool) {
         let style = ui.app_style();
 
         // Paint background
-        let enabled_color = style.confirmation_fill;
+        let enabled_color = style.success_fill;
         let bg_fill = style
             .widgets
             .inactive
