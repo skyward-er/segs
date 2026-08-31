@@ -11,14 +11,6 @@ const DEFAULT_MARGIN: Vec2 = Vec2::new(6., 3.);
 
 #[allow(private_bounds)]
 pub trait StatusBarButton: StatusBarButtonImpl + Sized {
-    fn add_icon_dyn(mut self, icon: Arc<dyn Icon>) -> Self {
-        self.contents().push(ContentAtoms::Image {
-            size: icon.fit_size(Vec2::splat(15.)),
-            image: icon,
-        });
-        self
-    }
-
     fn add_icon(mut self, icon: impl Icon + 'static) -> Self {
         self.contents().push(ContentAtoms::Image {
             size: icon.fit_size(Vec2::splat(15.)),
@@ -35,8 +27,30 @@ pub trait StatusBarButton: StatusBarButtonImpl + Sized {
         self
     }
 
+    /// Adds a solid status dot in an icon-sized slot.
+    fn add_dot(mut self, color: Color32) -> Self {
+        self.contents().push(ContentAtoms::Dot {
+            color,
+            size: Vec2::splat(15.),
+            radius: 4.,
+        });
+        self
+    }
+
     fn add_text(mut self, text: impl Into<String>) -> Self {
-        self.contents().push(ContentAtoms::Text(text.into()));
+        self.contents().push(ContentAtoms::Text {
+            text: text.into(),
+            width_reference: None,
+        });
+        self
+    }
+
+    /// Adds centered text reserving at least the width of a reference string.
+    fn add_text_with_width_of(mut self, text: impl Into<String>, width_reference: impl Into<String>) -> Self {
+        self.contents().push(ContentAtoms::Text {
+            text: text.into(),
+            width_reference: Some(width_reference.into()),
+        });
         self
     }
 }
@@ -54,8 +68,19 @@ pub struct PaddedStatusBarButton {
 
 #[derive(Clone)]
 enum ContentAtoms {
-    Image { image: Arc<dyn Icon>, size: Vec2 },
-    Text(String),
+    Image {
+        image: Arc<dyn Icon>,
+        size: Vec2,
+    },
+    Dot {
+        color: Color32,
+        size: Vec2,
+        radius: f32,
+    },
+    Text {
+        text: String,
+        width_reference: Option<String>,
+    },
     Space(f32),
 }
 
@@ -131,16 +156,32 @@ fn status_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
     let mut sizes = SmallVec::<[Vec2; 6]>::new();
     for atom in atoms.iter() {
         match atom {
-            ContentAtoms::Image { image: _, size } => {
+            ContentAtoms::Image { size, .. } => {
                 sizes.push(*size);
             }
-            ContentAtoms::Text(text) => {
+            ContentAtoms::Dot { size, .. } => {
+                sizes.push(*size);
+            }
+            ContentAtoms::Text { text, width_reference } => {
                 let galley = ui.painter().layout_no_wrap(
                     text.clone(),
                     ui.app_style().base_font_of(13.0),
                     ui.visuals().text_color(),
                 );
-                sizes.push(galley.size());
+                let reference_width = width_reference
+                    .as_ref()
+                    .map(|reference| {
+                        ui.painter()
+                            .layout_no_wrap(
+                                reference.clone(),
+                                ui.app_style().base_font_of(13.0),
+                                ui.visuals().text_color(),
+                            )
+                            .size()
+                            .x
+                    })
+                    .unwrap_or_default();
+                sizes.push(Vec2::new(galley.size().x.max(reference_width), galley.size().y));
                 galleys.push(galley);
             }
             ContentAtoms::Space(space) => {
@@ -173,7 +214,7 @@ fn status_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
         let mut galley_iter = galleys.into_iter();
         for (atom, size) in atoms.into_iter().zip(sizes) {
             match atom {
-                ContentAtoms::Image { image, size: _ } => {
+                ContentAtoms::Image { image, .. } => {
                     let icon_pos = Pos2::new(x_offset, v_center - size.y / 2.0);
                     let tint = if ui.ctx().theme() == Theme::Dark {
                         Color32::WHITE
@@ -186,9 +227,13 @@ fn status_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
                         .fit_to_exact_size(size)
                         .paint_at(ui, Rect::from_min_size(icon_pos, size));
                 }
-                ContentAtoms::Text(_) => {
-                    let text_pos = Pos2::new(x_offset, v_center - size.y / 2.0);
-                    painter.galley(text_pos, galley_iter.next().unwrap(), ui.visuals().text_color());
+                ContentAtoms::Dot { color, radius, .. } => {
+                    painter.circle_filled(Pos2::new(x_offset + size.x / 2., v_center), radius, color);
+                }
+                ContentAtoms::Text { .. } => {
+                    let galley = galley_iter.next().unwrap();
+                    let text_pos = Pos2::new(x_offset + (size.x - galley.size().x) / 2.0, v_center - size.y / 2.0);
+                    painter.galley(text_pos, galley, ui.visuals().text_color());
                 }
                 ContentAtoms::Space(_) => (), // No painting for space
             }
