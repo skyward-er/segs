@@ -124,6 +124,8 @@ pub enum DataValue {
 pub enum CommandStatus {
     /// The command is pending response.
     Pending,
+    /// The command did not receive a final response before its deadline.
+    TimedOut,
     /// The command was completed successfully.
     Success,
     /// The command was rejected by the target.
@@ -136,6 +138,7 @@ impl fmt::Display for CommandStatus {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Pending => "Pending",
+            Self::TimedOut => "Timed out",
             Self::Success => "Success",
             Self::Rejected => "Rejected",
             Self::LocalError => "Local error",

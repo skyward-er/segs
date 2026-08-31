@@ -364,6 +364,7 @@ fn show_status_badge(ui: &mut Ui, status: &CommandStatus) {
     let app_style = ui.app_style();
     let fill = match status {
         CommandStatus::Pending => app_style.neutral_fill,
+        CommandStatus::TimedOut => app_style.timeout_fill,
         CommandStatus::Success => app_style.success_fill,
         CommandStatus::Rejected => app_style.error_fill,
         CommandStatus::LocalError => app_style.local_error_fill,

@@ -7,7 +7,7 @@ use std::num::Wrapping;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc, mpsc::Receiver, mpsc::Sender};
 use std::thread;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, MavlinkVersion, MessageReadError, MsgField};
@@ -25,12 +25,14 @@ use crate::dataflow::{CommandId, CommandSequence, CommandStatus, MessageKey};
 const TELEMETRY_COMPONENT_ID: u8 = 0;
 const TC_MESSAGE_SUFFIX: &str = "_TC";
 const TC_TIMESTAMP_FIELD: &str = "timestamp";
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
 pub struct SkywardMavlinkAdapter {
     transport: DataTransport,
     mapping: DataMapping,
+    ctx: egui::Context,
     stop_flag: Arc<AtomicBool>,
     incoming: Receiver<MavFrame>,
     outgoing: Sender<OutgoingCommand>,
@@ -154,6 +156,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
         Ok(Self {
             transport,
             mapping,
+            ctx,
             stop_flag,
             incoming: incoming_rx,
             outgoing: outgoing_tx,
@@ -201,6 +204,8 @@ impl DataAdapter for SkywardMavlinkAdapter {
             self.pending.release(failure.pending_slot);
         }
 
+        self.expire_pending_commands(data_store, Instant::now());
+
         loop {
             let mut pending_slot = 0;
 
@@ -214,7 +219,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
                     None => false,
                 })
             else {
-                return; // No more commands to process
+                break; // No more commands to process
             };
 
             let command = &command_sequence.request;
@@ -265,6 +270,8 @@ impl DataAdapter for SkywardMavlinkAdapter {
                 command_sequence.status = CommandStatus::LocalError;
             }
         }
+
+        self.schedule_pending_timeout();
     }
 
     fn status(&self) -> Status {
@@ -376,6 +383,29 @@ impl SkywardMavlinkAdapter {
                 );
             }
         }
+    }
+
+    fn expire_pending_commands(&mut self, data_store: &mut DataStore, now: Instant) {
+        while let Some(PendingDeadline { sequence, expires_at }) = self.pending.oldest {
+            if now < expires_at {
+                break;
+            }
+
+            let pending =
+                self.pending.slots[sequence as usize].expect("Oldest pending sequence must reference an occupied slot");
+
+            self.pending.release(sequence);
+            data_store.command_sequence_mut(pending.command_id).status = CommandStatus::TimedOut;
+        }
+    }
+
+    fn schedule_pending_timeout(&self) {
+        let Some(PendingDeadline { expires_at, .. }) = self.pending.oldest else {
+            return;
+        };
+
+        self.ctx
+            .request_repaint_after(expires_at.saturating_duration_since(Instant::now()));
     }
 
     /// Updates the status of a command sequence on ACK/WACK/NACK messages.
@@ -709,8 +739,9 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
 
 /// Adapter-local state for pending commands, tracking which command sequence IDs are in use.
 struct PendingCommandSlots {
-    slots: [Option<CommandId>; 256],
+    slots: [Option<PendingCommandSlot>; 256],
     next_sequence: u8,
+    oldest: Option<PendingDeadline>,
 }
 
 impl Default for PendingCommandSlots {
@@ -718,6 +749,7 @@ impl Default for PendingCommandSlots {
         Self {
             slots: [None; 256],
             next_sequence: 1,
+            oldest: None,
         }
     }
 }
@@ -734,23 +766,52 @@ impl PendingCommandSlots {
             }
         }
 
-        //
-        self.slots[sequence as usize] = Some(command_id);
+        let sent_at = Instant::now();
+        self.slots[sequence as usize] = Some(PendingCommandSlot { command_id, sent_at });
+        self.oldest.get_or_insert(PendingDeadline {
+            sequence,
+            expires_at: sent_at + COMMAND_TIMEOUT,
+        });
         self.next_sequence = Self::advance(sequence);
         Some(sequence)
     }
 
     fn release(&mut self, sequence: u8) {
         self.slots[sequence as usize] = None;
+
+        if self.oldest.is_some_and(|oldest| oldest.sequence == sequence) {
+            self.oldest = self
+                .slots
+                .iter()
+                .enumerate()
+                .filter_map(|(index, slot)| Some((index as u8, slot.as_ref()?.sent_at)))
+                .min_by_key(|(_, sent_at)| *sent_at)
+                .map(|(sequence, sent_at)| PendingDeadline {
+                    sequence,
+                    expires_at: sent_at + COMMAND_TIMEOUT,
+                });
+        }
     }
 
     fn get(&self, sequence: u8) -> Option<CommandId> {
-        self.slots[sequence as usize].clone()
+        self.slots[sequence as usize].map(|slot| slot.command_id)
     }
 
     fn advance(sequence: u8) -> u8 {
         sequence.checked_add(1).unwrap_or(1)
     }
+}
+
+#[derive(Clone, Copy)]
+struct PendingCommandSlot {
+    command_id: CommandId,
+    sent_at: Instant,
+}
+
+#[derive(Clone, Copy)]
+struct PendingDeadline {
+    sequence: u8,
+    expires_at: Instant,
 }
 
 struct OutgoingCommand {
@@ -800,7 +861,7 @@ mod tests {
     #[test]
     fn correlation_slots_skip_active_ids_and_report_exhaustion() {
         let mut slots = PendingCommandSlots::default();
-        slots.slots[1] = Some(CommandId(1000));
+        assert_eq!(slots.acquire(CommandId(1000)), Some(1));
 
         assert_eq!(slots.acquire(CommandId(1001)), Some(2));
 

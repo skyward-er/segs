@@ -40,6 +40,8 @@ pub struct Style {
     pub success_fill: Color32,
     /// Background color for pending, inactive, or informational states.
     pub neutral_fill: Color32,
+    /// Background color for operations that exceeded their deadline.
+    pub timeout_fill: Color32,
     /// Background color for failures detected by the local application.
     pub local_error_fill: Color32,
     /// Background color for failed, rejected, or destructive states.
@@ -68,6 +70,7 @@ impl Style {
             accent_fill: ACCENT_FILL_DARK,
             success_fill: CONFIRMATION_FILL_DARK,
             neutral_fill: NEUTRAL_FILL_DARK,
+            timeout_fill: TIMEOUT_FILL_DARK,
             local_error_fill: LOCAL_ERROR_FILL_DARK,
             error_fill: ERROR_FILL_DARK,
             error_fg_color: ERROR_FG_DARK,
@@ -89,6 +92,7 @@ impl Style {
             accent_fill: ACCENT_FILL_LIGHT,
             success_fill: CONFIRMATION_FILL_LIGHT,
             neutral_fill: NEUTRAL_FILL_LIGHT,
+            timeout_fill: TIMEOUT_FILL_LIGHT,
             local_error_fill: LOCAL_ERROR_FILL_LIGHT,
             error_fill: ERROR_FILL_LIGHT,
             error_fg_color: ERROR_FG_LIGHT,
