@@ -80,14 +80,19 @@ pub struct Status {
     pub tx: Stats,
 }
 
+/// A snapshot of successful frame traffic and I/O errors for one direction.
+#[derive(Clone, Copy)]
 pub struct Stats {
+    /// Time of the most recent successful frame.
     pub last_time: Instant,
+    /// Successful frames per second during the most recently completed statistics window.
     pub rate: f32,
+    /// Cumulative number of successfully transferred frames.
     pub count: u32,
+    /// Cumulative number of frame parsing or transport I/O errors.
     pub errors: u32,
 }
 
-// TODO: stub implementation, remove once properly implemented with real data in Skyward MAVLink adapter
 impl Default for Stats {
     fn default() -> Self {
         Self {

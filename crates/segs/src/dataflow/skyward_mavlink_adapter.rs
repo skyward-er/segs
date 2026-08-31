@@ -5,14 +5,14 @@ use std::io::ErrorKind::{Interrupted, TimedOut, WouldBlock};
 use std::iter::zip;
 use std::num::Wrapping;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc, mpsc::Receiver, mpsc::Sender};
+use std::sync::{Arc, Mutex, mpsc, mpsc::Receiver, mpsc::Sender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use segs_mavlink::connection::{Connection, MavConnection};
 use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, MavlinkVersion, MessageReadError, MsgField};
 
-use crate::dataflow::adapter::{DataAdapter, Status};
+use crate::dataflow::adapter::{DataAdapter, Stats, Status};
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
 use crate::dataflow::protocol::{FieldDescriptor, MessageDescriptor, ProtocolDescriptor, SourceDescriptor};
 use crate::dataflow::transport::DataTransport;
@@ -26,6 +26,7 @@ const TELEMETRY_COMPONENT_ID: u8 = 0;
 const TC_MESSAGE_SUFFIX: &str = "_TC";
 const TC_TIMESTAMP_FIELD: &str = "timestamp";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+const STATS_RATE_WINDOW: Duration = Duration::from_secs(1);
 
 /// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -37,6 +38,8 @@ pub struct SkywardMavlinkAdapter {
     incoming: Receiver<MavFrame>,
     outgoing: Sender<OutgoingCommand>,
     send_failures: Receiver<SendFailure>,
+    rx_stats: Arc<Mutex<IoStats>>,
+    tx_stats: Arc<Mutex<IoStats>>,
     /// Outgoing packet sequence number.
     packet_sequence: Wrapping<u8>,
     /// Maps custom MAVLink component IDs to stable datastore command IDs.
@@ -99,16 +102,22 @@ impl DataAdapter for SkywardMavlinkAdapter {
             DataTransport::Serial { tty, baud_rate } => Connection::serial(tty.clone(), *baud_rate, profile.clone())?,
         };
         let connection = Arc::new(connection);
+        let created_at = Instant::now();
+        let rx_stats = Arc::new(Mutex::new(IoStats::new(created_at)));
+        let tx_stats = Arc::new(Mutex::new(IoStats::new(created_at)));
 
         let rx_conn = connection.clone();
         let rx_stop_flag = stop_flag.clone();
         let rx_ctx = ctx.clone();
+        let rx_thread_stats = rx_stats.clone();
         // RX thread: receives incoming MAVLink frames and notifies the UI to update
         thread::spawn(move || {
             while !rx_stop_flag.load(Ordering::Relaxed) {
                 // Receive the frame
                 match rx_conn.recv_frame() {
                     Ok(frame) => {
+                        rx_thread_stats.lock().unwrap().record_success(Instant::now());
+
                         // Send the frame to the incoming channel
                         let Ok(_) = incoming_tx.send(frame) else {
                             break; // Receiver has been dropped, exit the thread
@@ -119,9 +128,13 @@ impl DataAdapter for SkywardMavlinkAdapter {
                     }
                     Err(MessageReadError::Io(e)) => match e.kind() {
                         WouldBlock | TimedOut | Interrupted => continue, // retry
-                        _ => eprintln!("Failed to read MAVLink message: {e}"),
+                        _ => {
+                            rx_thread_stats.lock().unwrap().record_error();
+                            eprintln!("Failed to read MAVLink message: {e}");
+                        }
                     },
                     Err(MessageReadError::Parse(e)) => {
+                        rx_thread_stats.lock().unwrap().record_error();
                         eprintln!("Failed to parse MAVLink message: {e}");
                     }
                 }
@@ -130,25 +143,27 @@ impl DataAdapter for SkywardMavlinkAdapter {
 
         let tx_conn = connection.clone();
         let tx_ctx = ctx.clone();
+        let tx_thread_stats = tx_stats.clone();
         // TX thread: sends outgoing MAVLink frames and notifies the UI of errors
         thread::spawn(move || {
             // Get the next outgoing frame
             while let Ok(outgoing) = outgoing_rx.recv() {
                 // Send the frame out
-                let result = tx_conn.send_frame(outgoing.frame);
+                match tx_conn.send_frame(outgoing.frame) {
+                    Ok(_) => tx_thread_stats.lock().unwrap().record_success(Instant::now()),
+                    Err(error) => {
+                        tx_thread_stats.lock().unwrap().record_error();
+                        eprintln!("Failed to send MAVLink message: {error}");
 
-                // Notify the UI of send errors
-                if let Err(error) = result {
-                    eprintln!("Failed to send MAVLink message: {error}");
-
-                    let failure = SendFailure {
-                        pending_slot: outgoing.pending_slot,
-                        command_id: outgoing.command_id,
-                    };
-                    if send_failure_tx.send(failure).is_err() {
-                        break;
+                        let failure = SendFailure {
+                            pending_slot: outgoing.pending_slot,
+                            command_id: outgoing.command_id,
+                        };
+                        if send_failure_tx.send(failure).is_err() {
+                            break;
+                        }
+                        tx_ctx.request_repaint_of(egui::ViewportId::ROOT);
                     }
-                    tx_ctx.request_repaint_of(egui::ViewportId::ROOT);
                 }
             }
         });
@@ -161,6 +176,8 @@ impl DataAdapter for SkywardMavlinkAdapter {
             incoming: incoming_rx,
             outgoing: outgoing_tx,
             send_failures: send_failure_rx,
+            rx_stats,
+            tx_stats,
             packet_sequence: Wrapping(0),
             pending: PendingCommandSlots::default(),
             protocol: make_protocol_descriptor(&profile),
@@ -168,7 +185,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
             ack_message_id,
             wack_message_id,
             nack_message_id,
-            created_at: Instant::now(),
+            created_at,
         })
     }
 
@@ -275,11 +292,15 @@ impl DataAdapter for SkywardMavlinkAdapter {
     }
 
     fn status(&self) -> Status {
+        let now = Instant::now();
+        let rx = self.rx_stats.lock().unwrap().snapshot(now);
+        let tx = self.tx_stats.lock().unwrap().snapshot(now);
+
         Status {
             transport: self.transport.clone(),
             mapping: self.mapping.clone(),
-            rx: Default::default(),
-            tx: Default::default(),
+            rx,
+            tx,
         }
     }
 }
@@ -734,6 +755,53 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
         stream_messages,
         command_messages,
         sources,
+    }
+}
+
+/// Tracks cumulative I/O totals and successful frames in the current rate window.
+struct IoStats {
+    stats: Stats,
+    window_started: Instant,
+    window_count: u32,
+}
+
+impl IoStats {
+    fn new(created_at: Instant) -> Self {
+        Self {
+            stats: Stats {
+                last_time: created_at,
+                rate: 0.,
+                count: 0,
+                errors: 0,
+            },
+            window_started: created_at,
+            window_count: 0,
+        }
+    }
+
+    fn record_success(&mut self, now: Instant) {
+        self.update_rate(now);
+        self.window_count = self.window_count.saturating_add(1);
+        self.stats.last_time = now;
+        self.stats.count = self.stats.count.saturating_add(1);
+    }
+
+    fn record_error(&mut self) {
+        self.stats.errors = self.stats.errors.saturating_add(1);
+    }
+
+    fn snapshot(&mut self, now: Instant) -> Stats {
+        self.update_rate(now);
+        self.stats
+    }
+
+    fn update_rate(&mut self, now: Instant) {
+        let elapsed = now.saturating_duration_since(self.window_started);
+        if elapsed >= STATS_RATE_WINDOW {
+            self.stats.rate = self.window_count as f32 / elapsed.as_secs_f32();
+            self.window_started = now;
+            self.window_count = 0;
+        }
     }
 }
 
