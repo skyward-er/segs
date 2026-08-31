@@ -85,7 +85,7 @@ pub struct Status {
 pub struct Stats {
     /// Time of the most recent successful frame.
     pub last_time: Instant,
-    /// Successful frames per second during the most recently completed statistics window.
+    /// Successful frames per second during the preceding rolling statistics window.
     pub rate: f32,
     /// Cumulative number of successfully transferred frames.
     pub count: u32,

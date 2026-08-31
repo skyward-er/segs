@@ -1,4 +1,7 @@
-use std::collections::hash_map::{DefaultHasher, Entry};
+use std::collections::{
+    VecDeque,
+    hash_map::{DefaultHasher, Entry},
+};
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind::{Interrupted, TimedOut, WouldBlock};
@@ -26,7 +29,7 @@ const TELEMETRY_COMPONENT_ID: u8 = 0;
 const TC_MESSAGE_SUFFIX: &str = "_TC";
 const TC_TIMESTAMP_FIELD: &str = "timestamp";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
-const STATS_RATE_WINDOW: Duration = Duration::from_secs(1);
+const STATS_RATE_WINDOW: Duration = Duration::from_secs(4);
 
 /// Skyward-specific adapter implementation for the MAVLink protocol.
 /// Uses a local XML file mapping source that defines the MAVLink message formats to be processed
@@ -758,11 +761,10 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
     }
 }
 
-/// Tracks cumulative I/O totals and successful frames in the current rate window.
+/// Tracks cumulative I/O totals and recent successful frames for rate calculation.
 struct IoStats {
     stats: Stats,
-    window_started: Instant,
-    window_count: u32,
+    recent_frames: VecDeque<Instant>,
 }
 
 impl IoStats {
@@ -774,14 +776,13 @@ impl IoStats {
                 count: 0,
                 errors: 0,
             },
-            window_started: created_at,
-            window_count: 0,
+            recent_frames: VecDeque::new(),
         }
     }
 
     fn record_success(&mut self, now: Instant) {
+        self.recent_frames.push_back(now);
         self.update_rate(now);
-        self.window_count = self.window_count.saturating_add(1);
         self.stats.last_time = now;
         self.stats.count = self.stats.count.saturating_add(1);
     }
@@ -796,12 +797,15 @@ impl IoStats {
     }
 
     fn update_rate(&mut self, now: Instant) {
-        let elapsed = now.saturating_duration_since(self.window_started);
-        if elapsed >= STATS_RATE_WINDOW {
-            self.stats.rate = self.window_count as f32 / elapsed.as_secs_f32();
-            self.window_started = now;
-            self.window_count = 0;
+        while self
+            .recent_frames
+            .front()
+            .is_some_and(|frame| now.saturating_duration_since(*frame) >= STATS_RATE_WINDOW)
+        {
+            self.recent_frames.pop_front();
         }
+
+        self.stats.rate = self.recent_frames.len() as f32 / STATS_RATE_WINDOW.as_secs_f32();
     }
 }
 
