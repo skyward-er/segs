@@ -90,11 +90,11 @@ impl<'a> SourceModal<'a> {
 
                 let transport = match transport_sel {
                     TransportType::Ethernet => {
-                        ui.scope_builder(UiBuilder::new().id_salt("ethernet"), |ui| show_ethernet_fields(ui))
+                        ui.scope_builder(UiBuilder::new().id_salt("ethernet"), show_ethernet_fields)
                             .inner
                     }
                     TransportType::Serial => {
-                        ui.scope_builder(UiBuilder::new().id_salt("serial"), |ui| show_serial_fields(ui))
+                        ui.scope_builder(UiBuilder::new().id_salt("serial"), show_serial_fields)
                             .inner
                     }
                 };

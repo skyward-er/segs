@@ -43,8 +43,8 @@ impl App {
         };
 
         let data_store = DataStore::new();
-        let data_adapter = adapter::try_new(args.adapter, args.transport, args.mapping, ctx.clone())
-            .map(|adapter| DataAdapterInstance::new(adapter));
+        let data_adapter =
+            adapter::try_new(args.adapter, args.transport, args.mapping, ctx.clone()).map(DataAdapterInstance::new);
 
         Ok(Self {
             view,

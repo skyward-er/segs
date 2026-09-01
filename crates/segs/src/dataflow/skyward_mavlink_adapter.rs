@@ -74,7 +74,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
     fn new(ctx: egui::Context, transport: DataTransport, mapping: DataMapping) -> Result<Self, Box<dyn Error>> {
         let profile = match &mapping {
             DataMapping::LocalFile(path) => {
-                let mav_profile = segs_mavlink::parse_profile(&path)?;
+                let mav_profile = segs_mavlink::parse_profile(path)?;
                 Arc::new(segs_mavlink::MavProfile::from_profile_info(&mav_profile))
             }
             _ => return Err("Unsupported definition source method".into()),
@@ -101,7 +101,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
             DataTransport::Ethernet {
                 recv_socket,
                 send_socket,
-            } => Connection::udp(recv_socket, send_socket.clone(), profile.clone())?,
+            } => Connection::udp(recv_socket, *send_socket, profile.clone())?,
             DataTransport::Serial { tty, baud_rate } => Connection::serial(tty.clone(), *baud_rate, profile.clone())?,
         };
         let connection = Arc::new(connection);
@@ -255,7 +255,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
             };
 
             // Construct the MAVLink message
-            let message = match command_to_mav_message(&command, message_info) {
+            let message = match command_to_mav_message(command, message_info) {
                 Ok(message) => message,
                 Err(err) => {
                     self.pending.release(pending_slot);
@@ -285,7 +285,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
             };
 
             // Send the command to the TX thread
-            if let Err(_) = self.outgoing.send(outgoing) {
+            if self.outgoing.send(outgoing).is_err() {
                 self.pending.release(pending_slot);
                 command_sequence.status = CommandStatus::LocalError;
             }
@@ -367,7 +367,7 @@ impl SkywardMavlinkAdapter {
             return;
         };
 
-        for (i, (field, field_info)) in zip(message.fields.into_iter(), &message_info.fields).enumerate() {
+        for (i, (field, field_info)) in zip(message.fields, &message_info.fields).enumerate() {
             let stream_key = StreamKey {
                 source_key: SourceKey(header.system_id as u32),
                 data_key: compute_data_key(message.id, i as u32, &field_info.name),
@@ -470,10 +470,7 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
             });
         }
         (MsgField::Int64(value), DataStream::I64(inner_stream)) => {
-            inner_stream.push(DataPoint {
-                timestamp,
-                value: value as i64,
-            });
+            inner_stream.push(DataPoint { timestamp, value });
         }
         (MsgField::UInt8(value), DataStream::I64(inner_stream)) => {
             inner_stream.push(DataPoint {
@@ -506,10 +503,7 @@ fn insert_field_to_stream(field: MsgField, stream: &mut DataStream, timestamp: f
             });
         }
         (MsgField::Double(value), DataStream::F64(inner_stream)) => {
-            inner_stream.push(DataPoint {
-                timestamp,
-                value: value,
-            });
+            inner_stream.push(DataPoint { timestamp, value });
         }
         (MsgField::CharArray(value), DataStream::String(inner_stream)) => {
             inner_stream.push(DataPoint {

@@ -23,7 +23,7 @@ impl MavProfile {
     pub fn from_profile_info(profile: &ProfileInfo) -> Self {
         Self {
             enums: profile.enums.clone(),
-            messages: profile.messages.iter().map(|(_, msg)| (msg.id, msg.clone())).collect(),
+            messages: profile.messages.values().map(|msg| (msg.id, msg.clone())).collect(),
         }
     }
 }

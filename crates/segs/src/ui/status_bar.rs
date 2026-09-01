@@ -31,7 +31,7 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                     show_left_side(ui, appctx);
                 });
-                ui.with_layout(Layout::right_to_left(Align::Min), |ui| show_right_side(ui));
+                ui.with_layout(Layout::right_to_left(Align::Min), show_right_side);
             });
         });
 
@@ -50,10 +50,8 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         source_selection = !source_selection;
     }
 
-    if source_selection {
-        if SourceModal::new(appctx).show(ui).should_close() {
-            source_selection = false;
-        }
+    if source_selection && SourceModal::new(appctx).show(ui).should_close() {
+        source_selection = false;
     }
     ui.mem().insert_temp(source_id, source_selection);
 

@@ -376,17 +376,16 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                         if pending_delete
                             .as_ref()
                             .is_some_and(|confirmation| confirmation.slug == slug)
-                        {
-                            if let Some(target) = show_delete_popup(
+                            && let Some(target) = show_delete_popup(
                                 ui,
                                 layouts,
                                 &delete_button,
                                 &slug,
                                 &mut pending_delete,
                                 &mut selected,
-                            ) {
-                                transition = Some(target);
-                            }
+                            )
+                        {
+                            transition = Some(target);
                         }
                     });
                 });
@@ -524,9 +523,7 @@ fn show_inline_editor(
     edit: &mut Option<InlineEdit>,
     selected: &mut Option<String>,
 ) -> Option<ViewTarget> {
-    let Some(mut current) = edit.take() else {
-        return None;
-    };
+    let mut current = edit.take()?;
     let excluding = match &current.action {
         InlineEditAction::Rename { source } => Some(source.as_str()),
         InlineEditAction::Create | InlineEditAction::Duplicate { .. } => None,
@@ -663,9 +660,7 @@ fn show_delete_popup(
     pending_delete: &mut Option<DeleteConfirmation>,
     selected: &mut Option<String>,
 ) -> Option<ViewTarget> {
-    let Some(mut confirmation) = pending_delete.take() else {
-        return None;
-    };
+    let mut confirmation = pending_delete.take()?;
     let mut open = true;
     let confirmed = DeleteConfirmationPopup::new(&mut open, anchor.rect.right_bottom())
         .pivot(Align2::RIGHT_TOP)

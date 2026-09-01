@@ -38,8 +38,8 @@ impl View {
     pub fn from_target(target: ViewTarget) -> Self {
         match target {
             ViewTarget::Welcome => Self::Welcome(welcome::WelcomeView),
-            ViewTarget::Operator => Self::Operator(operator::OperatorView::default()),
-            ViewTarget::Configuration => Self::Configuration(configuration::ConfigurationView::default()),
+            ViewTarget::Operator => Self::Operator(operator::OperatorView),
+            ViewTarget::Configuration => Self::Configuration(configuration::ConfigurationView),
         }
     }
 }
