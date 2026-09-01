@@ -79,6 +79,11 @@ pub enum WidgetDataSetting<'a> {
         label: &'static str,
         stream: &'a mut Option<StreamKey>,
     },
+    MultipleStreams {
+        id: &'static str,
+        label: &'static str,
+        streams: &'a mut Vec<StreamKey>,
+    },
 }
 
 impl<'a> WidgetDataSetting<'a> {
@@ -86,9 +91,13 @@ impl<'a> WidgetDataSetting<'a> {
         Self::SingleStream { id, label, stream }
     }
 
+    pub fn multiple_streams(id: &'static str, label: &'static str, streams: &'a mut Vec<StreamKey>) -> Self {
+        Self::MultipleStreams { id, label, streams }
+    }
+
     pub fn id(&self) -> &'static str {
         match self {
-            Self::SingleStream { id, .. } => id,
+            Self::SingleStream { id, .. } | Self::MultipleStreams { id, .. } => id,
         }
     }
 
@@ -97,6 +106,11 @@ impl<'a> WidgetDataSetting<'a> {
         match self {
             Self::SingleStream { stream, .. } => {
                 stream.get_or_insert(key);
+            }
+            Self::MultipleStreams { streams, .. } => {
+                if streams.is_empty() {
+                    streams.push(key);
+                }
             }
         }
     }

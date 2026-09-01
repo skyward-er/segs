@@ -1,8 +1,16 @@
 use std::hash::Hash;
 
-use egui::{CursorIcon, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
+use egui::{CursorIcon, Id, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
 
 use crate::style::CtxStyleExt;
+
+/// The visual selection state of a checkbox.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CheckState {
+    Unchecked,
+    Partial,
+    Checked,
+}
 
 /// A selectable check indicator.
 pub struct Checkbox<'a> {
@@ -29,7 +37,45 @@ impl<'a> Checkbox<'a> {
 
     /// Paints a checkbox at the given rectangle.
     pub fn show_at(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response) -> Response {
-        show_checkbox(ui, active, rect, response)
+        let selection_id = response.id;
+        Self::show_at_with_selection_id(ui, active, rect, response, selection_id)
+    }
+
+    /// Paints a checkbox with selection animation attached to the provided identity.
+    pub fn show_at_with_selection_id(
+        ui: &mut Ui,
+        active: &mut bool,
+        rect: Rect,
+        response: Response,
+        selection_id: Id,
+    ) -> Response {
+        if ui.is_rect_visible(rect) && response.clicked() {
+            *active = !*active;
+        }
+
+        let state = if *active {
+            CheckState::Checked
+        } else {
+            CheckState::Unchecked
+        };
+        show_checkbox(ui, state, rect, response, selection_id)
+    }
+
+    /// Paints a checkbox state at the given rectangle without changing it.
+    pub fn show_state_at(ui: &mut Ui, state: CheckState, rect: Rect, response: Response) -> Response {
+        let selection_id = response.id;
+        Self::show_state_at_with_selection_id(ui, state, rect, response, selection_id)
+    }
+
+    /// Paints a checkbox state with selection animation attached to the provided identity.
+    pub fn show_state_at_with_selection_id(
+        ui: &mut Ui,
+        state: CheckState,
+        rect: Rect,
+        response: Response,
+        selection_id: Id,
+    ) -> Response {
+        show_checkbox(ui, state, rect, response, selection_id)
     }
 }
 
@@ -43,14 +89,9 @@ impl Widget for Checkbox<'_> {
     }
 }
 
-fn show_checkbox(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response) -> Response {
+fn show_checkbox(ui: &mut Ui, state: CheckState, rect: Rect, response: Response, selection_id: Id) -> Response {
     if ui.is_rect_visible(rect) {
         let id = response.id;
-
-        // Toggle flag on click
-        if response.clicked() {
-            *active = !*active;
-        }
 
         // Set pointing hand cursor on hover
         let response = response.on_hover_cursor(CursorIcon::PointingHand);
@@ -62,7 +103,8 @@ fn show_checkbox(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response)
 
         // Animation factor
         ui.style_mut().animation_time = 0.1;
-        let click_t = ui.ctx().animate_bool(id.with("_active_t"), *active);
+        let active = state != CheckState::Unchecked;
+        let click_t = ui.ctx().animate_bool(selection_id.with("_active_t"), active);
         let hover_t = ui
             .ctx()
             .animate_bool_responsive(id.with("_hover_t"), response.hovered());
@@ -80,15 +122,34 @@ fn show_checkbox(ui: &mut Ui, active: &mut bool, rect: Rect, response: Response)
         let bg_color = bg_fill.lerp_to_gamma(accent, click_t);
         painter.rect_filled(rect, 2.0, bg_color);
 
-        // Paint cross
+        // Paint the state mark
         let t = (click_t + pressed_t * 0.5).clamp(0.0, 1.0);
         let interact_style = ui.style().interact(&response);
-        paint_parametric_check(ui, rect.shrink(1.0), t, interact_style.fg_stroke);
+        match state {
+            CheckState::Unchecked | CheckState::Checked => {
+                paint_parametric_check(ui, rect.shrink(1.0), t, interact_style.fg_stroke);
+            }
+            CheckState::Partial => {
+                paint_partial_check(ui, rect.shrink(1.0), t, interact_style.fg_stroke);
+            }
+        }
 
         response
     } else {
         response
     }
+}
+
+fn paint_partial_check(ui: &mut Ui, rect: Rect, t: f32, stroke: Stroke) {
+    let half_width = rect.width() * 0.3 * t;
+    let center = rect.center();
+    ui.painter().line_segment(
+        [
+            pos2(center.x - half_width, center.y),
+            pos2(center.x + half_width, center.y),
+        ],
+        stroke,
+    );
 }
 
 fn paint_parametric_check(ui: &mut Ui, rect: Rect, t: f32, stroke: Stroke) {

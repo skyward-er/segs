@@ -57,6 +57,9 @@ fn show_data_settings(
             WidgetDataSetting::SingleStream { label, stream, .. } => {
                 stream_selector::show(ui, label, stream, protocol);
             }
+            WidgetDataSetting::MultipleStreams { label, streams, .. } => {
+                stream_selector::show_multiple(ui, label, streams, protocol);
+            }
         });
     }
 }

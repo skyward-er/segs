@@ -36,6 +36,13 @@ pub struct IndexedNode {
     parent: Option<usize>,
 }
 
+/// Stores display and flattened-position metadata for one field.
+#[derive(Debug)]
+struct IndexedField {
+    path: String,
+    node_index: usize,
+}
+
 /// Owns a protocol hierarchy flattened for searching and virtualized rendering.
 ///
 /// A hierarchy such as:
@@ -67,15 +74,14 @@ pub struct IndexedNode {
 /// Search results and visible rows are represented as indices into `nodes`,
 /// preserving hierarchy order without copying complete nodes.
 ///
-/// Field paths are indexed separately by [`DataKey`] so the selected-field
-/// preview can retrieve a breadcrumb such as `Flight › Timing › Timestamp`
-/// without traversing the hierarchy again.
+/// Field metadata is indexed separately by [`DataKey`] so selection state and
+/// breadcrumbs can resolve without traversing the hierarchy again.
 #[derive(Debug)]
 pub struct DescriptorIndex {
     /// The flattened protocol hierarchy in depth-first traversal order.
     nodes: Vec<IndexedNode>,
-    /// Complete display breadcrumbs indexed by field key.
-    field_paths: HashMap<DataKey, String>,
+    /// Display and flattened-position metadata indexed by field key.
+    fields: HashMap<DataKey, IndexedField>,
 }
 
 impl DescriptorIndex {
@@ -83,7 +89,7 @@ impl DescriptorIndex {
     pub fn build(protocol: &ProtocolDescriptor) -> Self {
         let mut index = Self {
             nodes: Vec::new(),
-            field_paths: HashMap::new(),
+            fields: HashMap::new(),
         };
         let mut path = Vec::new();
         for key in &protocol.stream_messages {
@@ -108,7 +114,12 @@ impl DescriptorIndex {
 
     /// Returns the breadcrumb associated with a selected data key.
     pub fn field_path(&self, data_key: DataKey) -> Option<&str> {
-        self.field_paths.get(&data_key).map(String::as_str)
+        self.fields.get(&data_key).map(|field| field.path.as_str())
+    }
+
+    /// Returns the flattened node position associated with a data key.
+    pub fn field_node(&self, data_key: DataKey) -> Option<usize> {
+        self.fields.get(&data_key).map(|field| field.node_index)
     }
 
     /// Returns browsable rows according to the expanded structure nodes.
@@ -225,7 +236,14 @@ impl DescriptorIndex {
                     }
                     breadcrumb.push_str(name);
 
-                    self.field_paths.insert(*data_key, breadcrumb);
+                    let node_index = self.nodes.len();
+                    self.fields.insert(
+                        *data_key,
+                        IndexedField {
+                            path: breadcrumb,
+                            node_index,
+                        },
+                    );
                     self.nodes.push(IndexedNode {
                         name: name.clone(),
                         normalized_name: name.to_lowercase(),
