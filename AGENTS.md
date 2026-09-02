@@ -32,11 +32,11 @@ Use `cargo run --bin segs` to launch the application when manual UI verification
 
 # Tests
 
-- Never write unit tests unless explicitly requested, or when the behavior is very complex and hard to modify without potentially introducing bugs
+- *Never* write unit tests unless explicitly requested
 - Do not write unit tests for trivial getters, constructors, field wiring, constant mappings, or code that is easily checked once and is unlikely to become incorrect later
 - Do not introduce or expose a function solely to make code unit-testable. Test through the natural API or keep the behavior inline
-- Prefer focused tests colocated in the owning module. Name tests after the behavior and expected outcome
-- When a change affects only trivial code, rely on compilation, formatting, linting, or a concise manual verification instead of adding a low-value test
+- If tests were requested, prefer focused tests colocated in the owning module. Name tests after the behavior and expected outcome
+- Rely on compilation, formatting, linting, or manual QA verification to test the code
 
 # Rust documentation
 
