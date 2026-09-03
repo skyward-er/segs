@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use egui::{Align, CursorIcon, Frame, Layout, Panel, Response, Ui, Vec2};
+use egui::{Align, CursorIcon, Frame, Layout, Panel, Response, Theme, Ui, Vec2};
 
 use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
@@ -145,6 +145,10 @@ fn show_status_tooltip(ui: &mut Ui, icon: impl Icon, text: &str) {
 }
 
 fn show_right_side(ui: &mut egui::Ui) {
+    // Place the theme toggle first so it is rightmost in the right-to-left layout
+    show_theme_toggle(ui);
+
+    // Show notification controls
     let notifications_id = ui.id().with("status_bar_notifications");
     let mut notifications_visible: bool = ui.mem().get_temp_or_default(notifications_id);
 
@@ -153,18 +157,39 @@ fn show_right_side(ui: &mut egui::Ui) {
     } else {
         icons::Bell::outline()
     };
-    let btn = UnpaddedStatusBarButton::default().add_icon(bell_icon).add_space(4.);
+    let btn = UnpaddedStatusBarButton::default().add_icon(bell_icon);
     let res = ui.add(btn);
     if res.on_hover_cursor(CursorIcon::PointingHand).clicked() {
         notifications_visible = !notifications_visible;
     }
     ui.mem().insert_temp(notifications_id, notifications_visible);
 
+    // Show quick command controls
     let btn = UnpaddedStatusBarButton::default()
         .padded()
         .add_icon(icons::Lightning)
         .add_text("Quick Commands");
     ui.add(btn);
+}
+
+/// Shows the theme toggle and switches between the light and dark themes when clicked.
+fn show_theme_toggle(ui: &mut Ui) {
+    let dark_mode = ui.visuals().dark_mode;
+
+    // Show the icon for the theme that will be activated
+    let clicked = if dark_mode {
+        let button = UnpaddedStatusBarButton::default().add_icon(icons::Sun::outline());
+        ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked()
+    } else {
+        let button = UnpaddedStatusBarButton::default().add_icon(icons::Moon::outline());
+        ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked()
+    };
+
+    // Switch to the opposite theme
+    if clicked {
+        ui.ctx().set_theme(if dark_mode { Theme::Light } else { Theme::Dark });
+        ui.ctx().request_discard("theme change");
+    }
 }
 
 /// Tracks RX frame activity across UI updates and drives the indicator blink phases.
