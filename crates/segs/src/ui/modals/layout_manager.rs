@@ -5,13 +5,13 @@ use std::sync::Arc;
 use chrono::Local;
 use egui::{
     Align, Align2, Button, Frame, Id, Key, Layout, Margin, Modifiers, Response, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, TextEdit, Tooltip, Ui, UiBuilder, Vec2,
+    StrokeKind, TextEdit as EguiTextEdit, Tooltip, Ui, UiBuilder, Vec2,
     text::{CCursor, CCursorRange},
     vec2,
 };
 use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
-use segs_ui::containers::Modal;
+use segs_ui::{containers::Modal, widgets::text::TextEdit};
 
 use crate::{
     layout::LayoutManager,
@@ -209,7 +209,8 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
         .frame(modal_frame)
         .show(ui.ctx(), |ui| {
             let manager_content_top = ui.cursor().top();
-            let mut separator_response = None;
+            let mut center_separator_response = None;
+            let mut search_separator_response = None;
             let mut search_response = None;
             ui.allocate_ui_with_layout(MANAGER_CONTENT_SIZE, Layout::left_to_right(Align::Min), |ui| {
                 let content_height = ui.available_height();
@@ -219,11 +220,12 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     search_response = Some(
                         ui.add(
                             TextEdit::singleline(&mut query)
+                                .frameless()
                                 .id_salt(SEARCH_INPUT_ID)
                                 .hint_text("Search layouts…"),
                         ),
                     );
-                    ui.add_space(6.);
+                    search_separator_response = Some(ui.separator());
                     let reserved_height = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
                     let list_height = (ui.available_height() - reserved_height).max(64.);
                     ScrollArea::vertical()
@@ -257,7 +259,11 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                                     should_close = true;
                                 }
                             } else if results.is_empty() {
-                                ui.weak("No matching layouts");
+                                // Align the empty state with the search field text
+                                ui.horizontal(|ui| {
+                                    ui.add_space(4.);
+                                    ui.weak("No layouts found");
+                                });
                             }
 
                             if !layouts.warnings().is_empty() {
@@ -295,7 +301,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     });
                 });
 
-                separator_response = Some(ui.separator());
+                center_separator_response = Some(ui.separator());
                 ui.vertical(|ui| {
                     ui.set_width(380.);
                     ui.set_height(content_height);
@@ -391,16 +397,30 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 });
             });
 
-            if let Some(separator) = separator_response {
+            if let Some(center_separator) = center_separator_response {
                 let content_rect = ui.min_rect();
-                let separator_style = ui.style().separator_style(separator.widget_state());
+                let separator_style = ui.style().separator_style(center_separator.widget_state());
                 let title_separator_y =
                     manager_content_top - ui.spacing().item_spacing.y - separator_style.spacing / 2.;
+
+                // Extend the center divider through the modal's surrounding frame
                 ui.painter().vline(
-                    separator.rect.center().x,
+                    center_separator.rect.center().x,
                     title_separator_y..=(content_rect.bottom() + modal_inner_margin.bottomf()),
                     separator_style.stroke,
                 );
+
+                if let Some(search_separator) = search_separator_response {
+                    let search_separator_style = ui.style().separator_style(search_separator.widget_state());
+                    let modal_left = content_rect.left() - modal_inner_margin.leftf();
+
+                    // Join the search separator to the modal border and center divider
+                    ui.painter().hline(
+                        modal_left..=center_separator.rect.center().x,
+                        search_separator.rect.center().y,
+                        search_separator_style.stroke,
+                    );
+                }
             }
 
             if let Some(search_response) = &search_response {
@@ -542,7 +562,7 @@ fn show_inline_editor(
             .fill(ui.visuals().text_edit_bg_color())
             .stroke(Stroke::new(1_f32, ui.visuals().error_fg_color))
     });
-    let mut editor = TextEdit::singleline(&mut current.value)
+    let mut editor = EguiTextEdit::singleline(&mut current.value)
         .id_salt("layout_inline_name")
         .desired_width(ui.available_width());
     if let Some(frame) = frame {
