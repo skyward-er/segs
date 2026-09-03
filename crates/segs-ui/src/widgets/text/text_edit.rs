@@ -85,6 +85,7 @@ pub struct TextEdit<'t> {
     char_limit: usize,
     return_key: Option<KeyboardShortcut>,
     background_fill: Option<Color32>,
+    show_frame: bool,
 }
 
 impl WidgetWithState for TextEdit<'_> {
@@ -145,6 +146,7 @@ impl<'t> TextEdit<'t> {
             char_limit: usize::MAX,
             return_key: Some(KeyboardShortcut::new(Modifiers::NONE, Key::Enter)),
             background_fill: None,
+            show_frame: true,
         }
     }
 
@@ -271,6 +273,15 @@ impl<'t> TextEdit<'t> {
     #[inline]
     pub fn interactive(mut self, interactive: bool) -> Self {
         self.interactive = interactive;
+        self
+    }
+
+    /// Removes the text edit background and stroke.
+    ///
+    /// Returns the text edit without its visual frame while preserving its padding and interaction behavior.
+    #[inline]
+    pub fn frameless(mut self) -> Self {
+        self.show_frame = false;
         self
     }
 
@@ -412,28 +423,31 @@ impl TextEdit<'_> {
     pub fn show(self, ui: &mut Ui) -> TextEditOutput {
         let is_mutable = self.text.is_mutable();
         let background_fill = self.background_fill;
-        let where_to_put_background = ui.painter().add(Shape::Noop);
+        let where_to_put_background = self.show_frame.then(|| ui.painter().add(Shape::Noop));
         let output = self.show_content(ui);
 
-        let id = output.response.id;
-        let hover_t = ui.ctx().animate_bool(id.with("_hover_t"), output.response.hovered());
-        let active_t = ui.ctx().animate_bool(id.with("_active_t"), output.response.has_focus());
+        if let Some(where_to_put_background) = where_to_put_background {
+            // Resolve the frame color from the current interaction state
+            let id = output.response.id;
+            let hover_t = ui.ctx().animate_bool(id.with("_hover_t"), output.response.hovered());
+            let active_t = ui.ctx().animate_bool(id.with("_active_t"), output.response.has_focus());
+            let style = &ui.app_style().text_edit;
+            let background_color = background_fill.unwrap_or_else(|| {
+                style
+                    .inactive_fill
+                    .lerp_to_gamma(style.hover_fill, hover_t)
+                    .lerp_to_gamma(style.active_fill, active_t)
+            });
 
-        let style = &ui.app_style().text_edit;
-        let background_color = background_fill.unwrap_or_else(|| {
-            style
-                .inactive_fill
-                .lerp_to_gamma(style.hover_fill, hover_t)
-                .lerp_to_gamma(style.active_fill, active_t)
-        });
-        let frame_rect = output.response.rect.expand(0.5);
-        let shape = if is_mutable {
-            epaint::RectShape::new(frame_rect, 3, background_color, Stroke::NONE, StrokeKind::Inside)
-        } else {
-            epaint::RectShape::stroke(frame_rect, 3, Stroke::NONE, StrokeKind::Inside)
-        };
-
-        ui.painter().set(where_to_put_background, shape);
+            // Paint the frame behind the text content
+            let frame_rect = output.response.rect.expand(0.5);
+            let shape = if is_mutable {
+                epaint::RectShape::new(frame_rect, 3, background_color, Stroke::NONE, StrokeKind::Inside)
+            } else {
+                epaint::RectShape::stroke(frame_rect, 3, Stroke::NONE, StrokeKind::Inside)
+            };
+            ui.painter().set(where_to_put_background, shape);
+        }
 
         output
     }
@@ -461,6 +475,7 @@ impl TextEdit<'_> {
             char_limit,
             return_key,
             background_fill: _,
+            show_frame: _,
         } = self;
 
         let text_color = text_color
