@@ -24,11 +24,11 @@ Before adding substantial code to an existing module, evaluate whether it repres
 1. Read the relevant implementation and nearby tests before editing. Check the working tree and preserve unrelated user changes.
 2. Make the smallest coherent change that satisfies the request. Do not add abstractions, helpers, dependencies, or public API without a concrete need.
 3. Format Rust changes with `cargo fmt`.
-4. Run the narrowest useful checks first, such as `cargo check -p <crate>` and `cargo test -p <crate> <test-name>`. For changes spanning crates or shared interfaces, follow with `cargo check --workspace` and the relevant workspace tests.
+4. Run the narrowest useful checks first, such as `cargo check -p <crate>` and `cargo test -p <crate> <test-name>`. For changes spanning crates or shared interfaces, follow with `cargo check` and the relevant workspace tests.
 5. Run `cargo clippy` and fix any warnings or errors it reports.
 6. Report which checks ran and any checks that could not run.
 
-Use `cargo run --bin segs` to launch the application when manual UI verification is relevant.
+Use `cargo run` to launch the application when manual UI verification is relevant.
 
 # Tests
 
@@ -40,7 +40,8 @@ Use `cargo run --bin segs` to launch the application when manual UI verification
 
 # Rust documentation
 
-- Always write rustdoc for functions, structs, enums, and their fields or variants unless their purpose is extremely trivial. Always document tuple return values
+- Always write rustdoc for functions, structs, enums, and their fields or variants
+- Always document tuple return values
 - For every function that requires rustdoc, document its return type and what the returned value means. For `Result` and `Option`, explain meaningful success values and the conditions that produce errors or `None`
 - Document side effects, ownership or resource-release rules, units, wire-format assumptions, and panics when they matter to correct use
 - Keep documentation focused on the contract and rationale instead of restating the implementation
@@ -48,12 +49,101 @@ Use `cargo run --bin segs` to launch the application when manual UI verification
 
 # Code and comment style
 
-- Separate logical phases with an empty line, such as lookup, validation, conversion, state update, and dispatch
-- Add a short comment before a block unless its purpose is extremely trivial
-- Explain the high-level purpose of the block and why it gets towards our goal; do not narrate trivial individual statements
+- Always divide the implementation into logical blocks of code and comment each one describing the high level operation that block is performing
+- Always question whether multiple iterations over the same data structure are necessary or if they can be coalesced into a single iteration
+- Always question whether a new data structure (e.g. a `Vec` or `HashMap`) is necessary or if an existing one can be extended to include the new data needed for the feature you're adding
 - Keep code comments to one simple sentence in general
 - Code comments must not end with a period
 - Prefer one comment for a cohesive block. Use two adjacent comments only when they communicate distinct constraints that are both necessary
 - Inline comments are appropriate for short exceptional control-flow explanations, such as why a loop continues or returns
 
 These comment rules apply to ordinary code comments (`//`). Rustdoc should use normal prose and punctuation.
+
+The overall goal of code comments is to make the code of a function be able to be read immediately by a human reader, without needing to read the code itself. See the example below.
+
+Example of the code commenting style to follow:
+
+```rust
+/// Process outgoing data from the data store.
+fn process_outgoing(&mut self, data_store: &mut DataStore) {
+    // Process any send failures from the RX thread
+    while let Ok(failure) = self.send_failures.try_recv() {
+        if self.pending.get(failure.pending_slot) != Some(failure.command_id) {
+            continue; // No matching command in the pending slot, skip
+        }
+        // Update the command status
+        data_store.command_sequence_mut(failure.command_id).status = CommandStatus::LocalError;
+        self.pending.release(failure.pending_slot);
+    }
+
+    self.expire_pending_commands(data_store, Instant::now());
+
+    loop {
+        let mut pending_slot = 0;
+
+        // Try to acquire a pending slot for the command
+        let Some(command_sequence) =
+            data_store.next_outgoing_command_if(|command| match self.pending.acquire(command.id) {
+                Some(slot) => {
+                    pending_slot = slot;
+                    true
+                }
+                None => false,
+            })
+        else {
+            break; // No more commands to process
+        };
+
+        let command = &command_sequence.request;
+        let command_id = command_sequence.id;
+
+        // Retrieve the message info for the command
+        let id = command.key.0 as u32;
+        let Some(message_info) = self.profile.messages.get(&id) else {
+            self.pending.release(pending_slot);
+            command_sequence.status = CommandStatus::LocalError;
+            eprintln!("Missing serialization info for message ID {id}, skipping");
+            continue;
+        };
+
+        // Construct the MAVLink message
+        let message = match command_to_mav_message(command, message_info) {
+            Ok(message) => message,
+            Err(err) => {
+                self.pending.release(pending_slot);
+                command_sequence.status = CommandStatus::LocalError;
+                eprintln!("Failed to construct MAVLink message ID {id}: {err}");
+                continue;
+            }
+        };
+
+        // Use the pending slot ID for correlating responses with a specific request
+        // The component ID in the MAVLink header is used for this purpose in the Skyward dialect
+        let header = MavHeader {
+            system_id: command.target.0 as u8,
+            component_id: pending_slot,
+            sequence: self.packet_sequence.0,
+        };
+        self.packet_sequence += 1;
+
+        let outgoing = OutgoingCommand {
+            frame: MavFrame {
+                version: MavlinkVersion::V1,
+                header,
+                message,
+            },
+            pending_slot,
+            command_id,
+        };
+
+        // Send the command to the TX thread
+        if self.outgoing.send(outgoing).is_err() {
+            self.pending.release(pending_slot);
+            command_sequence.status = CommandStatus::LocalError;
+        }
+    }
+
+    self.schedule_pending_timeout();
+}
+```
+
