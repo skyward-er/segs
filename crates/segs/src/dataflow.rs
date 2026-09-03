@@ -95,12 +95,21 @@ pub enum DataStream {
 }
 
 impl DataStream {
-    /// Returns the most recent value in this stream, if one has been received.
-    pub fn last(&self) -> Option<DataValue> {
+    /// Returns the most recent sample in this stream.
+    ///
+    /// The returned tuple contains the adapter-relative timestamp in seconds
+    /// followed by the sample value. `None` means the stream has no samples.
+    pub fn last(&self) -> Option<(f64, DataValue)> {
         match self {
-            Self::F64(points) => points.last().map(|point| DataValue::F64(point.value)),
-            Self::I64(points) => points.last().map(|point| DataValue::I64(point.value)),
-            Self::String(points) => points.last().map(|point| DataValue::String(point.value.clone())),
+            Self::F64(points) => points
+                .last()
+                .map(|point| (point.timestamp, DataValue::F64(point.value))),
+            Self::I64(points) => points
+                .last()
+                .map(|point| (point.timestamp, DataValue::I64(point.value))),
+            Self::String(points) => points
+                .last()
+                .map(|point| (point.timestamp, DataValue::String(point.value.clone()))),
         }
     }
 }
@@ -119,6 +128,25 @@ pub enum DataValue {
     F64(f64),
     Bool(bool),
     String(String),
+}
+
+impl fmt::Display for DataValue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::U8(value) => write!(formatter, "{}", value),
+            Self::U16(value) => write!(formatter, "{}", value),
+            Self::U32(value) => write!(formatter, "{}", value),
+            Self::U64(value) => write!(formatter, "{}", value),
+            Self::I8(value) => write!(formatter, "{}", value),
+            Self::I16(value) => write!(formatter, "{}", value),
+            Self::I32(value) => write!(formatter, "{}", value),
+            Self::I64(value) => write!(formatter, "{}", value),
+            Self::F32(value) => write!(formatter, "{:?}", value),
+            Self::F64(value) => write!(formatter, "{:?}", value),
+            Self::Bool(value) => write!(formatter, "{}", value),
+            Self::String(value) => write!(formatter, "{}", value),
+        }
+    }
 }
 
 pub enum CommandStatus {
@@ -164,9 +192,17 @@ pub struct CommandSequence {
 /// Testing module exposing functionality that would otherwise be private.
 #[cfg(test)]
 pub mod testing {
-    use super::MessageKey;
+    use super::*;
 
     pub const fn message_key(value: u64) -> MessageKey {
         MessageKey(value)
+    }
+
+    #[test]
+    fn float_values_use_adaptive_debug_formatting() {
+        assert_eq!(DataValue::F64(9.5e-44).to_string(), "9.5e-44");
+        assert_eq!(DataValue::F64(1e30).to_string(), "1e30");
+        assert_eq!(DataValue::F32(1.25).to_string(), "1.25");
+        assert_eq!(DataValue::F32(1.0).to_string(), "1.0");
     }
 }

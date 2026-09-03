@@ -1,11 +1,6 @@
-mod descriptor;
 mod search;
 
-use std::{
-    collections::HashSet,
-    f32::consts::FRAC_PI_2,
-    sync::{Arc, Weak},
-};
+use std::{collections::HashSet, f32::consts::FRAC_PI_2};
 
 use egui::{
     ComboBox, CursorIcon, Id, Rect, Response, RichText, ScrollArea, Sense, TextStyle, TextWrapMode, Ui, Vec2,
@@ -24,16 +19,15 @@ use segs_ui::{
 
 use crate::dataflow::{
     DataKey, SourceKey, StreamKey,
-    adapter::DataAdapterInstanceToken,
-    protocol::{ProtocolDescriptor, SourceDescriptor},
+    adapter::{DataAdapterInstance, DataAdapterInstanceToken},
+    protocol::{
+        SourceDescriptor,
+        descriptor_index::{DescriptorIndex, IndexedNode, IndexedNodeKind},
+    },
 };
 
-use self::{
-    descriptor::{DescriptorIndex, IndexedNode, IndexedNodeKind},
-    search::resolve_search_cache,
-};
+use self::search::resolve_search_cache;
 
-const DESCRIPTOR_INDEX_ID: &str = "stream_selector_descriptor_index";
 const TREE_MIN_HEIGHT: f32 = 96.;
 const TREE_MAX_HEIGHT: f32 = 280.;
 const TREE_VIEWPORT_FRACTION: f32 = 0.4;
@@ -44,15 +38,8 @@ const TREE_ROW_CORNER_RADIUS: f32 = 2.;
 #[derive(Clone, Debug, Default)]
 struct PickerState {
     open: bool,
-    index: Weak<DescriptorIndex>,
+    adapter_token: Option<DataAdapterInstanceToken>,
     expanded: HashSet<usize>,
-}
-
-/// Associates the reusable descriptor index with one installed adapter.
-#[derive(Clone)]
-struct CachedDescriptorIndex {
-    adapter_token: DataAdapterInstanceToken,
-    index: Arc<DescriptorIndex>,
 }
 
 /// Stores one tree row's layout, interaction, and animation identity.
@@ -90,13 +77,8 @@ struct FieldTreeRenderer<'tree, 'selection> {
 }
 
 /// Renders the source and stream controls for a widget data setting.
-pub fn show(
-    ui: &mut Ui,
-    label: &str,
-    stream: &mut Option<StreamKey>,
-    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
-) {
-    show_selection(ui, label, StreamSelection::Single(stream), protocol);
+pub fn show(ui: &mut Ui, label: &str, stream: &mut Option<StreamKey>, adapter: Option<&DataAdapterInstance>) {
+    show_selection(ui, label, StreamSelection::Single(stream), adapter);
 }
 
 /// Renders the source and multiple-field controls for a widget data setting.
@@ -104,28 +86,30 @@ pub fn show_multiple(
     ui: &mut Ui,
     label: &str,
     streams: &mut Vec<StreamKey>,
-    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
+    names: Option<&mut Vec<String>>,
+    adapter: Option<&DataAdapterInstance>,
 ) {
-    show_selection(ui, label, StreamSelection::Multiple(streams), protocol);
+    show_selection(ui, label, StreamSelection::Multiple { streams, names }, adapter);
 }
 
 /// The widget-owned stream storage accepted by the shared selector.
 enum StreamSelection<'a> {
     Single(&'a mut Option<StreamKey>),
-    Multiple(&'a mut Vec<StreamKey>),
+    Multiple {
+        streams: &'a mut Vec<StreamKey>,
+        names: Option<&'a mut Vec<String>>,
+    },
 }
 
-fn show_selection(
-    ui: &mut Ui,
-    label: &str,
-    selection: StreamSelection<'_>,
-    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
-) {
-    // Validate the protocol before rendering controls that index its descriptors
-    let Some((protocol, adapter_token)) = protocol else {
+fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adapter: Option<&DataAdapterInstance>) {
+    // Validate the adapter before rendering controls that index its descriptors
+    let Some(adapter) = adapter else {
         ui.weak("No data source configured.");
         return;
     };
+    let protocol = adapter.describe_protocol();
+    let adapter_token = adapter.token();
+    let index = adapter.descriptor_index();
     if protocol.sources.is_empty() {
         ui.weak("No data sources available.");
         return;
@@ -138,7 +122,7 @@ fn show_selection(
     // Render both selectors from the widget value or their temporary state
     let selected_source_key = match &selection {
         StreamSelection::Single(stream) => stream.as_ref().map(|stream| stream.source_key),
-        StreamSelection::Multiple(streams) => streams.first().map(|stream| stream.source_key),
+        StreamSelection::Multiple { streams, .. } => streams.first().map(|stream| stream.source_key),
     };
     let source_key = show_source_selection(ui, &protocol.sources, selected_source_key);
 
@@ -147,17 +131,17 @@ fn show_selection(
             let data_key = show_single_field_selection(
                 ui,
                 label,
-                protocol,
+                index,
                 adapter_token,
                 stream.as_ref().map(|stream| stream.data_key),
             );
             *stream = data_key.map(|data_key| StreamKey { source_key, data_key });
         }
-        StreamSelection::Multiple(streams) => {
+        StreamSelection::Multiple { streams, names } => {
             for stream in streams.iter_mut() {
                 stream.source_key = source_key;
             }
-            show_multiple_field_selection(ui, label, protocol, adapter_token, source_key, streams);
+            show_multiple_field_selection(ui, label, index, adapter_token, source_key, streams, names);
         }
     }
 }
@@ -210,12 +194,11 @@ fn show_source_selection(
 fn show_single_field_selection(
     ui: &mut Ui,
     label: &str,
-    protocol: &ProtocolDescriptor,
+    index: &DescriptorIndex,
     adapter_token: &DataAdapterInstanceToken,
     stream_data_key: Option<DataKey>,
 ) -> Option<DataKey> {
     let selection_id = ui.id().with("data");
-    let index = descriptor_index(ui, protocol, adapter_token);
 
     // Prefer the widget value before temporary incomplete selection state
     let mut selected_data_key =
@@ -223,7 +206,7 @@ fn show_single_field_selection(
     show_field_picker(
         ui,
         label,
-        &index,
+        index,
         adapter_token,
         FieldSelection::Single(&mut selected_data_key),
     );
@@ -235,12 +218,16 @@ fn show_single_field_selection(
 fn show_multiple_field_selection(
     ui: &mut Ui,
     label: &str,
-    protocol: &ProtocolDescriptor,
+    index: &DescriptorIndex,
     adapter_token: &DataAdapterInstanceToken,
     source_key: SourceKey,
     streams: &mut Vec<StreamKey>,
+    mut names: Option<&mut Vec<String>>,
 ) {
-    let index = descriptor_index(ui, protocol, adapter_token);
+    if let Some(names) = names.as_mut() {
+        synchronize_stream_names(index, streams, names);
+    }
+
     let mut selected_nodes = vec![false; index.nodes().len()];
     let mut unavailable_count = 0;
     for stream in streams.iter().copied() {
@@ -254,7 +241,7 @@ fn show_multiple_field_selection(
     let changed = show_field_picker(
         ui,
         label,
-        &index,
+        index,
         adapter_token,
         FieldSelection::Multiple {
             selected_nodes: &mut selected_nodes,
@@ -266,22 +253,45 @@ fn show_multiple_field_selection(
     }
 
     streams.clear();
-    streams.extend(index.nodes().iter().enumerate().filter_map(|(node_index, node)| {
+    if let Some(names) = names.as_mut() {
+        names.clear();
+    }
+    for (node_index, node) in index.nodes().iter().enumerate() {
         if !selected_nodes[node_index] {
-            return None;
+            continue;
         }
         let IndexedNodeKind::Field { data_key } = node.kind else {
-            return None;
+            continue;
         };
-        Some(StreamKey { source_key, data_key })
-    }));
+        streams.push(StreamKey { source_key, data_key });
+        if let Some(names) = names.as_mut() {
+            names.push(node.name.clone());
+        }
+    }
+}
+
+/// Synchronizes saved names without changing stream order or unavailable names.
+fn synchronize_stream_names(index: &DescriptorIndex, streams: &[StreamKey], names: &mut Vec<String>) {
+    names.truncate(streams.len());
+
+    for (position, stream) in streams.iter().enumerate() {
+        if let Some(current_name) = index.field_name(stream.data_key) {
+            if let Some(saved_name) = names.get_mut(position) {
+                current_name.clone_into(saved_name);
+            } else {
+                names.push(current_name.to_owned());
+            }
+        } else if position == names.len() {
+            names.push("Unavailable field".to_owned());
+        }
+    }
 }
 
 /// Renders the compact summary and expandable hierarchy for either selection mode.
 fn show_field_picker(
     ui: &mut Ui,
     label: &str,
-    index: &Arc<DescriptorIndex>,
+    index: &DescriptorIndex,
     adapter_token: &DataAdapterInstanceToken,
     mut selection: FieldSelection<'_>,
 ) -> bool {
@@ -289,13 +299,10 @@ fn show_field_picker(
     let query_id = ui.id().with("field_picker_query");
     let search_input_id = ui.id().with("field_picker_search_input");
     let mut picker_state = ui.mem().get_temp_or_default::<PickerState>(picker_state_id);
-    let same_index = picker_state
-        .index
-        .upgrade()
-        .is_some_and(|cached| Arc::ptr_eq(&cached, index));
+    let same_index = picker_state.adapter_token.as_ref() == Some(adapter_token);
     if !same_index {
         // Expansion rows belong to one descriptor traversal order
-        picker_state.index = Arc::downgrade(index);
+        picker_state.adapter_token = Some(adapter_token.clone());
         picker_state.expanded.clear();
     }
 
@@ -375,7 +382,7 @@ fn show_selection_summary(
 /// Renders the filtered or browsable hierarchy through fixed-height rows.
 fn show_field_tree(
     ui: &mut Ui,
-    index: &Arc<DescriptorIndex>,
+    index: &DescriptorIndex,
     adapter_token: &DataAdapterInstanceToken,
     query: &str,
     expanded: &mut HashSet<usize>,
@@ -720,31 +727,6 @@ fn paint_descriptor_text(ui: &Ui, row_rect: Rect, text_left: f32, text: &str, st
     let galley = text.into_galley(ui, Some(TextWrapMode::Truncate), width, TextStyle::Body);
     let text_pos = pos2(text_left, row_rect.center().y - galley.size().y * 0.5);
     ui.painter().galley(text_pos, galley, ui.visuals().text_color());
-}
-
-/// Returns the index for the installed adapter's protocol descriptor.
-fn descriptor_index(
-    ui: &Ui,
-    protocol: &ProtocolDescriptor,
-    adapter_token: &DataAdapterInstanceToken,
-) -> Arc<DescriptorIndex> {
-    let id = Id::new(DESCRIPTOR_INDEX_ID);
-    if let Some(cached) = ui.mem().get_temp::<CachedDescriptorIndex>(id)
-        && &cached.adapter_token == adapter_token
-    {
-        return cached.index;
-    }
-
-    // A new wrapper token always denotes a newly installed adapter
-    let index = Arc::new(DescriptorIndex::build(protocol));
-    ui.mem().insert_temp(
-        id,
-        CachedDescriptorIndex {
-            adapter_token: adapter_token.clone(),
-            index: index.clone(),
-        },
-    );
-    index
 }
 
 /// Computes a responsive cap for the nested field tree.

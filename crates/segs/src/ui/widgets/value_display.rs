@@ -112,18 +112,9 @@ impl ValueDisplayWidget {
         };
 
         match data_store.latest(stream) {
-            Some(DataValue::U8(value)) => value.to_string(),
-            Some(DataValue::U16(value)) => value.to_string(),
-            Some(DataValue::U32(value)) => value.to_string(),
-            Some(DataValue::U64(value)) => value.to_string(),
-            Some(DataValue::I8(value)) => value.to_string(),
-            Some(DataValue::I16(value)) => value.to_string(),
-            Some(DataValue::I32(value)) => value.to_string(),
-            Some(DataValue::I64(value)) => value.to_string(),
-            Some(DataValue::F32(value)) => format!("{value:.3}"),
-            Some(DataValue::F64(value)) => format!("{value:.3}"),
-            Some(DataValue::Bool(value)) => value.to_string(),
-            Some(DataValue::String(value)) => value,
+            Some((_, DataValue::F32(value))) => format!("{:.3}", value),
+            Some((_, DataValue::F64(value))) => format!("{:.3}", value),
+            Some((_, value)) => value.to_string(),
             None => "No data".to_owned(),
         }
     }

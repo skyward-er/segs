@@ -1,6 +1,8 @@
+mod message_viewer;
 mod value_display;
 
 use enum_dispatch::enum_dispatch;
+pub use message_viewer::MessageViewerWidget;
 pub use value_display::ValueDisplayWidget;
 
 use egui::{Id, Ui, Vec2};
@@ -27,13 +29,17 @@ pub struct WidgetData {
 #[enum_dispatch(WidgetTrait)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WidgetVariant {
+    MessageViewer(MessageViewerWidget),
     ValueDisplay(ValueDisplayWidget),
 }
 
 impl WidgetVariant {
     /// Gallery defaults in display order.
     pub fn gallery() -> Vec<Self> {
-        vec![ValueDisplayWidget::default().into()]
+        vec![
+            ValueDisplayWidget::default().into(),
+            MessageViewerWidget::default().into(),
+        ]
     }
 }
 

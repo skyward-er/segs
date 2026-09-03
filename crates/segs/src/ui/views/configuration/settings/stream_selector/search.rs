@@ -9,8 +9,7 @@ use egui::{
 };
 
 use crate::dataflow::adapter::DataAdapterInstanceToken;
-
-use super::descriptor::DescriptorIndex;
+use crate::dataflow::protocol::descriptor_index::DescriptorIndex;
 
 /// Stores one adapter's matching rows for egui's frame cache.
 ///
@@ -44,7 +43,7 @@ impl CachedSearch {
 /// Identifies reusable search results by adapter lifecycle and query.
 #[derive(Clone, Copy)]
 struct SearchRequest<'a> {
-    index: &'a Arc<DescriptorIndex>,
+    index: &'a DescriptorIndex,
     adapter_token: &'a DataAdapterInstanceToken,
     query: &'a str,
 }
@@ -75,7 +74,7 @@ type SearchFrameCache = FrameCache<Arc<CachedSearch>, SearchComputer>;
 /// Returns filtered rows from egui's automatically evicted frame cache.
 pub fn resolve_search_cache(
     ui: &Ui,
-    index: &Arc<DescriptorIndex>,
+    index: &DescriptorIndex,
     adapter_token: &DataAdapterInstanceToken,
     query: &str,
 ) -> Arc<CachedSearch> {

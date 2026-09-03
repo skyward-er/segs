@@ -40,8 +40,12 @@ impl DataStore {
         self.streams.get(&key)
     }
 
-    /// Returns the most recent value in the stream associated with `key`.
-    pub fn latest(&self, key: StreamKey) -> Option<DataValue> {
+    /// Returns the most recent sample in the stream associated with `key`.
+    ///
+    /// The returned tuple contains the adapter-relative timestamp in seconds
+    /// followed by the sample value. `None` means the stream is absent or has
+    /// no samples.
+    pub fn latest(&self, key: StreamKey) -> Option<(f64, DataValue)> {
         self.stream(key).and_then(DataStream::last)
     }
 

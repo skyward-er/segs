@@ -83,6 +83,7 @@ pub enum WidgetDataSetting<'a> {
         id: &'static str,
         label: &'static str,
         streams: &'a mut Vec<StreamKey>,
+        names: Option<&'a mut Vec<String>>,
     },
 }
 
@@ -92,7 +93,27 @@ impl<'a> WidgetDataSetting<'a> {
     }
 
     pub fn multiple_streams(id: &'static str, label: &'static str, streams: &'a mut Vec<StreamKey>) -> Self {
-        Self::MultipleStreams { id, label, streams }
+        Self::MultipleStreams {
+            id,
+            label,
+            streams,
+            names: None,
+        }
+    }
+
+    /// Creates a multiple-stream setting with parallel persistent display names.
+    pub fn multiple_streams_with_names(
+        id: &'static str,
+        label: &'static str,
+        streams: &'a mut Vec<StreamKey>,
+        names: &'a mut Vec<String>,
+    ) -> Self {
+        Self::MultipleStreams {
+            id,
+            label,
+            streams,
+            names: Some(names),
+        }
     }
 
     pub fn id(&self) -> &'static str {
@@ -107,9 +128,12 @@ impl<'a> WidgetDataSetting<'a> {
             Self::SingleStream { stream, .. } => {
                 stream.get_or_insert(key);
             }
-            Self::MultipleStreams { streams, .. } => {
+            Self::MultipleStreams { streams, names, .. } => {
                 if streams.is_empty() {
                     streams.push(key);
+                    if let Some(names) = names {
+                        names.push("Stream".to_owned());
+                    }
                 }
             }
         }

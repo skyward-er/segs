@@ -117,6 +117,16 @@ impl DescriptorIndex {
         self.fields.get(&data_key).map(|field| field.path.as_str())
     }
 
+    /// Returns the leaf descriptor name associated with a data key.
+    ///
+    /// The returned name is `None` when the key is not part of the indexed
+    /// stream-message descriptors.
+    pub fn field_name(&self, data_key: DataKey) -> Option<&str> {
+        self.fields
+            .get(&data_key)
+            .map(|field| self.nodes[field.node_index].name.as_str())
+    }
+
     /// Returns the flattened node position associated with a data key.
     pub fn field_node(&self, data_key: DataKey) -> Option<usize> {
         self.fields.get(&data_key).map(|field| field.node_index)
@@ -350,5 +360,52 @@ mod tests {
             .map(|row| index.nodes()[*row].name.as_str())
             .collect::<Vec<_>>();
         assert_eq!(structure_names, ["Flight", "Timing", "Timestamp", "Sequence", "Roll"]);
+    }
+
+    #[test]
+    fn field_order_and_names_follow_the_protocol_descriptor() {
+        let message = message_key(1);
+        let first = DataKey(10);
+        let second = DataKey(20);
+        let protocol = ProtocolDescriptor {
+            message_schemas: HashMap::from([(
+                message,
+                MessageDescriptor {
+                    name: "Flight".into(),
+                    fields: vec![
+                        FieldDescriptor::Field {
+                            name: "Altitude".into(),
+                            field_type: DataType::F64,
+                            data_key: first,
+                        },
+                        FieldDescriptor::Structure {
+                            name: "Timing".into(),
+                            fields: vec![FieldDescriptor::Field {
+                                name: "Timestamp".into(),
+                                field_type: DataType::U64,
+                                data_key: second,
+                            }],
+                        },
+                    ],
+                },
+            )]),
+            stream_messages: vec![message],
+            command_messages: Vec::new(),
+            sources: Vec::new(),
+        };
+
+        let index = DescriptorIndex::build(&protocol);
+        let field_keys = index
+            .nodes()
+            .iter()
+            .filter_map(|node| match node.kind {
+                IndexedNodeKind::Field { data_key } => Some(data_key),
+                IndexedNodeKind::Structure { .. } => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(field_keys, [first, second]);
+        assert_eq!(index.field_name(first), Some("Altitude"));
+        assert_eq!(index.field_name(second), Some("Timestamp"));
     }
 }

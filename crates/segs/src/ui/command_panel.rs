@@ -383,7 +383,7 @@ fn show_field_values(ui: &mut Ui, descriptors: &[FieldDescriptor], values: &Hash
                 ui.horizontal(|ui| {
                     ui.label(name);
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(format_data_value(&values[data_key]));
+                        ui.label(values[data_key].to_string());
                     });
                 });
             }
@@ -508,23 +508,6 @@ fn source_name(protocol: &ProtocolDescriptor, key: SourceKey) -> &str {
         .expect("Adapter command target must be a described source")
         .name
         .as_str()
-}
-
-fn format_data_value(value: &DataValue) -> String {
-    match value {
-        DataValue::U8(value) => value.to_string(),
-        DataValue::U16(value) => value.to_string(),
-        DataValue::U32(value) => value.to_string(),
-        DataValue::U64(value) => value.to_string(),
-        DataValue::I8(value) => value.to_string(),
-        DataValue::I16(value) => value.to_string(),
-        DataValue::I32(value) => value.to_string(),
-        DataValue::I64(value) => value.to_string(),
-        DataValue::F32(value) => format!("{value:?}"),
-        DataValue::F64(value) => format!("{value:?}"),
-        DataValue::Bool(value) => value.to_string(),
-        DataValue::String(value) => value.trim_end_matches('\0').to_owned(),
-    }
 }
 
 #[cfg(test)]
@@ -687,13 +670,5 @@ mod tests {
             parse_field(&draft("not-a-number"), &DataType::F64),
             Err(FieldParseError::Invalid(_))
         ));
-    }
-
-    #[test]
-    fn float_values_use_adaptive_debug_formatting() {
-        assert_eq!(format_data_value(&DataValue::F64(9.5e-44)), "9.5e-44");
-        assert_eq!(format_data_value(&DataValue::F64(1e30)), "1e30");
-        assert_eq!(format_data_value(&DataValue::F32(1.25)), "1.25");
-        assert_eq!(format_data_value(&DataValue::F32(1.0)), "1.0");
     }
 }

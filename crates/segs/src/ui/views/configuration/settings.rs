@@ -4,18 +4,14 @@ use egui::{ComboBox, Grid, Ui};
 use segs_ui::widgets::{Separator, UiWidgetExt, text::TextEdit};
 
 use crate::{
-    dataflow::{adapter::DataAdapterInstanceToken, protocol::ProtocolDescriptor},
+    dataflow::adapter::DataAdapterInstance,
     ui::{
         widget_settings::{WidgetDataSetting, WidgetSetting},
         widgets::{WidgetData, WidgetTrait},
     },
 };
 
-pub fn show(
-    ui: &mut Ui,
-    widget: Option<&mut WidgetData>,
-    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
-) {
+pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, adapter: Option<&DataAdapterInstance>) {
     let Some(widget) = widget else {
         ui.weak("Select a widget to edit its settings.");
         return;
@@ -26,7 +22,7 @@ pub fn show(
         let has_data_settings = {
             let data_settings = widget.variant.data_settings();
             let has_data_settings = !data_settings.is_empty();
-            show_data_settings(ui, data_settings, protocol);
+            show_data_settings(ui, data_settings, adapter);
             has_data_settings
         };
 
@@ -46,19 +42,17 @@ pub fn show(
     });
 }
 
-fn show_data_settings(
-    ui: &mut Ui,
-    settings: Vec<WidgetDataSetting<'_>>,
-    protocol: Option<(&ProtocolDescriptor, &DataAdapterInstanceToken)>,
-) {
+fn show_data_settings(ui: &mut Ui, settings: Vec<WidgetDataSetting<'_>>, adapter: Option<&DataAdapterInstance>) {
     for setting in settings {
         let setting_id = setting.id();
         ui.push_id(setting_id, |ui| match setting {
             WidgetDataSetting::SingleStream { label, stream, .. } => {
-                stream_selector::show(ui, label, stream, protocol);
+                stream_selector::show(ui, label, stream, adapter);
             }
-            WidgetDataSetting::MultipleStreams { label, streams, .. } => {
-                stream_selector::show_multiple(ui, label, streams, protocol);
+            WidgetDataSetting::MultipleStreams {
+                label, streams, names, ..
+            } => {
+                stream_selector::show_multiple(ui, label, streams, names, adapter);
             }
         });
     }
