@@ -17,7 +17,9 @@ use segs_mavlink::{MavFrame, MavHeader, MavMessage, MavProfile, MavType, Mavlink
 
 use crate::dataflow::adapter::{DataAdapter, Stats, Status};
 use crate::dataflow::mapping::{DataMapping, MappingDescriptor, MappingType};
-use crate::dataflow::protocol::{FieldDescriptor, MessageDescriptor, ProtocolDescriptor, SourceDescriptor};
+use crate::dataflow::protocol::{
+    EnumDescriptor, FieldDescriptor, MessageDescriptor, ProtocolDescriptor, SourceDescriptor,
+};
 use crate::dataflow::transport::DataTransport;
 use crate::dataflow::{
     Command, DataKey, DataPoint, DataStream, DataType, DataValue, SourceKey, StreamKey, store::DataStore,
@@ -702,10 +704,28 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
                 .iter()
                 .enumerate()
                 .filter(|(_, field)| !is_managed_tc_timestamp(message, &field.name))
-                .map(|(i, field)| FieldDescriptor::Field {
-                    name: field.name.clone(),
-                    field_type: mavtype_to_datatype(field.mavtype.clone()),
-                    data_key: compute_data_key(message.id, i as u32, &field.name),
+                .map(|(i, field)| {
+                    let data_key = compute_data_key(message.id, i as u32, &field.name);
+
+                    // Preserve ordinary enum metadata when the referenced declaration is usable
+                    if let Some(descriptor) = field
+                        .enumtype
+                        .as_ref()
+                        .and_then(|name| profile.enums.get(name))
+                        .and_then(|mavenum| make_enum_descriptor(mavenum, &field.mavtype))
+                    {
+                        FieldDescriptor::EnumField {
+                            name: field.name.clone(),
+                            descriptor,
+                            data_key,
+                        }
+                    } else {
+                        FieldDescriptor::Field {
+                            name: field.name.clone(),
+                            field_type: mavtype_to_datatype(field.mavtype.clone()),
+                            data_key,
+                        }
+                    }
                 })
                 .collect();
             let key = MessageKey(message.id as u64);
@@ -752,6 +772,62 @@ fn make_protocol_descriptor(profile: &MavProfile) -> ProtocolDescriptor {
         stream_messages,
         command_messages,
         sources,
+    }
+}
+
+/// Builds protocol-independent metadata for an ordinary MAVLink enum.
+///
+/// Returns the enum name and its declaration-ordered typed values. `None`
+/// means the enum is empty, represents a bitmask, or contains a value that
+/// cannot be represented by the MAVLink field type.
+fn make_enum_descriptor(mavenum: &segs_mavlink::EnumInfo, mavtype: &MavType) -> Option<EnumDescriptor> {
+    if mavenum.bitmask || mavenum.entries.is_empty() {
+        return None;
+    }
+
+    let mut previous_value = 0;
+    let mut variants = Vec::with_capacity(mavenum.entries.len());
+
+    // Resolve implicit values using the MAVLink parser's declaration semantics
+    for entry in &mavenum.entries {
+        let value = match entry.value {
+            Some(value) => {
+                previous_value = previous_value.max(value);
+                value
+            }
+            None => {
+                previous_value = previous_value.checked_add(1)?;
+                previous_value
+            }
+        };
+        variants.push((entry.name.clone(), enum_value_to_data_value(value, mavtype)?));
+    }
+
+    Some(EnumDescriptor {
+        name: mavenum.name.clone(),
+        variants,
+    })
+}
+
+/// Converts an unsigned MAVLink enum code to the field's exact primitive value.
+///
+/// Returns the typed value when the code fits the integer field type, or
+/// `None` for unsupported types and out-of-range codes.
+fn enum_value_to_data_value(value: u64, mavtype: &MavType) -> Option<DataValue> {
+    match mavtype {
+        MavType::UInt8 | MavType::Char => u8::try_from(value).ok().map(DataValue::U8),
+        MavType::UInt16 => u16::try_from(value).ok().map(DataValue::U16),
+        MavType::UInt32 => u32::try_from(value).ok().map(DataValue::U32),
+        MavType::UInt64 => Some(DataValue::U64(value)),
+        MavType::Int8 => i8::try_from(value).ok().map(DataValue::I8),
+        MavType::Int16 => i16::try_from(value).ok().map(DataValue::I16),
+        MavType::Int32 => i32::try_from(value).ok().map(DataValue::I32),
+        MavType::Int64 => i64::try_from(value).ok().map(DataValue::I64),
+        MavType::UInt8MavlinkVersion
+        | MavType::Float
+        | MavType::Double
+        | MavType::CharArray(_)
+        | MavType::Array(_, _) => None,
     }
 }
 

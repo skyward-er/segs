@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 
-use crate::dataflow::{DataKey, DataType, MessageKey, SourceKey};
+use crate::dataflow::{DataKey, DataType, DataValue, MessageKey, SourceKey};
+
+/// Describes the named values belonging to a protocol enum.
+#[derive(Debug)]
+pub struct EnumDescriptor {
+    /// Protocol-defined name of the enum.
+    pub name: String,
+    /// Named values in their protocol declaration order.
+    pub variants: Vec<(String, DataValue)>,
+}
 
 /// Describes one structure or field in a message schema.
 #[derive(Debug)]
@@ -11,6 +20,15 @@ pub enum FieldDescriptor {
     Field {
         name: String,
         field_type: DataType,
+        data_key: DataKey,
+    },
+    /// A named value constrained to one of the described enum variants.
+    EnumField {
+        /// Protocol-defined name of the field.
+        name: String,
+        /// Enum metadata used to interpret the field value.
+        descriptor: EnumDescriptor,
+        /// Protocol-independent identity of the field's data stream.
         data_key: DataKey,
     },
 }

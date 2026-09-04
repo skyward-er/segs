@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt, time::SystemTime};
 
 use chrono::{DateTime, Local};
-use egui::{Align, Button, ComboBox, Frame, Id, Layout, Panel, RichText, ScrollArea, Ui};
+use egui::{Align, Button, ComboBox, Frame, Id, Label, Layout, Panel, RichText, ScrollArea, Ui};
 use segs_ui::{
     components::panel_header::PanelHeader,
     containers::Card,
@@ -18,7 +18,7 @@ use crate::{
     dataflow::{
         Command, CommandId, CommandStatus, DataKey, DataType, DataValue, MessageKey, SourceKey,
         adapter::{DataAdapterInstance, DataAdapterInstanceToken},
-        protocol::{FieldDescriptor, ProtocolDescriptor},
+        protocol::{EnumDescriptor, FieldDescriptor, ProtocolDescriptor},
         store::DataStore,
     },
 };
@@ -81,6 +81,8 @@ pub fn toggle(ui: &mut Ui) {
 struct FieldDraft {
     text: String,
     touched: bool,
+    selected_enum_variant: Option<usize>,
+    enum_choices: Option<SearchableComboBoxList<usize>>,
 }
 
 impl CommandPanelState {
@@ -259,6 +261,35 @@ fn show_field_editors(
                     draft.touched = true;
                 }
             }
+            FieldDescriptor::EnumField {
+                name,
+                descriptor,
+                data_key,
+            } => {
+                let draft = drafts
+                    .get_mut(data_key)
+                    .expect("Selected message fields must have initialized drafts");
+                let FieldDraft {
+                    selected_enum_variant,
+                    enum_choices,
+                    ..
+                } = draft;
+                let choices = enum_choices
+                    .as_ref()
+                    .expect("Enum field drafts must contain searchable choices");
+
+                ui.label(RichText::new(format!("{name} · {}", descriptor.name)).size(11.));
+                ui.add(
+                    SearchableComboBox::new(
+                        ui.make_persistent_id("enum_selector"),
+                        choices,
+                        SingleSelection::new(selected_enum_variant),
+                    )
+                    .empty_selection_text("Select a value")
+                    .search_hint("Search enum values…")
+                    .empty_results_text("No matching enum values."),
+                );
+            }
         });
     }
 }
@@ -338,20 +369,39 @@ fn show_status_badge(ui: &mut Ui, status: &CommandStatus) {
 
 fn show_field_values(ui: &mut Ui, descriptors: &[FieldDescriptor], values: &HashMap<DataKey, DataValue>) {
     for descriptor in descriptors {
-        match descriptor {
+        // Resolve the shared leaf data while preserving nested structures
+        let (name, data_key, enum_descriptor) = match descriptor {
             FieldDescriptor::Structure { name, fields } => {
                 ui.label(RichText::new(name).strong());
                 ui.indent(name, |ui| show_field_values(ui, fields, values));
+                continue;
             }
-            FieldDescriptor::Field { name, data_key, .. } => {
-                ui.horizontal(|ui| {
-                    ui.label(name);
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(values[data_key].to_string());
-                    });
-                });
-            }
-        }
+            FieldDescriptor::Field { name, data_key, .. } => (name, data_key, None),
+            FieldDescriptor::EnumField {
+                name,
+                descriptor,
+                data_key,
+            } => (name, data_key, Some(descriptor)),
+        };
+        let value = &values[data_key];
+
+        // Prefer a matching enum variant while retaining unknown numeric values
+        let displayed_value = enum_descriptor
+            .and_then(|descriptor| {
+                descriptor
+                    .variants
+                    .iter()
+                    .find(|(_, variant_value)| variant_value == value)
+            })
+            .map_or_else(|| value.to_string(), |(variant_name, _)| variant_name.clone());
+
+        // Show the resolved field value on the right side of the row
+        ui.horizontal(|ui| {
+            ui.label(name);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.add(Label::new(displayed_value).truncate());
+            });
+        });
     }
 }
 
@@ -361,6 +411,23 @@ fn initialize_drafts(descriptors: &[FieldDescriptor], drafts: &mut HashMap<DataK
             FieldDescriptor::Structure { fields, .. } => initialize_drafts(fields, drafts),
             FieldDescriptor::Field { data_key, .. } => {
                 drafts.insert(*data_key, FieldDraft::default());
+            }
+            FieldDescriptor::EnumField {
+                descriptor, data_key, ..
+            } => {
+                drafts.insert(
+                    *data_key,
+                    FieldDraft {
+                        enum_choices: Some(SearchableComboBoxList::new(
+                            descriptor
+                                .variants
+                                .iter()
+                                .enumerate()
+                                .map(|(index, (name, _))| (index, name)),
+                        )),
+                        ..FieldDraft::default()
+                    },
+                );
             }
         }
     }
@@ -372,6 +439,9 @@ fn fields_are_valid(descriptors: &[FieldDescriptor], drafts: &HashMap<DataKey, F
         FieldDescriptor::Field {
             field_type, data_key, ..
         } => parse_field(&drafts[data_key], field_type).is_ok(),
+        FieldDescriptor::EnumField {
+            descriptor, data_key, ..
+        } => parse_enum_field(&drafts[data_key], descriptor).is_ok(),
     })
 }
 
@@ -397,9 +467,23 @@ fn collect_parsed_fields(
             } => {
                 values.insert(*data_key, parse_field(&drafts[data_key], field_type)?);
             }
+            FieldDescriptor::EnumField {
+                descriptor, data_key, ..
+            } => {
+                values.insert(*data_key, parse_enum_field(&drafts[data_key], descriptor)?);
+            }
         }
     }
     Ok(())
+}
+
+fn parse_enum_field(draft: &FieldDraft, descriptor: &EnumDescriptor) -> Result<DataValue, FieldParseError> {
+    let index = draft.selected_enum_variant.ok_or(FieldParseError::Missing)?;
+    descriptor
+        .variants
+        .get(index)
+        .map(|(_, value)| value.clone())
+        .ok_or(FieldParseError::Invalid("Selected enum value is unavailable"))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -472,6 +556,8 @@ mod tests {
         FieldDraft {
             text: text.into(),
             touched: true,
+            selected_enum_variant: None,
+            enum_choices: None,
         }
     }
 

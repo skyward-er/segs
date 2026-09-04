@@ -114,7 +114,7 @@ impl DataStream {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DataValue {
     U8(u8),
     U16(u16),

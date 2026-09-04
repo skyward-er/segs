@@ -93,7 +93,9 @@ fn add_fields(builder: &mut SearchableComboBoxHierarchyBuilder<'_, DataKey>, fie
             FieldDescriptor::Structure { name, fields } => {
                 builder.group(name, |builder| add_fields(builder, fields));
             }
-            FieldDescriptor::Field { name, data_key, .. } => builder.item(*data_key, name),
+            FieldDescriptor::Field { name, data_key, .. } | FieldDescriptor::EnumField { name, data_key, .. } => {
+                builder.item(*data_key, name)
+            }
         }
     }
 }
