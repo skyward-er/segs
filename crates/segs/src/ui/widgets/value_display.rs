@@ -10,7 +10,7 @@ use segs_ui::style::CtxStyleExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dataflow::{DataValue, StreamKey, store::DataStore},
+    dataflow::{StreamKey, store::DataStore},
     ui::{
         widget_settings::{WidgetDataSetting, WidgetSetting},
         widgets::WidgetTrait,
@@ -111,12 +111,9 @@ impl ValueDisplayWidget {
             return "No stream".to_owned();
         };
 
-        match data_store.latest(stream) {
-            Some((_, DataValue::F32(value))) => format!("{:.3}", value),
-            Some((_, DataValue::F64(value))) => format!("{:.3}", value),
-            Some((_, value)) => value.to_string(),
-            None => "No data".to_owned(),
-        }
+        data_store
+            .latest(stream)
+            .map_or_else(|| "No data".to_owned(), |(_, value)| value.to_string())
     }
 }
 

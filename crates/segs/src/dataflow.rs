@@ -7,10 +7,16 @@ pub mod skyward_mavlink_adapter;
 pub mod store;
 pub mod transport;
 
-use std::{fmt, time::SystemTime};
+use std::{fmt, num::NonZeroUsize, time::SystemTime};
 
 use egui::ahash::HashMap;
+use lexical_write_float::{FormattedSize, Options, ToLexicalWithOptions, format::STANDARD};
 use serde::{Deserialize, Serialize};
+
+const FLOAT_FORMAT_OPTIONS: Options = Options::builder()
+    .max_significant_digits(NonZeroUsize::new(8))
+    .trim_floats(false)
+    .build_strict();
 
 /// An opaque handler that uniquely represents a data stream.
 /// Adapters are responsible for generating a uniform key space based on the data source.
@@ -142,8 +148,18 @@ impl fmt::Display for DataValue {
             Self::I16(value) => write!(formatter, "{}", value),
             Self::I32(value) => write!(formatter, "{}", value),
             Self::I64(value) => write!(formatter, "{}", value),
-            Self::F32(value) => write!(formatter, "{:?}", value),
-            Self::F64(value) => write!(formatter, "{:?}", value),
+            Self::F32(value) => {
+                // Format floats with bounded precision while retaining a visible fractional component
+                let mut buffer = [0; f32::FORMATTED_SIZE_DECIMAL];
+                let formatted = value.to_lexical_with_options::<STANDARD>(&mut buffer, &FLOAT_FORMAT_OPTIONS);
+                formatter.write_str(std::str::from_utf8(formatted).map_err(|_| fmt::Error)?)
+            }
+            Self::F64(value) => {
+                // Format floats with bounded precision while retaining a visible fractional component
+                let mut buffer = [0; f64::FORMATTED_SIZE_DECIMAL];
+                let formatted = value.to_lexical_with_options::<STANDARD>(&mut buffer, &FLOAT_FORMAT_OPTIONS);
+                formatter.write_str(std::str::from_utf8(formatted).map_err(|_| fmt::Error)?)
+            }
             Self::Bool(value) => write!(formatter, "{}", value),
             Self::String(value) => write!(formatter, "{}", value),
         }
@@ -200,9 +216,10 @@ pub mod testing {
     }
 
     #[test]
-    fn float_values_use_adaptive_debug_formatting() {
+    fn float_values_use_bounded_adaptive_formatting() {
         assert_eq!(DataValue::F64(9.5e-44).to_string(), "9.5e-44");
-        assert_eq!(DataValue::F64(1e30).to_string(), "1e30");
+        assert_eq!(DataValue::F64(1e30).to_string(), "1.0e30");
+        assert_eq!(DataValue::F64(45.12345678).to_string(), "45.123457");
         assert_eq!(DataValue::F32(1.25).to_string(), "1.25");
         assert_eq!(DataValue::F32(1.0).to_string(), "1.0");
     }
