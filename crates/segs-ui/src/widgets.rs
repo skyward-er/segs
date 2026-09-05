@@ -1,12 +1,15 @@
 pub mod atoms;
 pub mod buttons;
-mod expandable_selector;
 pub mod labels;
+mod searchable_combo_box;
 mod separator;
 pub mod text;
 
 use egui::Response;
-pub use expandable_selector::ExpandableSelector;
+pub use searchable_combo_box::{
+    MultipleSelection, SearchableComboBox, SearchableComboBoxHierarchy, SearchableComboBoxHierarchyBuilder,
+    SearchableComboBoxList, SingleSelection,
+};
 use segs_assets::icons::Icon;
 pub use separator::Separator;
 

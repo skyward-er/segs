@@ -1,15 +1,15 @@
 use std::{collections::HashMap, fmt, time::SystemTime};
 
 use chrono::{DateTime, Local};
-use egui::{Align, Button, ComboBox, Frame, Id, Layout, Margin, Panel, RichText, ScrollArea, Ui};
+use egui::{Align, Button, ComboBox, Frame, Id, Layout, Panel, RichText, ScrollArea, Ui};
 use segs_ui::{
     components::panel_header::PanelHeader,
     containers::Card,
     style::CtxStyleExt,
     widgets::{
-        ExpandableSelector, Separator,
-        labels::{Badge, SectionHeader, SelectableRow},
-        text::{TextEdit, ValidationTextEdit},
+        SearchableComboBox, SearchableComboBoxList, Separator, SingleSelection,
+        labels::{Badge, SectionHeader},
+        text::ValidationTextEdit,
     },
 };
 
@@ -17,8 +17,8 @@ use crate::{
     app::AppContext,
     dataflow::{
         Command, CommandId, CommandStatus, DataKey, DataType, DataValue, MessageKey, SourceKey,
-        adapter::DataAdapterInstanceToken,
-        protocol::{FieldDescriptor, MessageDescriptor, ProtocolDescriptor},
+        adapter::{DataAdapterInstance, DataAdapterInstanceToken},
+        protocol::{FieldDescriptor, ProtocolDescriptor},
         store::DataStore,
     },
 };
@@ -26,7 +26,7 @@ use crate::{
 const COMPOSER_HEIGHT_FRACTION: f32 = 0.58;
 const COMPOSER_ITEM_SPACING: f32 = 4.;
 const SEND_BUTTON_TOP_SPACING: f32 = 4.;
-const MESSAGE_LIST_HEIGHT: f32 = 180.;
+const MESSAGE_SELECTOR_MAX_ROWS: usize = 8;
 const COMMAND_PANEL_ID: &str = "command_panel";
 const COMMAND_PANEL_OPEN_ID: &str = "command_panel_open";
 const COMMAND_PANEL_STATE_ID: &str = "command_panel_state";
@@ -37,8 +37,7 @@ struct CommandPanelState {
     adapter_token: Option<DataAdapterInstanceToken>,
     target: Option<SourceKey>,
     message: Option<MessageKey>,
-    message_picker_open: bool,
-    query: String,
+    command_choices: Option<SearchableComboBoxList<MessageKey>>,
     drafts: HashMap<DataKey, FieldDraft>,
     latest_sequence: Option<CommandId>,
 }
@@ -49,7 +48,7 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
     let mut state = ui
         .data_mut(|data| data.remove_temp::<CommandPanelState>(state_id))
         .unwrap_or_default();
-    state.sync_adapter(appctx.data_adapter.as_ref().map(|adapter| adapter.token()));
+    state.sync_adapter(appctx.data_adapter.as_ref());
 
     let app_style = ui.app_style();
     let panel_frame = Frame::new().fill(app_style.main_panels_fill);
@@ -85,7 +84,8 @@ struct FieldDraft {
 }
 
 impl CommandPanelState {
-    fn sync_adapter(&mut self, token: Option<&DataAdapterInstanceToken>) {
+    fn sync_adapter(&mut self, adapter: Option<&DataAdapterInstance>) {
+        let token = adapter.map(DataAdapterInstance::token);
         let unchanged = match (&self.adapter_token, token) {
             (Some(current), Some(token)) => current == token,
             (None, None) => true,
@@ -95,22 +95,20 @@ impl CommandPanelState {
             return;
         }
 
+        let command_choices = adapter.map(|adapter| {
+            let protocol = adapter.describe_protocol();
+            SearchableComboBoxList::new(protocol.command_messages.iter().filter_map(|key| {
+                protocol
+                    .message_schemas
+                    .get(key)
+                    .map(|descriptor| (*key, descriptor.name.clone()))
+            }))
+        });
         *self = Self {
             adapter_token: token.cloned(),
+            command_choices,
             ..Self::default()
         };
-    }
-
-    fn select_message(&mut self, key: MessageKey, descriptor: &MessageDescriptor) {
-        if self.message == Some(key) {
-            self.message_picker_open = false;
-            return;
-        }
-
-        self.message = Some(key);
-        self.message_picker_open = false;
-        self.drafts.clear();
-        initialize_drafts(&descriptor.fields, &mut self.drafts);
     }
 }
 
@@ -142,11 +140,13 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
     ui.spacing_mut().item_spacing.y = COMPOSER_ITEM_SPACING;
 
     show_target_selector(ui, state, protocol);
-    show_message_selector(ui, state, protocol);
+    let message_changed = show_message_selector(ui, state, protocol);
 
     if let Some(message_key) = state.message {
         let message = &protocol.message_schemas[&message_key];
-        show_field_editors(ui, &message.fields, &mut state.drafts);
+        ui.push_id("command_message_fields", |ui| {
+            show_field_editors(ui, &message.fields, &mut state.drafts, !message_changed);
+        });
     }
 
     let ready = state.target.is_some()
@@ -193,81 +193,45 @@ fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &P
     }
 }
 
-fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) {
-    let content_margin = ui.spacing().window_margin;
-    let composer_item_spacing = ui.spacing().item_spacing.y;
-    let selected = state
-        .message
-        .map(|key| protocol.message_schemas[&key].name.as_str())
-        .unwrap_or("Select message");
+fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) -> bool {
+    let Some(choices) = state.command_choices.as_ref() else {
+        return false;
+    };
+    let Some(adapter_token) = state.adapter_token.as_ref() else {
+        return false;
+    };
+    let selector_id = ui.make_persistent_id(("command_message_selector", adapter_token));
 
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 0.;
-        ui.add(
-            ExpandableSelector::new("Message", selected, &mut state.message_picker_open)
-                .preview_weak(state.message.is_none())
-                .horizontal_bleed(content_margin),
-        );
-
-        if !state.message_picker_open {
-            return;
-        }
-
-        let inner_margin = Margin {
-            left: content_margin.left,
-            right: content_margin.right,
-            top: 6,
-            bottom: 0,
-        };
-        let outer_margin = Margin {
-            left: -content_margin.left,
-            right: -content_margin.right,
-            top: 0,
-            bottom: 0,
-        };
-        Frame::new()
-            .fill(ui.visuals().panel_fill)
-            .inner_margin(inner_margin)
-            .outer_margin(outer_margin)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = composer_item_spacing;
-                ui.add(
-                    TextEdit::singleline(&mut state.query)
-                        .hint_text("Search command messages…")
-                        .desired_width(ui.available_width()),
-                );
-                let messages = filtered_command_messages(protocol, &state.query);
-                if messages.is_empty() {
-                    ui.weak("No matching command messages.");
-                } else {
-                    ui.visuals_mut().clip_rect_margin = 0.;
-                    ScrollArea::vertical()
-                        .id_salt("command_message_list")
-                        .max_height(MESSAGE_LIST_HEIGHT)
-                        .min_scrolled_height(0.)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            for key in messages {
-                                let descriptor = &protocol.message_schemas[&key];
-                                if ui
-                                    .add(SelectableRow::new(state.message == Some(key), &descriptor.name))
-                                    .clicked()
-                                {
-                                    state.select_message(key, descriptor);
-                                }
-                            }
-                        });
-                }
-            });
-    });
+    ui.label("Message");
+    let response = ui.add(
+        SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.message))
+            .empty_selection_text("Select a command")
+            .max_visible_rows(MESSAGE_SELECTOR_MAX_ROWS)
+            .search_hint("Search command messages…")
+            .empty_results_text("No matching command messages."),
+    );
+    if response.changed() {
+        let key = state.message.expect("changed command selection must contain a value");
+        state.drafts.clear();
+        initialize_drafts(&protocol.message_schemas[&key].fields, &mut state.drafts);
+    }
+    response.changed()
 }
 
-fn show_field_editors(ui: &mut Ui, descriptors: &[FieldDescriptor], drafts: &mut HashMap<DataKey, FieldDraft>) {
-    for descriptor in descriptors {
-        match descriptor {
+fn show_field_editors(
+    ui: &mut Ui,
+    descriptors: &[FieldDescriptor],
+    drafts: &mut HashMap<DataKey, FieldDraft>,
+    validate_blur: bool,
+) {
+    // Keep widget identities tied to stable form positions rather than command-specific keys
+    for (descriptor_index, descriptor) in descriptors.iter().enumerate() {
+        ui.push_id(("command_field_descriptor", descriptor_index), |ui| match descriptor {
             FieldDescriptor::Structure { name, fields } => {
                 ui.label(RichText::new(name).strong());
-                ui.indent(name, |ui| show_field_editors(ui, fields, drafts));
+                ui.indent("children", |ui| {
+                    show_field_editors(ui, fields, drafts, validate_blur);
+                });
             }
             FieldDescriptor::Field {
                 name,
@@ -285,17 +249,17 @@ fn show_field_editors(ui: &mut Ui, descriptors: &[FieldDescriptor], drafts: &mut
 
                 ui.label(RichText::new(format!("{name} · {field_type}")).size(11.));
                 let mut editor = ValidationTextEdit::new(&mut draft.text)
-                    .id_salt(*data_key)
+                    .id_salt("editor")
                     .desired_width(ui.available_width());
                 if let Some(error) = error {
                     editor = editor.error(error);
                 }
                 let response = ui.add(editor);
-                if response.changed() || response.lost_focus() {
+                if response.changed() || (validate_blur && response.lost_focus()) {
                     draft.touched = true;
                 }
             }
-        }
+        });
     }
 }
 
@@ -402,16 +366,6 @@ fn initialize_drafts(descriptors: &[FieldDescriptor], drafts: &mut HashMap<DataK
     }
 }
 
-fn filtered_command_messages(protocol: &ProtocolDescriptor, query: &str) -> Vec<MessageKey> {
-    let query = query.trim().to_lowercase();
-    protocol
-        .command_messages
-        .iter()
-        .copied()
-        .filter(|key| protocol.message_schemas[key].name.to_lowercase().contains(&query))
-        .collect()
-}
-
 fn fields_are_valid(descriptors: &[FieldDescriptor], drafts: &HashMap<DataKey, FieldDraft>) -> bool {
     descriptors.iter().all(|descriptor| match descriptor {
         FieldDescriptor::Structure { fields, .. } => fields_are_valid(fields, drafts),
@@ -514,66 +468,11 @@ fn source_name(protocol: &ProtocolDescriptor, key: SourceKey) -> &str {
 mod tests {
     use super::*;
 
-    use crate::dataflow::{StreamKey, protocol::SourceDescriptor, testing::message_key};
-
     fn draft(text: &str) -> FieldDraft {
         FieldDraft {
             text: text.into(),
             touched: true,
         }
-    }
-
-    fn command_protocol() -> ProtocolDescriptor {
-        let alpha = message_key(1);
-        let beta = message_key(2);
-        let telemetry = message_key(3);
-        ProtocolDescriptor {
-            message_schemas: HashMap::from([
-                (
-                    alpha,
-                    MessageDescriptor {
-                        name: "ALPHA_TC".into(),
-                        fields: Vec::new(),
-                    },
-                ),
-                (
-                    beta,
-                    MessageDescriptor {
-                        name: "BETA_TC".into(),
-                        fields: Vec::new(),
-                    },
-                ),
-                (
-                    telemetry,
-                    MessageDescriptor {
-                        name: "ALPHA_TM".into(),
-                        fields: Vec::new(),
-                    },
-                ),
-            ]),
-            stream_messages: vec![telemetry],
-            command_messages: vec![beta, alpha],
-            sources: vec![SourceDescriptor {
-                name: "Target".into(),
-                key: StreamKey::mock().source_key,
-            }],
-        }
-    }
-
-    #[test]
-    fn command_filtering_is_case_insensitive_and_preserves_role_order() {
-        let protocol = command_protocol();
-
-        assert_eq!(
-            filtered_command_messages(&protocol, "  tc "),
-            vec![message_key(2), message_key(1)]
-        );
-        assert_eq!(filtered_command_messages(&protocol, "alpha"), vec![message_key(1)]);
-        assert!(filtered_command_messages(&protocol, "missing").is_empty());
-        assert_eq!(
-            filtered_command_messages(&protocol, ""),
-            vec![message_key(2), message_key(1)]
-        );
     }
 
     #[test]

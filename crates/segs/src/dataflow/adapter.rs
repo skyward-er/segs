@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dataflow::{
     mapping::{DataMapping, MappingDescriptor},
-    protocol::{ProtocolDescriptor, descriptor_index::DescriptorIndex},
+    protocol::ProtocolDescriptor,
     skyward_mavlink_adapter::SkywardMavlinkAdapter,
     store::DataStore,
     transport::DataTransport,
@@ -137,29 +137,20 @@ pub fn get_mapping_sources(adapter: AdapterType) -> Vec<MappingDescriptor> {
 pub struct DataAdapterInstance {
     adapter: Box<dyn DataAdapter>,
     token: DataAdapterInstanceToken,
-    descriptor_index: DescriptorIndex,
 }
 
 impl DataAdapterInstance {
     /// Wraps an adapter as a newly installed instance.
     pub fn new(adapter: Box<dyn DataAdapter>) -> Self {
-        let descriptor_index = DescriptorIndex::build(adapter.describe_protocol());
-
         Self {
             adapter,
             token: DataAdapterInstanceToken(Arc::new(())),
-            descriptor_index,
         }
     }
 
     /// Returns the identity used to associate derived state with this instance.
     pub fn token(&self) -> &DataAdapterInstanceToken {
         &self.token
-    }
-
-    /// Returns the flattened stream descriptor index owned by this adapter instance.
-    pub fn descriptor_index(&self) -> &DescriptorIndex {
-        &self.descriptor_index
     }
 }
 

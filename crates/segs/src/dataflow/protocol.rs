@@ -1,5 +1,3 @@
-pub mod descriptor_index;
-
 use std::collections::HashMap;
 
 use crate::dataflow::{DataKey, DataType, MessageKey, SourceKey};
