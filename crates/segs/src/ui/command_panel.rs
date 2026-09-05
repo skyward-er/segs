@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt, time::SystemTime};
+use std::{fmt, time::SystemTime};
 
 use chrono::{DateTime, Local};
+use egui::ahash::{HashMap, HashMapExt};
 use egui::{Align, Button, Frame, Grid, Id, Label, Layout, Margin, Panel, RichText, ScrollArea, Ui};
 use segs_ui::{
     components::panel_header::PanelHeader,

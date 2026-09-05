@@ -1,8 +1,8 @@
-use std::{collections::HashSet, f32::consts::FRAC_PI_2, hash::Hash, ops::Range, sync::Arc};
+use std::{f32::consts::FRAC_PI_2, hash::Hash, ops::Range, sync::Arc};
 
 use egui::{
     Align, CursorIcon, Frame, Id, Layout, Margin, Rect, Response, ScrollArea, Sense, TextStyle, TextWrapMode, Ui, Vec2,
-    WidgetInfo, WidgetText, WidgetType, pos2, vec2,
+    WidgetInfo, WidgetText, WidgetType, ahash::HashSet, pos2, vec2,
 };
 use segs_assets::icons::{CaretDown, Check, Icon};
 

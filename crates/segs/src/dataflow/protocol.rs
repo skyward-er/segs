@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use egui::ahash::HashMap;
 
 use crate::dataflow::{DataKey, DataType, DataValue, MessageKey, SourceKey};
 

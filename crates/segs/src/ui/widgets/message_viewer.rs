@@ -1,5 +1,6 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
+use egui::ahash::HashMap;
 use egui::{CornerRadius, FontId, Frame, Label, Margin, Rect, RichText, ScrollArea, Sense, Ui, Vec2, pos2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;

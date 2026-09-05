@@ -1,9 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
 use chrono::Utc;
+use egui::ahash::{HashSet, HashSetExt};
 use rand::random;
 use thiserror::Error;
 
@@ -471,7 +472,7 @@ mod tests {
             .layouts()
             .map(|layout| layout.name.as_str())
             .collect::<HashSet<_>>();
-        assert_eq!(names, HashSet::from(["Duplicate", "Independent"]));
+        assert_eq!(names, ["Duplicate", "Independent"].into_iter().collect());
         assert!(
             manager
                 .warnings()

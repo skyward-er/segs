@@ -1,4 +1,6 @@
-use std::{collections::HashSet, hash::Hash};
+use std::hash::Hash;
+
+use egui::ahash::HashSet;
 
 /// Adapts an optional value to single-choice combo-box behavior.
 pub struct SingleSelection<'a, T> {

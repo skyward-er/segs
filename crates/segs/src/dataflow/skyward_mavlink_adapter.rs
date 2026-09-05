@@ -970,7 +970,9 @@ struct SendFailure {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
+
+    use egui::ahash::{HashMap, HashMapExt};
 
     use super::*;
 
@@ -1261,7 +1263,9 @@ mod tests {
             key: MessageKey(message.id as u64),
             timestamp: SystemTime::now(),
             target: SourceKey(7),
-            fields: HashMap::from([(compute_data_key(message.id, 1, "value"), DataValue::U8(9))]),
+            fields: [(compute_data_key(message.id, 1, "value"), DataValue::U8(9))]
+                .into_iter()
+                .collect(),
         };
         let converted = command_to_mav_message(&command, &message).unwrap();
         let after = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

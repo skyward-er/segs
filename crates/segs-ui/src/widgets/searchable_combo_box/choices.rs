@@ -1,4 +1,6 @@
-use std::{collections::HashMap, hash::Hash};
+use std::hash::Hash;
+
+use egui::ahash::{HashMap, HashMapExt};
 
 /// An immutable ordered list of searchable combo-box choices.
 pub struct SearchableComboBoxList<T> {

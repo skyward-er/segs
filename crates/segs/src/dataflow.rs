@@ -7,8 +7,9 @@ pub mod skyward_mavlink_adapter;
 pub mod store;
 pub mod transport;
 
-use std::{collections::HashMap, fmt, time::SystemTime};
+use std::{fmt, time::SystemTime};
 
+use egui::ahash::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// An opaque handler that uniquely represents a data stream.
