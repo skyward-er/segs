@@ -2,13 +2,15 @@ mod choices;
 
 use std::collections::HashSet;
 
-use egui::{ComboBox, Id, Ui};
+use egui::{Grid, Id, Ui};
 use segs_memory::MemoryExt;
-use segs_ui::widgets::{MultipleSelection, SearchableComboBox, SearchableComboBoxHierarchy, SingleSelection};
+use segs_ui::widgets::{
+    MultipleSelection, SearchableComboBox, SearchableComboBoxHierarchy, SearchableComboBoxList, SingleSelection,
+};
 
-use crate::dataflow::{DataKey, SourceKey, StreamKey, adapter::DataAdapterInstance, protocol::SourceDescriptor};
+use crate::dataflow::{DataKey, SourceKey, StreamKey, adapter::DataAdapterInstance};
 
-use self::choices::resolve_hierarchy;
+use self::choices::resolve_choices;
 
 const FIELD_SELECTOR_MAX_ROWS: usize = 13;
 
@@ -52,99 +54,113 @@ fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adap
         ui.weak("No streams available.");
         return;
     }
-    let hierarchy = resolve_hierarchy(ui.ctx(), protocol, adapter.token());
+    let (source_choices, hierarchy) = resolve_choices(ui.ctx(), protocol, adapter.token());
+    let source_selector_id = ui.make_persistent_id(("stream_source_selector", adapter.token()));
     let field_selector_id = ui.make_persistent_id(("stream_field_selector", adapter.token()));
 
-    // Render both selectors from persisted widget state
+    // Resolve the selected source from persisted widget state
     let selected_source_key = match &selection {
         StreamSelection::Single(stream) => stream.as_ref().map(|stream| stream.source_key),
         StreamSelection::Multiple { streams, .. } => streams.first().map(|stream| stream.source_key),
     };
-    let source_key = show_source_selection(ui, &protocol.sources, selected_source_key);
 
-    match selection {
-        StreamSelection::Single(stream) => {
-            let data_key = show_single_field_selection(
-                ui,
-                field_selector_id,
-                label,
-                &hierarchy,
-                stream.as_ref().map(|stream| stream.data_key),
-            );
-            *stream = data_key.map(|data_key| StreamKey { source_key, data_key });
-        }
-        StreamSelection::Multiple { streams, names } => {
-            for stream in streams.iter_mut() {
-                stream.source_key = source_key;
+    // Align source and stream controls to one shared label column
+    Grid::new("stream_selection_grid")
+        .num_columns(2)
+        .spacing([8., 8.])
+        .show(ui, |ui| {
+            let source_key = show_source_selection(ui, source_selector_id, &source_choices, selected_source_key);
+            ui.end_row();
+
+            // Leave the final row open to avoid reserving trailing row spacing
+            match selection {
+                StreamSelection::Single(stream) => {
+                    let data_key = show_single_field_selection(
+                        ui,
+                        field_selector_id,
+                        label,
+                        &hierarchy,
+                        stream.as_ref().map(|stream| stream.data_key),
+                        source_key.is_some(),
+                    );
+                    if let Some(source_key) = source_key {
+                        *stream = data_key.map(|data_key| StreamKey { source_key, data_key });
+                    }
+                }
+                StreamSelection::Multiple { streams, names } => {
+                    if let Some(source_key) = source_key {
+                        for stream in streams.iter_mut() {
+                            stream.source_key = source_key;
+                        }
+                    }
+                    show_multiple_field_selection(ui, field_selector_id, label, &hierarchy, source_key, streams, names);
+                }
             }
-            show_multiple_field_selection(ui, field_selector_id, label, &hierarchy, source_key, streams, names);
-        }
-    }
+        });
 }
 
 /// Renders the source picker and returns its selected key.
+///
+/// Returns `None` until the user selects an available source.
 fn show_source_selection(
     ui: &mut Ui,
-    sources: &[SourceDescriptor],
+    combo_id: Id,
+    choices: &SearchableComboBoxList<SourceKey>,
     selected_source_key: Option<SourceKey>,
-) -> SourceKey {
+) -> Option<SourceKey> {
     let selection_id = ui.id().with("source");
-    let is_available = |key| sources.iter().any(|source| source.key == key);
+    let is_available = |key| choices.label_for(&key).is_some();
 
-    // Prefer the widget value then temporary state then the first source
-    let mut source_key = selected_source_key
-        .filter(|key| is_available(*key))
-        .or_else(|| {
-            ui.mem()
-                .get_temp::<SourceKey>(selection_id)
-                .filter(|key| is_available(*key))
-        })
-        .unwrap_or(sources[0].key);
-    let source_name = &sources
-        .iter()
-        .find(|source| source.key == source_key)
-        .expect("selected source must exist")
-        .name;
-
-    // Render source names while retaining their stable keys
-    ui.horizontal(|ui| {
-        ui.label("Source");
-        ComboBox::from_id_salt(selection_id)
-            .width(ui.available_width())
-            .truncate()
-            .selected_text(source_name)
-            .show_ui(ui, |ui| {
-                for source in sources {
-                    ui.selectable_value(&mut source_key, source.key, &source.name);
-                }
-            });
+    // Prefer the widget value then temporary incomplete selection state
+    let mut source_key = selected_source_key.filter(|key| is_available(*key)).or_else(|| {
+        ui.mem()
+            .get_temp::<Option<SourceKey>>(selection_id)
+            .flatten()
+            .filter(|key| is_available(*key))
     });
+
+    // Render searchable source names while retaining their stable keys
+    ui.label("Source");
+    ui.add(
+        SearchableComboBox::new(combo_id, choices, SingleSelection::new(&mut source_key))
+            .empty_selection_text("Select a source")
+            .search_hint("Search sources…")
+            .empty_results_text("No matching sources."),
+    );
 
     ui.mem().insert_temp(selection_id, source_key);
     source_key
 }
 
 /// Renders a hierarchical single-field selector and returns its selected key.
+///
+/// Returns the persisted or newly selected data key, or `None` when no stream
+/// is selected. Selections made without a source remain temporary until a
+/// source becomes available.
 fn show_single_field_selection(
     ui: &mut Ui,
     combo_id: Id,
     label: &str,
     hierarchy: &SearchableComboBoxHierarchy<DataKey>,
     stream_data_key: Option<DataKey>,
+    source_selected: bool,
 ) -> Option<DataKey> {
     let selection_id = ui.id().with("data");
 
-    // Prefer the widget value before temporary incomplete selection state
-    let mut selected = stream_data_key.or_else(|| ui.mem().get_temp::<Option<DataKey>>(selection_id).flatten());
+    // Restore any incomplete selection before the persisted widget value
+    let pending = ui.mem().remove_temp::<Option<DataKey>>(selection_id).flatten();
+    let mut selected = pending.or(stream_data_key);
     ui.label(label);
     ui.add(
         SearchableComboBox::new(combo_id, hierarchy, SingleSelection::new(&mut selected))
-            .empty_selection_text("Select a field")
+            .empty_selection_text("Select a stream")
             .max_visible_rows(FIELD_SELECTOR_MAX_ROWS)
-            .search_hint("Search messages and fields…")
-            .empty_results_text("No matching messages or fields."),
+            .search_hint("Search streams…")
+            .empty_results_text("No matching streams."),
     );
-    ui.mem().insert_temp(selection_id, selected);
+    if !source_selected {
+        ui.mem().insert_temp(selection_id, selected);
+    }
     selected
 }
 
@@ -154,7 +170,7 @@ fn show_multiple_field_selection(
     combo_id: Id,
     label: &str,
     hierarchy: &SearchableComboBoxHierarchy<DataKey>,
-    source_key: SourceKey,
+    source_key: Option<SourceKey>,
     streams: &mut Vec<StreamKey>,
     mut names: Option<&mut Vec<String>>,
 ) {
@@ -162,18 +178,25 @@ fn show_multiple_field_selection(
         synchronize_stream_names(hierarchy, streams, names);
     }
 
-    // Preserve unavailable values until the component reports a user edit
-    let mut selected = streams.iter().map(|stream| stream.data_key).collect::<HashSet<_>>();
+    // Restore incomplete selections before the persisted widget values
+    let selection_id = ui.id().with("data");
+    let pending = ui.mem().remove_temp::<HashSet<DataKey>>(selection_id);
+    let had_pending = pending.is_some();
+    let mut selected = pending.unwrap_or_else(|| streams.iter().map(|stream| stream.data_key).collect());
     ui.label(label);
     let response = ui.add(
         SearchableComboBox::new(combo_id, hierarchy, MultipleSelection::new(&mut selected))
-            .empty_selection_text("Select fields")
+            .empty_selection_text("Select streams")
             .max_visible_rows(FIELD_SELECTOR_MAX_ROWS)
-            .search_hint("Search messages and fields…")
-            .empty_results_text("No matching messages or fields.")
-            .selection_nouns("field", "fields"),
+            .search_hint("Search streams…")
+            .empty_results_text("No matching streams.")
+            .selection_nouns("stream", "streams"),
     );
-    if !response.changed() {
+    let Some(source_key) = source_key else {
+        ui.mem().insert_temp(selection_id, selected);
+        return;
+    };
+    if !response.changed() && !had_pending {
         return;
     }
 
@@ -212,7 +235,7 @@ fn synchronize_stream_names(
                 names.push(current_name.to_owned());
             }
         } else if position == names.len() {
-            names.push("Unavailable field".to_owned());
+            names.push("Unavailable stream".to_owned());
         }
     }
 }

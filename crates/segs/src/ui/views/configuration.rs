@@ -4,7 +4,7 @@ mod settings;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use egui::{
-    CentralPanel, Color32, Frame, Id, Panel, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
+    CentralPanel, Color32, Frame, Id, Margin, Panel, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
 };
 use segs_assets::icons;
 use segs_memory::MemoryExt;
@@ -33,6 +33,7 @@ const GRID_SETTINGS_VISIBLE_ID: &str = "configuration_grid_settings_visible";
 const GRID_SETTINGS_BUTTON_ID: &str = "configuration_grid_settings_button";
 const GRID_SETTINGS_BUTTON_SIZE: Vec2 = vec2(24., 24.);
 const GRID_SETTINGS_BUTTON_MARGIN: f32 = 4.;
+const PANEL_VERTICAL_MARGIN: i8 = 8;
 static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 
 /// View subtype representing the different configuration views available when
@@ -476,10 +477,15 @@ fn capped_grid_size(grid: &Grid, default_size: Vec2, min_size: Vec2) -> Vec2 {
 
 fn show_panel(ui: &mut Ui, title: &str, subtitle: &str, content: impl FnOnce(&mut Ui)) {
     ui.add(PanelHeader::new(title).subtitle(subtitle));
+    let content_margin = Margin {
+        top: PANEL_VERTICAL_MARGIN,
+        bottom: PANEL_VERTICAL_MARGIN,
+        ..ui.spacing().window_margin
+    };
 
     ScrollArea::vertical()
         .auto_shrink(false)
-        .content_margin(ui.spacing().window_margin)
+        .content_margin(content_margin)
         .show(ui, |ui| {
             ui.vertical(content);
         });

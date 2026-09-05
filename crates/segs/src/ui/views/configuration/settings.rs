@@ -11,6 +11,8 @@ use crate::{
     },
 };
 
+const DATA_SETTINGS_SEPARATOR_SPACING: f32 = 10.;
+
 pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, adapter: Option<&DataAdapterInstance>) {
     let Some(widget) = widget else {
         ui.weak("Select a widget to edit its settings.");
@@ -29,7 +31,11 @@ pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, adapter: Option<&DataA
         let settings = widget.variant.settings();
         if has_data_settings && !settings.is_empty() {
             let horizontal_margin = ui.spacing().window_margin.leftf();
-            ui.add(Separator::default().grow(horizontal_margin));
+            ui.add(
+                Separator::default()
+                    .spacing(DATA_SETTINGS_SEPARATOR_SPACING)
+                    .grow(horizontal_margin),
+            );
         }
 
         if settings.is_empty() {

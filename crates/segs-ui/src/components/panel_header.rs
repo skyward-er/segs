@@ -39,7 +39,12 @@ impl Widget for PanelHeader {
                 .response
             })
             .response;
+
+        // Prevent the separator from reserving a trailing gap before panel content
+        let item_spacing = ui.spacing().item_spacing.y;
+        ui.spacing_mut().item_spacing.y = 0.;
         ui.add(Separator::default().spacing(0.));
+        ui.spacing_mut().item_spacing.y = item_spacing;
 
         res
     }

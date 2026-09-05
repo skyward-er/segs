@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt, time::SystemTime};
 
 use chrono::{DateTime, Local};
-use egui::{Align, Button, ComboBox, Frame, Id, Label, Layout, Panel, RichText, ScrollArea, Ui};
+use egui::{Align, Button, Frame, Grid, Id, Label, Layout, Margin, Panel, RichText, ScrollArea, Ui};
 use segs_ui::{
     components::panel_header::PanelHeader,
     containers::Card,
@@ -25,6 +25,9 @@ use crate::{
 
 const COMPOSER_HEIGHT_FRACTION: f32 = 0.58;
 const COMPOSER_ITEM_SPACING: f32 = 4.;
+const COMPOSER_VERTICAL_MARGIN: i8 = 8;
+const SELECTION_ROW_SPACING: f32 = 8.;
+const SELECTION_SEPARATOR_SPACING: f32 = 8.;
 const SEND_BUTTON_TOP_SPACING: f32 = 4.;
 const MESSAGE_SELECTOR_MAX_ROWS: usize = 8;
 const COMMAND_PANEL_ID: &str = "command_panel";
@@ -36,6 +39,7 @@ const COMMAND_PANEL_STATE_ID: &str = "command_panel_state";
 struct CommandPanelState {
     adapter_token: Option<DataAdapterInstanceToken>,
     target: Option<SourceKey>,
+    target_choices: Option<SearchableComboBoxList<SourceKey>>,
     message: Option<MessageKey>,
     command_choices: Option<SearchableComboBoxList<MessageKey>>,
     drafts: HashMap<DataKey, FieldDraft>,
@@ -106,8 +110,18 @@ impl CommandPanelState {
                     .map(|descriptor| (*key, descriptor.name.clone()))
             }))
         });
+        let target_choices = adapter.map(|adapter| {
+            SearchableComboBoxList::new(
+                adapter
+                    .describe_protocol()
+                    .sources
+                    .iter()
+                    .map(|source| (source.key, source.name.clone())),
+            )
+        });
         *self = Self {
             adapter_token: token.cloned(),
+            target_choices,
             command_choices,
             ..Self::default()
         };
@@ -126,14 +140,23 @@ fn show_contents(ui: &mut Ui, state: &mut CommandPanelState, appctx: &mut AppCon
     };
     let protocol = adapter.describe_protocol();
     let composer_height = (ui.available_height() * COMPOSER_HEIGHT_FRACTION).max(160.);
+    let panel_item_spacing = ui.spacing().item_spacing.y;
+    let composer_margin = Margin {
+        top: COMPOSER_VERTICAL_MARGIN,
+        bottom: COMPOSER_VERTICAL_MARGIN,
+        ..ui.spacing().window_margin
+    };
 
+    // Join the header, composer, and latest-sequence sections without implicit gaps
+    ui.spacing_mut().item_spacing.y = 0.;
     ScrollArea::vertical()
         .id_salt("command_composer")
         .max_height(composer_height)
         .auto_shrink([false, true])
-        .content_margin(ui.spacing().window_margin)
+        .content_margin(composer_margin)
         .show(ui, |ui| show_composer(ui, state, protocol, &mut appctx.data_store));
 
+    ui.spacing_mut().item_spacing.y = panel_item_spacing;
     ui.add(Separator::default().spacing(0.));
     show_latest_sequence(ui, state.latest_sequence, protocol, &appctx.data_store);
 }
@@ -141,10 +164,35 @@ fn show_contents(ui: &mut Ui, state: &mut CommandPanelState, appctx: &mut AppCon
 fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor, store: &mut DataStore) {
     ui.spacing_mut().item_spacing.y = COMPOSER_ITEM_SPACING;
 
-    show_target_selector(ui, state, protocol);
-    let message_changed = show_message_selector(ui, state, protocol);
+    // Align command selection controls to one shared label column
+    let message_changed = Grid::new("command_selection_grid")
+        .num_columns(2)
+        .spacing([8., SELECTION_ROW_SPACING])
+        .show(ui, |ui| {
+            show_target_selector(ui, state);
+            ui.end_row();
+            // Leave the final row open to avoid reserving trailing row spacing
+            show_message_selector(ui, state, protocol)
+        })
+        .inner;
+    if protocol.sources.is_empty() {
+        ui.weak("This protocol exposes no command targets.");
+    }
 
-    if let Some(message_key) = state.message {
+    // Separate command selection from the editable payload and send action
+    let horizontal_margin = ui.spacing().window_margin.leftf();
+    ui.add(
+        Separator::default()
+            .spacing(SELECTION_SEPARATOR_SPACING)
+            .grow(horizontal_margin),
+    );
+
+    let has_fields = state
+        .message
+        .is_some_and(|message_key| !protocol.message_schemas[&message_key].fields.is_empty());
+    if has_fields {
+        // Render the selected command's editable payload
+        let message_key = state.message.expect("field rendering requires a selected command");
         let message = &protocol.message_schemas[&message_key];
         ui.push_id("command_message_fields", |ui| {
             show_field_editors(ui, &message.fields, &mut state.drafts, !message_changed);
@@ -156,7 +204,9 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
         && state
             .message
             .is_some_and(|key| fields_are_valid(&protocol.message_schemas[&key].fields, &state.drafts));
-    ui.add_space(SEND_BUTTON_TOP_SPACING);
+    if has_fields {
+        ui.add_space(SEND_BUTTON_TOP_SPACING);
+    }
     if ui.add_enabled(ready, Button::new("Send")).clicked() {
         let message_key = state.message.expect("send requires a selected message");
         let target = state.target.expect("send requires a selected target");
@@ -171,28 +221,24 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
     }
 }
 
-fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) {
-    ui.horizontal(|ui| {
-        ui.label("Target");
-        let selected = state
-            .target
-            .map(|key| source_name(protocol, key))
-            .unwrap_or("Select target");
-        ui.add_enabled_ui(!protocol.sources.is_empty(), |ui| {
-            ComboBox::from_id_salt("command_target")
-                .width(ui.available_width())
-                .truncate()
-                .selected_text(selected)
-                .show_ui(ui, |ui| {
-                    for source in &protocol.sources {
-                        ui.selectable_value(&mut state.target, Some(source.key), &source.name);
-                    }
-                });
-        });
+fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState) {
+    let Some(choices) = state.target_choices.as_ref() else {
+        return;
+    };
+    let Some(adapter_token) = state.adapter_token.as_ref() else {
+        return;
+    };
+    let selector_id = ui.make_persistent_id(("command_target_selector", adapter_token));
+
+    ui.label("Target");
+    ui.add_enabled_ui(!choices.is_empty(), |ui| {
+        ui.add(
+            SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.target))
+                .empty_selection_text("Select a target")
+                .search_hint("Search targets…")
+                .empty_results_text("No matching targets."),
+        );
     });
-    if protocol.sources.is_empty() {
-        ui.weak("This protocol exposes no command targets.");
-    }
 }
 
 fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) -> bool {
@@ -204,13 +250,13 @@ fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &
     };
     let selector_id = ui.make_persistent_id(("command_message_selector", adapter_token));
 
-    ui.label("Message");
+    ui.label("Command");
     let response = ui.add(
         SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.message))
             .empty_selection_text("Select a command")
             .max_visible_rows(MESSAGE_SELECTOR_MAX_ROWS)
-            .search_hint("Search command messages…")
-            .empty_results_text("No matching command messages."),
+            .search_hint("Search command…")
+            .empty_results_text("No matching commands."),
     );
     if response.changed() {
         let key = state.message.expect("changed command selection must contain a value");
@@ -350,8 +396,10 @@ fn show_command_card(
             source_name(protocol, command.target),
             timestamp.format("%H:%M:%S")
         ));
-        ui.add_space(6.);
-        show_field_values(ui, &descriptor.fields, &command.fields);
+        if !descriptor.fields.is_empty() {
+            ui.add_space(6.);
+            show_field_values(ui, &descriptor.fields, &command.fields);
+        }
     });
 }
 

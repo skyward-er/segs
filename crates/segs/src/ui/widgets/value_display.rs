@@ -82,7 +82,7 @@ impl WidgetTrait for ValueDisplayWidget {
     }
 
     fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>> {
-        vec![WidgetDataSetting::single_stream("stream", "Field", &mut self.stream)]
+        vec![WidgetDataSetting::single_stream("stream", "Stream", &mut self.stream)]
     }
 
     fn settings(&mut self) -> Vec<WidgetSetting<'_>> {

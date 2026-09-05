@@ -242,7 +242,7 @@ impl WidgetTrait for MessageViewerWidget {
     fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>> {
         vec![WidgetDataSetting::multiple_streams_with_names(
             "streams",
-            "Fields",
+            "Streams",
             &mut self.streams,
             &mut self.stream_names,
         )]
