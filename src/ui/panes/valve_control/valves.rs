@@ -175,17 +175,6 @@ pub enum ParameterValue<T, E> {
 }
 
 impl<T, E> ParameterValue<T, E> {
-    pub fn map<U, F>(self, f: F) -> ParameterValue<U, E>
-    where
-        F: FnOnce(T) -> U,
-    {
-        match self {
-            Self::Valid(value) => ParameterValue::Valid(f(value)),
-            Self::Missing => ParameterValue::Missing,
-            Self::Invalid(error) => ParameterValue::Invalid(error),
-        }
-    }
-
     pub fn valid_or(self, default: T) -> T {
         match self {
             Self::Valid(value) => value,

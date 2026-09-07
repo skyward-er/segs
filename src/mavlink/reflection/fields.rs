@@ -57,11 +57,6 @@ macro_rules! extract_as_type {
 }
 
 impl IndexedField {
-    /// Returns a reference to the parent message definition.
-    pub fn msg(&self) -> &MavMessage {
-        self.msg
-    }
-
     /// Returns the message ID.
     pub fn msg_id(&self) -> u32 {
         self.msg.id
@@ -75,11 +70,6 @@ impl IndexedField {
     /// Returns a reference to the field metadata.
     pub fn field(&self) -> &MavField {
         self.field
-    }
-
-    /// Returns the field name.
-    pub fn name(&self) -> &str {
-        &self.field.name
     }
 
     /// Extracts the field value as a string using debug formatting.

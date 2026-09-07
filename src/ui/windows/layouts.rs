@@ -126,11 +126,11 @@ fn show_layouts_table(
 
                 let name_button = if is_selected && changed {
                     Button::new(RichText::new(name).color(Color32::BLACK))
-                        .stroke(Stroke::new(1.0, Color32::BROWN))
+                        .stroke(Stroke::new(1.0_f32, Color32::BROWN))
                         .fill(Color32::YELLOW)
                 } else if is_selected && !changed {
                     Button::new(RichText::new(name).color(Color32::BLACK))
-                        .stroke(Stroke::new(1.0, Color32::GREEN))
+                        .stroke(Stroke::new(1.0_f32, Color32::GREEN))
                         .fill(Color32::LIGHT_GREEN)
                 } else {
                     Button::new(name).fill(Color32::TRANSPARENT)

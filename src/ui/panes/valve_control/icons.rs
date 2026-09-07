@@ -11,7 +11,7 @@ pub enum Icon {
 }
 
 impl Icon {
-    fn as_image_source(&self, theme: Theme) -> ImageSource {
+    fn as_image_source(&self, theme: Theme) -> ImageSource<'_> {
         match (&self, theme) {
             (Icon::Wiggle, Theme::Light) => {
                 egui::include_image!(concat!(
@@ -64,7 +64,7 @@ impl Icon {
         }
     }
 
-    pub fn as_image(&self, theme: Theme) -> Image {
+    pub fn as_image(&self, theme: Theme) -> Image<'_> {
         Image::new(self.as_image_source(theme))
     }
 }

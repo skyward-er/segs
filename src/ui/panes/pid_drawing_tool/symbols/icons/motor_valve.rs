@@ -145,7 +145,7 @@ impl MotorValve {
         }
     }
 
-    pub fn get_sprite(&self, theme: Theme) -> ImageSource {
+    pub fn get_sprite(&self, theme: Theme) -> ImageSource<'_> {
         match (&self.variant, theme) {
             (MotorValveVariant::TwoWay(internal), Theme::Dark) => match internal.last_value {
                 None => load_dark_sprite!("motor_valve.svg"),

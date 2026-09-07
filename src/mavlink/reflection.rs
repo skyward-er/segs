@@ -30,23 +30,8 @@ pub static MAVLINK_PROFILE: LazyLock<ReflectionContext> = LazyLock::new(Reflecti
 /// Trait for looking up fields in a MAVLink message map.
 ///
 /// This trait abstracts the process of retrieving and mutating fields in a [`MessageMap`]
-/// using a field identifier that implements [`FieldLike`]. It provides both immutable and
-/// mutable access to fields, supporting type conversion via [`TryFrom`].
+/// using a field identifier that implements [`FieldLike`].
 pub trait FieldLookup {
-    /// Retrieves a field from the message map by field identifier.
-    ///
-    /// # Type Parameters
-    /// - `T`: The target type to convert the field to. Must implement `TryFrom<&FieldType>`.
-    /// - `F`: The field identifier type. Must implement [`FieldLike`].
-    ///
-    /// # Arguments
-    /// - `field`: The field identifier.
-    ///
-    /// # Returns
-    /// - `Some(T)` if the field exists and conversion succeeds.
-    /// - `None` if the field does not exist or conversion fails.
-    fn get_field<'a, T: TryFrom<&'a FieldType>, F: FieldLike>(&'a self, field: F) -> Option<T>;
-
     /// Retrieves a mutable reference to a field from the message map by field identifier.
     ///
     /// # Type Parameters
@@ -68,26 +53,6 @@ pub trait FieldLookup {
 }
 
 impl FieldLookup for MessageMap {
-    /// Retrieves a field from the message map by field identifier.
-    ///
-    /// This implementation uses the [`FieldLike`] trait to resolve the field metadata,
-    /// then attempts to retrieve and convert the field value from the underlying field map.
-    ///
-    /// # Example
-    /// ```
-    /// let value: Option<u32> = message_map.get_field("some_field_name");
-    /// ```
-    fn get_field<'a, T: TryFrom<&'a FieldType>, F: FieldLike>(&'a self, field: F) -> Option<T> {
-        // Convert the field identifier to a MAVLink field using the reflection context.
-        let field = field
-            .to_mav_field(self.message_id(), &MAVLINK_PROFILE)
-            .ok()?;
-        // Retrieve the field from the field map and attempt conversion.
-        self.field_map()
-            .get(field.id())
-            .and_then(|f| T::try_from(f).ok())
-    }
-
     /// Retrieves a mutable reference to a field from the message map by field identifier.
     ///
     /// This implementation uses the [`FieldLike`] trait to resolve the field metadata,

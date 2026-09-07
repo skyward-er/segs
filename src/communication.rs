@@ -121,7 +121,7 @@ mod sealed {
 
     /// Enum representing the different types of transceivers.
     #[enum_dispatch]
-    pub(super) enum Transceivers {
+    pub(crate) enum Transceivers {
         Serial(SerialTransceiver),
         Ethernet(EthernetTransceiver),
     }

@@ -47,7 +47,7 @@ impl Icon {
         ]
     }
 
-    pub fn get_image(&self, theme: Theme) -> ImageSource {
+    pub fn get_image(&self, theme: Theme) -> ImageSource<'_> {
         match (&self, theme) {
             (Icon::Arrow, Theme::Light) => {
                 egui::include_image!("../../../../../icons/pid_symbols/light/arrow.svg")

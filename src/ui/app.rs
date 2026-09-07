@@ -4,8 +4,8 @@ use egui_tiles::{Behavior, Container, Linear, LinearDir, Tile, TileId, Tiles, Tr
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "conrig")]
 use skyward_mavlink::{
-    mavlink::MessageData,
     hydra::{ACK_TM_DATA, NACK_TM_DATA},
+    mavlink::MessageData,
 };
 use std::{
     fs,
@@ -458,7 +458,7 @@ impl App {
     /// Sends outgoing messages from the panes to the message broker.
     #[profiling::function]
     fn process_outgoing_messages(&mut self) {
-        let mut outgoing: Vec<(MavHeader, MavMessage)> = self
+        let outgoing: Vec<(MavHeader, MavMessage)> = self
             .state
             .panes_tree
             .tiles
@@ -473,7 +473,11 @@ impl App {
             .flatten()
             .collect();
         #[cfg(feature = "conrig")]
-        outgoing.extend(self.state.command_switch_window.consume_messages_to_send());
+        let outgoing = {
+            let mut outgoing = outgoing;
+            outgoing.extend(self.state.command_switch_window.consume_messages_to_send());
+            outgoing
+        };
         self.message_broker.process_outgoing_messages(outgoing);
     }
 }

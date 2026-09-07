@@ -135,7 +135,7 @@ impl ValveControlView {
                         .outer_margin(0)
                         .corner_radius(ui.visuals().noninteractive().corner_radius)
                         .fill(visuals.bg_fill)
-                        .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                        .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                         .show(ui, |ui| {
                             ui.set_height(ui.available_height());
                             ui.horizontal_centered(|ui| {
@@ -217,7 +217,7 @@ impl ValveControlView {
                                 .outer_margin(0)
                                 .corner_radius(ui.visuals().noninteractive().corner_radius)
                                 .fill(visuals.bg_fill)
-                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                                 .show(ui, |ui| {
                                     ui.set_height(ui.available_height());
                                     ui.horizontal_centered(|ui| {
@@ -263,7 +263,7 @@ impl ValveControlView {
                                 .outer_margin(0)
                                 .corner_radius(ui.visuals().noninteractive().corner_radius)
                                 .fill(visuals.bg_fill)
-                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                                 .show(ui, |ui| {
                                     ui.set_height(ui.available_height());
                                     ui.horizontal_centered(|ui| {
@@ -314,7 +314,7 @@ impl ValveControlView {
                                 .outer_margin(0)
                                 .corner_radius(ui.visuals().noninteractive().corner_radius)
                                 .fill(visuals.bg_fill)
-                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                                 .show(ui, |ui| {
                                     ui.set_height(ui.available_height());
                                     ui.horizontal_centered(|ui| {
@@ -351,7 +351,7 @@ impl ValveControlView {
                     .inner_margin(Margin::symmetric(0, 3))
                     .corner_radius(ui.visuals().noninteractive().corner_radius)
                     .fill(fill_color)
-                    .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                    .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                     .show(ui, |ui| {
                         Label::new(RichText::new(label).size(14.).strong()).ui(ui);
                     });
@@ -450,7 +450,7 @@ impl ValveControlView {
                                                 ui.visuals().noninteractive().corner_radius,
                                             )
                                             .fill(ui.visuals().widgets.inactive.bg_fill)
-                                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                            .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                                             .show(ui, |ui| {
                                                 // caveat used to clear the field and fill with the current value
                                                 if let Some(WindowAction::SetAperture) =
@@ -563,7 +563,7 @@ impl ValveControlView {
                                                 ui.visuals().noninteractive().corner_radius,
                                             )
                                             .fill(ui.visuals().widgets.inactive.bg_fill)
-                                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                            .stroke(Stroke::new(1_f32, Color32::TRANSPARENT))
                                             .show(ui, |ui| {
                                                 // caveat used to clear the field and fill with the current value
                                                 if let Some(WindowAction::SetTiming) =

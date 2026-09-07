@@ -3,14 +3,13 @@
 //! It serves also as an abstraction wrapper around the `skyward_mavlink` crate, facilitating
 //! rapid switching between different mavlink versions and profiles (_dialects_).
 
-mod error;
 pub mod reflection;
 
 use std::time::Instant;
 
 // Re-export from the mavlink crate
 pub use skyward_mavlink::{
-    mavlink::*, hydra::*,
+    hydra::*, mavlink::*,
     reflection::HYDRA_MAVLINK_PROFILE_SERIALIZED as MAVLINK_PROFILE_SERIALIZED,
 };
 

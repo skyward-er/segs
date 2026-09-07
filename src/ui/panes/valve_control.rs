@@ -16,8 +16,8 @@ use egui::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
-    mavlink::{MavHeader, MessageData},
     hydra::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
+    mavlink::{MavHeader, MessageData},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -577,7 +577,7 @@ impl ValveControlPane {
                         (
                             visuals.bg_fill.gamma_multiply(0.3),
                             visuals.bg_fill,
-                            Stroke::new(1.0, Color32::TRANSPARENT),
+                            Stroke::new(1.0_f32, Color32::TRANSPARENT),
                         )
                     };
 

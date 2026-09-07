@@ -26,7 +26,7 @@ impl ReceptionLed {
 
         // Determine colors based on state
         let fill_color = if self.active { active_bg } else { inactive_bg };
-        let stroke = Stroke::new(1.0, visuals.fg_stroke.color);
+        let stroke = Stroke::new(1.0_f32, visuals.fg_stroke.color);
 
         // Use the painter to draw a rectangle
         if ui.is_rect_visible(rect) {

@@ -11,9 +11,7 @@ use egui::{Context, Id, Ui};
 
 use crate::error::ErrInstrument;
 
-const SERIAL_PORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
 const SHORT_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
-const INDEF_REFRESH_INTERVAL: Duration = Duration::MAX;
 
 /// Internal helper function that caches the result of a given function call for a specified duration.
 ///
@@ -65,16 +63,6 @@ pub trait RecentCallCache {
         let id = Id::new(hashable);
         self.cached_function_call_for(id, fun, SHORT_REFRESH_INTERVAL)
     }
-
-    fn call_cached_indef<F, T, H>(&self, hashable: &H, fun: F) -> T
-    where
-        F: Fn() -> T,
-        T: Clone + Send + Sync + 'static,
-        H: Hash,
-    {
-        let id = Id::new(hashable);
-        self.cached_function_call_for(id, fun, INDEF_REFRESH_INTERVAL)
-    }
 }
 
 impl RecentCallCache for Context {
@@ -96,35 +84,6 @@ impl RecentCallCache for &Ui {
         T: Clone + Send + Sync + 'static,
     {
         call(self.ctx(), id, fun, expiration_duration)
-    }
-}
-
-pub trait CacheWithCondition {
-    fn cache_result_if<F, T, H>(&self, hashable: H, condition: bool, fun: F) -> T
-    where
-        F: Fn() -> T,
-        T: Clone + Send + Sync + 'static,
-        H: Hash;
-}
-
-impl CacheWithCondition for Ui {
-    fn cache_result_if<F, T, H>(&self, hashable: H, condition: bool, fun: F) -> T
-    where
-        F: Fn() -> T,
-        T: Clone + Send + Sync + 'static,
-        H: Hash,
-    {
-        let id = self.next_auto_id().with(hashable);
-        self.memory_mut(|m| {
-            let value = m.data.get_temp::<T>(id);
-            if !condition || value.is_none() {
-                let value = fun();
-                m.data.insert_temp(id, value.clone());
-                value
-            } else {
-                value.log_unwrap()
-            }
-        })
     }
 }
 
