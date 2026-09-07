@@ -20,7 +20,7 @@ const DEFAULT_STALE_AFTER_SECONDS: f64 = 5.;
 const INNER_MARGIN: i8 = 2;
 const ROW_SPACING: f32 = 3.;
 const STALE_VALUE_HORIZONTAL_PADDING: f32 = 3.;
-const STALE_VALUE_VERTICAL_PADDING: f32 = 1.;
+const STALE_VALUE_VERTICAL_PADDING: f32 = 3.;
 const AGE_STATE_ID: &str = "message_viewer_age";
 
 /// Displays the latest values of selected streams in a borderless table.
@@ -106,7 +106,7 @@ impl WidgetTrait for MessageViewerWidget {
                 value_galley: std::sync::Arc<egui::Galley>,
                 name_baseline: f32,
                 value_baseline: f32,
-                stale: bool,
+                stale_age: Option<f64>,
             }
 
             // Initialize shared rendering resources and grid geometry accumulators
@@ -149,7 +149,7 @@ impl WidgetTrait for MessageViewerWidget {
                             None
                         }
                     };
-                    let stale = self.show_stale_warning && age.is_some_and(|age| age >= stale_after);
+                    let stale_age = age.filter(|age| self.show_stale_warning && *age >= stale_after);
                     if self.show_stale_warning
                         && let Some(age) = age
                         && age < stale_after
@@ -166,14 +166,16 @@ impl WidgetTrait for MessageViewerWidget {
                     let value_galley = ui.painter().layout_no_wrap(value_text, value_font.clone(), text_color);
                     let name_baseline = galley_baseline(&name_galley);
                     let value_baseline = galley_baseline(&value_galley);
+                    let value_visual_bounds = galley_visual_vertical_bounds(&value_galley);
 
                     // Accumulate the shared grid geometry before storing the prepared row
                     name_width = name_width.max(name_galley.size().x);
                     value_width = value_width.max(value_galley.size().x + STALE_VALUE_HORIZONTAL_PADDING * 2.);
-                    row_ascent = row_ascent.max(name_baseline.max(value_baseline + STALE_VALUE_VERTICAL_PADDING));
+                    row_ascent = row_ascent
+                        .max(name_baseline.max(value_baseline - value_visual_bounds.0 + STALE_VALUE_VERTICAL_PADDING));
                     row_descent = row_descent.max(
                         (name_galley.size().y - name_baseline)
-                            .max(value_galley.size().y - value_baseline + STALE_VALUE_VERTICAL_PADDING),
+                            .max(value_visual_bounds.1 - value_baseline + STALE_VALUE_VERTICAL_PADDING),
                     );
 
                     PreparedRow {
@@ -181,7 +183,7 @@ impl WidgetTrait for MessageViewerWidget {
                         value_galley,
                         name_baseline,
                         value_baseline,
-                        stale,
+                        stale_age,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -216,19 +218,37 @@ impl WidgetTrait for MessageViewerWidget {
 
                     // Allocate each row and position both columns on the shared baseline
                     for prepared_row in rows {
-                        let (row, _) = ui.allocate_exact_size(vec2(row_width, row_height), Sense::hover());
+                        let (row, row_response) = ui.allocate_exact_size(vec2(row_width, row_height), Sense::hover());
                         let name_position = pos2(row.left(), row.top() + row_ascent - prepared_row.name_baseline);
                         let value_position = pos2(
                             row.right() - STALE_VALUE_HORIZONTAL_PADDING - prepared_row.value_galley.size().x,
                             row.top() + row_ascent - prepared_row.value_baseline,
                         );
 
-                        // Paint the timeout fill behind stale values while preserving fresh geometry
-                        if prepared_row.stale {
-                            let value_rect = Rect::from_min_size(value_position, prepared_row.value_galley.size())
-                                .expand2(vec2(STALE_VALUE_HORIZONTAL_PADDING, STALE_VALUE_VERTICAL_PADDING));
+                        // Paint and annotate stale values using their rendered glyph bounds
+                        if let Some(stale_age) = prepared_row.stale_age {
+                            let visual_bounds = galley_visual_vertical_bounds(&prepared_row.value_galley);
+                            let value_rect = Rect::from_min_max(
+                                pos2(
+                                    value_position.x - STALE_VALUE_HORIZONTAL_PADDING,
+                                    value_position.y + visual_bounds.0 - STALE_VALUE_VERTICAL_PADDING,
+                                ),
+                                pos2(
+                                    value_position.x
+                                        + prepared_row.value_galley.size().x
+                                        + STALE_VALUE_HORIZONTAL_PADDING,
+                                    value_position.y + visual_bounds.1 + STALE_VALUE_VERTICAL_PADDING,
+                                ),
+                            );
                             ui.painter()
                                 .rect_filled(value_rect, CornerRadius::same(3), timeout_fill);
+
+                            let value_response =
+                                ui.interact(value_rect, row_response.id.with("stale_value"), Sense::hover());
+                            if value_response.hovered() {
+                                ui.ctx().request_repaint_after(Duration::from_secs(1));
+                            }
+                            value_response.on_hover_text(format_stale_age(stale_age));
                         }
 
                         // Paint the prepared name and value text over the completed row background
@@ -339,6 +359,36 @@ fn galley_baseline(galley: &egui::Galley) -> f32 {
         .first()
         .and_then(|row| row.glyphs.first().map(|glyph| row.pos.y + glyph.pos.y))
         .unwrap_or(galley.size().y)
+}
+
+/// Returns the rendered glyph bounds from the galley's top edge.
+///
+/// The returned tuple contains the top and bottom positions in logical points.
+fn galley_visual_vertical_bounds(galley: &egui::Galley) -> (f32, f32) {
+    if galley.mesh_bounds.is_positive() {
+        (galley.mesh_bounds.top(), galley.mesh_bounds.bottom())
+    } else {
+        (galley.rect.top(), galley.rect.bottom())
+    }
+}
+
+/// Formats the elapsed sample age for a stale-value tooltip.
+///
+/// Returns a sentence using the largest fully elapsed whole time unit.
+fn format_stale_age(age: f64) -> String {
+    let seconds = age.floor() as u64;
+    let (count, unit) = if seconds >= 86_400 {
+        (seconds / 86_400, "day")
+    } else if seconds >= 3_600 {
+        (seconds / 3_600, "hour")
+    } else if seconds >= 60 {
+        (seconds / 60, "minute")
+    } else {
+        (seconds, "second")
+    };
+    let plural = if count == 1 { "" } else { "s" };
+
+    format!("Last updated {count} {unit}{plural} ago")
 }
 
 #[cfg(test)]
