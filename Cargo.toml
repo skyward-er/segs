@@ -43,7 +43,7 @@ features = ["reflection", "hydra", "serde"]
 
 [dependencies.mavlink-bindgen]
 git = "https://git.skywarder.eu/avn/swd/mavlink/rust-mavlink.git"
-rev = "eedd2b0d1b83af613298b72c9de3c741a2d51a82"
+rev = "0855d16b30470d354c1b2897bbf57c6db82ed7d1"
 features = ["serde"]
 
 [features]
