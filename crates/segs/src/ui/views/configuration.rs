@@ -69,7 +69,7 @@ impl ViewTrait for ConfigurationView {
             .min_size(180.)
             .max_size(300.)
             .frame(panel_frame)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 show_panel(ui, "WIDGET GALLERY", "Drag to add to the layout", |ui| {
                     gallery::show(ui, &mut appctx.data_store);
                 });
@@ -80,7 +80,7 @@ impl ViewTrait for ConfigurationView {
             .min_size(180.)
             .max_size(300.)
             .frame(panel_frame)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 show_panel(ui, "WIDGET SETTINGS", "Edit the selected widget", |ui| {
                     let selected = selected_widget(ui);
                     let widget = selected.and_then(|id| {
@@ -98,7 +98,7 @@ impl ViewTrait for ConfigurationView {
 
         CentralPanel::default()
             .frame(Frame::new().fill(app_style.main_panels_fill))
-            .show_inside(ui, |ui| show_layout_editor(ui, appctx, &grid));
+            .show(ui, |ui| show_layout_editor(ui, appctx, &grid));
 
         show_widget_drag(ui, appctx, &grid);
     }

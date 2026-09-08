@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 use egui::{CursorIcon, Id, Rect, Response, Sense, Shape, Stroke, Ui, UiBuilder, Widget, pos2, vec2};
 
 use crate::style::CtxStyleExt;
@@ -30,7 +28,7 @@ impl<'a> Checkbox<'a> {
         }
     }
 
-    pub fn with_id(mut self, id: impl Hash) -> Self {
+    pub fn with_id(mut self, id: impl egui::AsIdSalt) -> Self {
         self.builder = self.builder.id_salt(id);
         self
     }

@@ -1,4 +1,4 @@
-use egui::ahash::HashMap;
+use ahash::HashMap;
 
 use crate::dataflow::{DataKey, DataType, DataValue, MessageKey, SourceKey};
 

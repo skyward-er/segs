@@ -3,7 +3,8 @@ mod temporary;
 
 use std::{any::Any, path::Path};
 
-use egui::{Id, ahash::HashSet};
+use ahash::HashSet;
+use egui::Id;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{

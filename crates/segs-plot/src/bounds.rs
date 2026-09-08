@@ -1,6 +1,7 @@
 use std::ops::RangeInclusive;
 
-use egui::{Id, ahash::HashMap};
+use ahash::HashMap;
+use egui::Id;
 use emath::{Pos2, Vec2, Vec2b};
 
 /// A point coordinate in the plot.

@@ -972,7 +972,7 @@ struct SendFailure {
 mod tests {
     use std::collections::BTreeMap;
 
-    use egui::ahash::{HashMap, HashMapExt};
+    use ahash::{HashMap, HashMapExt};
 
     use super::*;
 

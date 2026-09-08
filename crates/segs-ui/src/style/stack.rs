@@ -15,24 +15,26 @@
 //! # Usage
 //!
 //! ```rust
+//! use segs_ui::style::{AppStyle, CtxStyleExt as _, Style, UiStyleExt as _};
+//!
 //! // 1. Define your dark and light base styles and set them up once:
 //! AppStyle::setup(Style::dark(), Style::light());
 //!
-//! // 2. At the top of your root UI function, sync with egui's active theme:
-//! AppStyle::sync(ui);
-//!
-//! // 3. Use anywhere in UI code via the StyleExt trait:
-//! use crate::style::StyleExt as _;
-//!
 //! fn my_widget(ui: &mut egui::Ui) {
 //!     let s = ui.app_style();
-//!     ui.label(egui::RichText::new("Hello").color(s.primary));
+//!     ui.label(egui::RichText::new("Hello").color(s.accent_fill));
 //!
-//!     ui.with_style_override(|s| s.primary = egui::Color32::RED, |ui| {
+//!     ui.with_style_override(|s| s.accent_fill = egui::Color32::RED, |ui| {
 //!         let s = ui.app_style();
-//!         ui.label(egui::RichText::new("Red").color(s.primary));
+//!         ui.label(egui::RichText::new("Red").color(s.accent_fill));
 //!     });
 //! }
+//!
+//! // 2. At the top of your root UI function, sync with egui's active theme:
+//! egui::__run_test_ui(|ui| {
+//!     let _style_guard = AppStyle::sync(ui);
+//!     my_widget(ui);
+//! });
 //! ```
 //!
 //! # Assumptions
@@ -113,10 +115,11 @@ impl AppStyle {
     /// frame:
     ///
     /// ```rust
-    /// fn ui(&mut self, ctx: &egui::Context) {
-    ///     let _style_guard = AppStyle::sync(ctx);
-    ///     // ... all your UI code here ...
-    /// }
+    /// # use segs_ui::style::AppStyle;
+    /// # egui::__run_test_ui(|ui| {
+    /// let _style_guard = AppStyle::sync(ui);
+    /// // ... all your UI code here ...
+    /// # });
     /// ```
     #[must_use = "keep the guard alive for the entire frame"]
     pub fn sync(ctx: &Context) -> FrameGuard {
@@ -229,9 +232,12 @@ pub trait CtxStyleExt {
     /// Read once per scope, use the result for all widgets in that scope:
     ///
     /// ```rust
+    /// # use segs_ui::style::CtxStyleExt as _;
+    /// # egui::__run_test_ui(|ui| {
     /// let s = ui.app_style();
-    /// ui.label(RichText::new("a").color(s.primary));
-    /// ui.label(RichText::new("b").color(s.on_surface));
+    /// ui.label(egui::RichText::new("accent").color(s.accent_fill));
+    /// ui.label(egui::RichText::new("error").color(s.error_fg_color));
+    /// # });
     /// ```
     fn app_style(&self) -> Arc<Style>;
 

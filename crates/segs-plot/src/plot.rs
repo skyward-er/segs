@@ -32,9 +32,9 @@ type AxisResponses = [Vec<Response>; 2];
 ///
 /// ```
 /// # egui::__run_test_ui(|ui| {
-/// use egui_plot::Line;
-/// use egui_plot::Plot;
-/// use egui_plot::PlotPoints;
+/// use segs_plot::Line;
+/// use segs_plot::Plot;
+/// use segs_plot::PlotPoints;
 ///
 /// let sin: PlotPoints = (0..1000)
 ///     .map(|i| {
@@ -99,7 +99,7 @@ pub struct Plot<'a> {
 
 impl<'a> Plot<'a> {
     /// Give a unique id for each plot within the same [`Ui`].
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl egui::AsId) -> Self {
         Self {
             id_source: Id::new(id_source),
             id: None,
@@ -356,9 +356,9 @@ impl<'a> Plot<'a> {
     ///
     /// ```
     /// # egui::__run_test_ui(|ui| {
-    /// use egui_plot::Line;
-    /// use egui_plot::Plot;
-    /// use egui_plot::PlotPoints;
+    /// use segs_plot::Line;
+    /// use segs_plot::Plot;
+    /// use segs_plot::PlotPoints;
     /// let sin: PlotPoints = (0..1000)
     ///     .map(|i| {
     ///         let x = i as f64 * 0.01;
@@ -407,7 +407,7 @@ impl<'a> Plot<'a> {
     /// drawn. For example, if x = 80..=230 is visible and you want big
     /// marks at steps of 100 and small ones at 25, you can return:
     /// ```no_run
-    /// # use egui_plot::GridMark;
+    /// # use segs_plot::GridMark;
     /// vec![
     ///     // 100s
     ///     GridMark {

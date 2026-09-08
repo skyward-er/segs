@@ -29,7 +29,7 @@ pub struct Legend {
     color_conflict_handling: ColorConflictHandling,
 
     /// Used for overriding the `hidden_items` set in [`LegendWidget`].
-    hidden_items: Option<egui::ahash::HashSet<Id>>,
+    hidden_items: Option<ahash::HashSet<Id>>,
 }
 
 impl Default for Legend {
@@ -205,7 +205,7 @@ impl LegendWidget {
         rect: Rect,
         config: Legend,
         items: &[Box<dyn PlotItem + 'a>],
-        hidden_items: &egui::ahash::HashSet<Id>, // Existing hidden items in the plot memory.
+        hidden_items: &ahash::HashSet<Id>, // Existing hidden items in the plot memory.
     ) -> Option<Self> {
         // If `config.hidden_items` is not `None`, it is used.
         let hidden_items = config.hidden_items.as_ref().unwrap_or(hidden_items);
@@ -252,7 +252,7 @@ impl LegendWidget {
     }
 
     // Get the names of the hidden items.
-    pub fn hidden_items(&self) -> egui::ahash::HashSet<Id> {
+    pub fn hidden_items(&self) -> ahash::HashSet<Id> {
         self.entries
             .iter()
             .filter_map(|entry| (!entry.checked).then_some(entry.id))

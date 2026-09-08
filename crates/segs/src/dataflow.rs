@@ -9,7 +9,7 @@ pub mod transport;
 
 use std::{fmt, num::NonZeroUsize, time::SystemTime};
 
-use egui::ahash::HashMap;
+use ahash::HashMap;
 use lexical_write_float::{FormattedSize, Options, ToLexicalWithOptions, format::STANDARD};
 use serde::{Deserialize, Serialize};
 

@@ -1,6 +1,7 @@
 mod choices;
 
-use egui::{Grid, Id, Ui, ahash::HashSet};
+use ahash::HashSet;
+use egui::{Grid, Id, Ui};
 use segs_memory::MemoryExt;
 use segs_ui::widgets::{
     MultipleSelection, SearchableComboBox, SearchableComboBoxHierarchy, SearchableComboBoxList, SingleSelection,

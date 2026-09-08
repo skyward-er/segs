@@ -8,6 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ahash.workspace = true
 eframe.workspace = true
 egui.workspace = true
 segs-assets.path = "../segs-assets"

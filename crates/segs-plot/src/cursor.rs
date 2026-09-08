@@ -1,4 +1,5 @@
-use egui::{Id, ahash::HashMap};
+use ahash::HashMap;
+use egui::Id;
 
 /// Indicates a vertical or horizontal cursor line in plot coordinates.
 #[derive(Copy, Clone, PartialEq)]

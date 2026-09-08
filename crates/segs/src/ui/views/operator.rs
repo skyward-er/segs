@@ -15,7 +15,7 @@ impl ViewTrait for OperatorView {
 
         CentralPanel::default()
             .frame(Frame::new().fill(app_style.main_panels_fill))
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 let rect = ui.available_rect_before_wrap();
 
                 let Some(layout) = appctx.layouts.active() else {

@@ -17,7 +17,10 @@ use egui::{
 };
 use epaint::{
     StrokeKind,
-    text::{Galley, LayoutJob, cursor::CCursor},
+    text::{
+        CharIndex, Galley, LayoutJob,
+        cursor::{CCursor, LayoutCursor},
+    },
 };
 
 use crate::style::CtxStyleExt;
@@ -31,6 +34,7 @@ type LayouterFn<'t> = &'t mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> Arc<Galley
 /// Example:
 ///
 /// ```
+/// # egui::__run_test_ui(|ui| {
 /// # let mut my_string = String::new();
 /// let response = ui.add(egui::TextEdit::singleline(&mut my_string));
 /// if response.changed() {
@@ -39,6 +43,7 @@ type LayouterFn<'t> = &'t mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> Arc<Galley
 /// if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
 ///     // …
 /// }
+/// # });
 /// ```
 ///
 /// To fill an [`Ui`] with a [`TextEdit`] use [`Ui::add_sized`]:
@@ -168,14 +173,14 @@ impl<'t> TextEdit<'t> {
     /// A source for the unique [`Id`], e.g.
     /// `.id_source("second_text_edit_field")` or `.id_source(loop_index)`.
     #[inline]
-    pub fn id_source(self, id_salt: impl std::hash::Hash) -> Self {
+    pub fn id_source(self, id_salt: impl egui::AsId) -> Self {
         self.id_salt(id_salt)
     }
 
     /// A source for the unique [`Id`], e.g.
     /// `.id_salt("second_text_edit_field")` or `.id_salt(loop_index)`.
     #[inline]
-    pub fn id_salt(mut self, id_salt: impl std::hash::Hash) -> Self {
+    pub fn id_salt(mut self, id_salt: impl egui::AsId) -> Self {
         self.id_salt = Some(Id::new(id_salt));
         self
     }
@@ -532,6 +537,18 @@ impl TextEdit<'_> {
         });
         let mut state = TextEditState::load(ui.ctx(), id).unwrap_or_default();
 
+        // Reset composition state after this text edit loses IME ownership
+        let owns_ime_events = ui.memory(|mem| mem.owns_ime_events(id));
+        if !owns_ime_events {
+            state.cursor_purpose = TextEditCursorPurpose::Selection;
+            state.ime_enabled = false;
+            if !state.cursor.is_empty() {
+                state
+                    .cursor
+                    .set_char_range(state.cursor.char_range().map(|range| CCursorRange::one(range.primary)));
+            }
+        }
+
         // On touch screens (e.g. mobile in `eframe` web), should
         // dragging select text, or scroll the enclosing [`ScrollArea`] (if any)?
         // Since currently copying selected text in not supported on `eframe` web,
@@ -580,6 +597,8 @@ impl TextEdit<'_> {
 
             if did_interact || response.clicked() {
                 ui.memory_mut(|mem| mem.request_focus(response.id));
+                state.cursor_purpose = TextEditCursorPurpose::Selection;
+                state.ime_enabled = false;
 
                 state.last_interaction_time = ui.ctx().input(|i| i.time);
             }
@@ -611,6 +630,7 @@ impl TextEdit<'_> {
                 multiline,
                 password,
                 default_cursor_range,
+                owns_ime_events,
                 char_limit,
                 event_filter,
                 return_key,
@@ -676,7 +696,12 @@ impl TextEdit<'_> {
 
             let has_focus = ui.memory(|mem| mem.has_focus(id));
 
-            if has_focus && let Some(cursor_range) = state.cursor.range(&galley) {
+            let should_paint_ime_visuals_the_legacy_way = ui.visuals().ime_composition.legacy_visuals;
+
+            if has_focus
+                && (state.cursor_purpose.is_selection() || should_paint_ime_visuals_the_legacy_way)
+                && let Some(cursor_range) = state.cursor.range(&galley)
+            {
                 // Add text selection rectangles to the galley:
                 paint_text_selection(&mut galley, ui.visuals(), &cursor_range, None);
             }
@@ -739,35 +764,57 @@ impl TextEdit<'_> {
                     //   focus
                     let viewport_has_focus = ui.ctx().input(|i| i.focused);
                     if viewport_has_focus {
-                        text_selection::visuals::paint_text_cursor(
-                            ui,
-                            &painter,
-                            primary_cursor_rect,
-                            now - state.last_interaction_time,
-                        );
+                        let time_since_last_interaction = now - state.last_interaction_time;
+                        let cursor_purpose = if should_paint_ime_visuals_the_legacy_way {
+                            &TextEditCursorPurpose::Selection
+                        } else {
+                            &state.cursor_purpose
+                        };
+
+                        // Paint either the regular cursor or the active composition
+                        match cursor_purpose {
+                            TextEditCursorPurpose::Selection => {
+                                text_selection::visuals::paint_text_cursor(
+                                    ui,
+                                    &painter,
+                                    primary_cursor_rect,
+                                    time_since_last_interaction,
+                                );
+                            }
+                            TextEditCursorPurpose::ImeComposition { active_range } => {
+                                let [start, end] = cursor_range.sorted_cursors();
+                                paint_ime_preedit_text_visuals(
+                                    galley_pos,
+                                    ui,
+                                    &painter,
+                                    &galley,
+                                    row_height,
+                                    start..end,
+                                    active_range.clone(),
+                                    time_since_last_interaction,
+                                );
+                            }
+                        }
                     }
 
-                    // Set IME output (in screen coords) when text is editable and visible
-                    let to_global = ui.ctx().layer_transform_to_global(ui.layer_id()).unwrap_or_default();
-
-                    ui.ctx().output_mut(|o| {
-                        o.ime = Some(egui::output::IMEOutput {
-                            rect: to_global * rect,
-                            cursor_rect: to_global * primary_cursor_rect,
+                    if ui.memory(|mem| mem.owns_ime_events(id)) {
+                        // Set IME output in screen coordinates for the owning text edit
+                        let to_global = ui.ctx().layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+                        ui.ctx().output_mut(|output| {
+                            output.ime = Some(egui::output::IMEOutput {
+                                purpose: if password {
+                                    egui::IMEPurpose::Password
+                                } else {
+                                    egui::IMEPurpose::Normal
+                                },
+                                rect: to_global * rect,
+                                cursor_rect: to_global * primary_cursor_rect,
+                                should_interrupt_composition: false,
+                            });
                         });
-                    });
+                    }
                 }
             }
-        }
-
-        // Ensures correct IME behavior when the text input area gains or loses focus.
-        if state.ime_enabled && (response.gained_focus() || response.lost_focus()) {
-            state.ime_enabled = false;
-            if let Some(mut ccursor_range) = state.cursor.char_range() {
-                ccursor_range.secondary.index = ccursor_range.primary.index;
-                state.cursor.set_char_range(Some(ccursor_range));
-            }
-            ui.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Ime(_))));
         }
 
         state.clone().store(ui.ctx(), id);
@@ -781,9 +828,8 @@ impl TextEdit<'_> {
                     hint_text_str.as_str(),
                 )
             });
-        } else if selection_changed {
-            let cursor_range = cursor_range.unwrap();
-            let char_range = cursor_range.primary.index..=cursor_range.secondary.index;
+        } else if selection_changed && let Some(cursor_range) = cursor_range {
+            let char_range = cursor_range.as_sorted_char_range();
             let info = WidgetInfo::text_selection_changed(
                 ui.is_enabled(),
                 char_range,
@@ -826,6 +872,125 @@ fn mask_if_password(is_password: bool, text: &str) -> String {
 
 // ----------------------------------------------------------------------------
 
+/// Paint the underlines and cursor for text controlled by an input method editor.
+#[expect(clippy::too_many_arguments)]
+fn paint_ime_preedit_text_visuals(
+    pos: egui::Pos2,
+    ui: &Ui,
+    painter: &egui::Painter,
+    galley: &Arc<Galley>,
+    row_height: f32,
+    preedit_range: core::ops::Range<CCursor>,
+    mut relative_active_range: Option<core::ops::Range<CCursor>>,
+    time_since_last_interaction: f64,
+) {
+    // Skip empty composition ranges
+    if preedit_range.start.index == preedit_range.end.index {
+        return;
+    }
+
+    // Clamp the active segment to the composition text
+    if let Some(relative_active_range) = &mut relative_active_range
+        && relative_active_range.end.index > preedit_range.end.index - preedit_range.start.index
+    {
+        relative_active_range.end.index = preedit_range.end.index - preedit_range.start.index;
+    }
+
+    let visuals = ui.visuals();
+    let active_stroke = visuals.ime_composition.active_underline_stroke;
+    let inactive_stroke = visuals.ime_composition.inactive_underline_stroke;
+
+    // Paint active and inactive composition segments
+    if let Some(relative_active_range) = &relative_active_range
+        && relative_active_range.start.index != relative_active_range.end.index
+    {
+        if relative_active_range.start.index > CharIndex::ZERO {
+            paint_ime_underlines(
+                pos,
+                painter,
+                galley,
+                galley.layout_from_cursor(preedit_range.start),
+                galley.layout_from_cursor(preedit_range.start + relative_active_range.start.index),
+                inactive_stroke,
+            );
+        }
+
+        paint_ime_underlines(
+            pos,
+            painter,
+            galley,
+            galley.layout_from_cursor(preedit_range.start + relative_active_range.start.index),
+            galley.layout_from_cursor(preedit_range.start + relative_active_range.end.index),
+            active_stroke,
+        );
+
+        if relative_active_range.end.index != preedit_range.end.index - preedit_range.start.index {
+            paint_ime_underlines(
+                pos,
+                painter,
+                galley,
+                galley.layout_from_cursor(preedit_range.start + relative_active_range.end.index),
+                galley.layout_from_cursor(preedit_range.end),
+                inactive_stroke,
+            );
+        }
+    } else {
+        paint_ime_underlines(
+            pos,
+            painter,
+            galley,
+            galley.layout_from_cursor(preedit_range.start),
+            galley.layout_from_cursor(preedit_range.end),
+            inactive_stroke,
+        );
+    }
+
+    // Paint the cursor when the IME reports an empty active segment
+    if let Some(relative_active_range) = relative_active_range
+        && relative_active_range.start.index == relative_active_range.end.index
+    {
+        let active_cursor = preedit_range.start + relative_active_range.start.index;
+        let cursor_rect = cursor_rect(galley, &active_cursor, row_height);
+        text_selection::visuals::paint_text_cursor(
+            ui,
+            painter,
+            cursor_rect.translate(pos.to_vec2()),
+            time_since_last_interaction,
+        );
+    }
+}
+
+/// Paint composition underlines between two laid-out text cursors.
+fn paint_ime_underlines(
+    pos: egui::Pos2,
+    painter: &egui::Painter,
+    galley: &Arc<Galley>,
+    min: LayoutCursor,
+    max: LayoutCursor,
+    stroke: egui::Stroke,
+) {
+    // Draw one underline segment for each affected row
+    for row_index in min.row..=max.row {
+        let placed_row = &galley.rows[row_index];
+        let row = &placed_row.row;
+        let left = if row_index == min.row {
+            row.x_offset(min.column)
+        } else {
+            0.0
+        };
+        let right = if row_index == max.row {
+            row.x_offset(max.column)
+        } else {
+            row.size.x
+        };
+        let offset_y = placed_row.pos.y + row.size.y;
+
+        painter.line_segment([pos + vec2(left, offset_y), pos + vec2(right, offset_y)], stroke);
+    }
+}
+
+// ----------------------------------------------------------------------------
+
 /// Check for (keyboard) events to edit the cursor and/or text.
 #[expect(clippy::too_many_arguments)]
 fn events(
@@ -839,6 +1004,7 @@ fn events(
     multiline: bool,
     password: bool,
     default_cursor_range: CCursorRange,
+    owns_ime_events: bool,
     char_limit: usize,
     event_filter: EventFilter,
     return_key: Option<KeyboardShortcut>,
@@ -865,7 +1031,7 @@ fn events(
 
     let mut events = ui.input(|i| i.filtered_events(&event_filter));
 
-    if state.ime_enabled {
+    if state.cursor_purpose.is_ime_composition() {
         remove_ime_incompatible_events(&mut events);
         // Process IME events first:
         events.sort_by_key(|e| !matches!(e, Event::Ime(_)));
@@ -994,56 +1160,79 @@ fn events(
                 ..
             } => check_for_mutating_key_press(os, &cursor_range, text, galley, modifiers, *key),
 
-            Event::Ime(ime_event) => match ime_event {
-                ImeEvent::Enabled => {
-                    state.ime_enabled = true;
-                    state.ime_cursor_range = cursor_range;
-                    None
-                }
-                ImeEvent::Preedit(text_mark) => {
-                    if text_mark == "\n" || text_mark == "\r" {
-                        None
-                    } else {
-                        // Empty prediction can be produced when user press backspace
-                        // or escape during IME, so we clear current text.
-                        let mut ccursor = text.delete_selected(&cursor_range);
-                        let start_cursor = ccursor;
-                        if !text_mark.is_empty() {
-                            text.insert_text_at(&mut ccursor, text_mark, char_limit);
-                        }
-                        state.ime_cursor_range = cursor_range;
-                        Some(CCursorRange::two(start_cursor, ccursor))
-                    }
-                }
-                ImeEvent::Commit(prediction) => {
-                    if prediction == "\n" || prediction == "\r" {
-                        None
-                    } else {
-                        state.ime_enabled = false;
+            Event::Ime(ime_event) if owns_ime_events => {
+                // Replace the previous preedit text before applying the next IME event
+                let clear_preedit_text = |text: &mut dyn TextBuffer, range: &CCursorRange| text.delete_selected(range);
 
-                        if !prediction.is_empty()
-                            && cursor_range.secondary.index == state.ime_cursor_range.secondary.index
-                        {
-                            let mut ccursor = text.delete_selected(&cursor_range);
-                            text.insert_text_at(&mut ccursor, prediction, char_limit);
+                match ime_event {
+                    #[expect(deprecated)]
+                    ImeEvent::Enabled | ImeEvent::Disabled => None,
+                    ImeEvent::Preedit {
+                        text: composition_text, ..
+                    }
+                    | ImeEvent::Commit(composition_text)
+                        if composition_text.is_empty() && !state.cursor_purpose.is_ime_composition() =>
+                    {
+                        None
+                    }
+                    ImeEvent::Preedit {
+                        text: composition_text, ..
+                    }
+                    | ImeEvent::Commit(composition_text)
+                        if composition_text == "\n" || composition_text == "\r" =>
+                    {
+                        None
+                    }
+                    ImeEvent::Preedit {
+                        text: preedit_text,
+                        active_range_chars,
+                    } => {
+                        let mut ccursor = clear_preedit_text(text, &cursor_range);
+
+                        if preedit_text.is_empty() {
+                            state.cursor_purpose = TextEditCursorPurpose::Selection;
+                            state.ime_enabled = false;
                             Some(CCursorRange::one(ccursor))
                         } else {
-                            let ccursor = cursor_range.primary;
-                            Some(CCursorRange::one(ccursor))
+                            let start_cursor = ccursor;
+                            text.insert_text_at(&mut ccursor, preedit_text, char_limit);
+                            state.ime_enabled = true;
+                            state.ime_cursor_range = cursor_range;
+                            state.cursor_purpose = TextEditCursorPurpose::ImeComposition {
+                                active_range: active_range_chars
+                                    .clone()
+                                    .map(|range| CCursor::new(range.start)..CCursor::new(range.end)),
+                            };
+                            Some(CCursorRange::two(start_cursor, ccursor))
                         }
                     }
+                    ImeEvent::Commit(commit_text) => {
+                        let mut ccursor = clear_preedit_text(text, &cursor_range);
+                        if !commit_text.is_empty() {
+                            text.insert_text_at(&mut ccursor, commit_text, char_limit);
+                        }
+                        state.cursor_purpose = TextEditCursorPurpose::Selection;
+                        state.ime_enabled = false;
+                        Some(CCursorRange::one(ccursor))
+                    }
+                    ImeEvent::DeleteSurrounding {
+                        before_chars,
+                        after_chars,
+                    } => Some(text.delete_surrounding_chars(cursor_range, *before_chars, *after_chars)),
                 }
-                ImeEvent::Disabled => {
-                    state.ime_enabled = false;
-                    None
-                }
-            },
+            }
 
             _ => None,
         };
 
         if let Some(new_ccursor_range) = did_mutate_text {
             any_change = true;
+
+            // Ordinary edits end any active IME composition
+            if !matches!(event, Event::Ime(_)) {
+                state.cursor_purpose = TextEditCursorPurpose::Selection;
+                state.ime_enabled = false;
+            }
 
             // Layout again to avoid frame delay, and to keep `text` and `galley` in sync.
             *galley = layouter(ui, text, wrap_width);
@@ -1184,13 +1373,16 @@ pub struct TextEditState {
     /// Controls the text selection.
     pub cursor: TextCursorState,
 
+    /// The current purpose and visual treatment of the cursor.
+    cursor_purpose: TextEditCursorPurpose,
+
     /// Wrapped in Arc for cheaper clones.
     pub undoer: Arc<Mutex<TextEditUndoer>>,
 
-    // If IME candidate window is shown on this text edit.
+    /// Whether an input method editor currently controls this text edit.
     pub ime_enabled: bool,
 
-    // cursor range for IME candidate.
+    /// The cursor range saved when the current IME composition began.
     pub ime_cursor_range: CCursorRange,
 
     // Text offset within the widget area.
@@ -1200,6 +1392,32 @@ pub struct TextEditState {
     /// When did the user last press a key or click on the `TextEdit`.
     /// Used to pause the cursor animation when typing.
     pub last_interaction_time: f64,
+}
+
+/// Describes whether the text cursor represents a selection or an IME composition.
+#[derive(Clone, Default)]
+enum TextEditCursorPurpose {
+    /// The cursor represents a normal text selection.
+    #[default]
+    Selection,
+
+    /// The cursor spans text currently controlled by an input method editor.
+    ImeComposition {
+        /// The active character range relative to the start of the composition.
+        active_range: Option<core::ops::Range<CCursor>>,
+    },
+}
+
+impl TextEditCursorPurpose {
+    /// Returns whether the cursor represents a normal selection.
+    fn is_selection(&self) -> bool {
+        matches!(self, Self::Selection)
+    }
+
+    /// Returns whether the cursor represents an active IME composition.
+    fn is_ime_composition(&self) -> bool {
+        matches!(self, Self::ImeComposition { .. })
+    }
 }
 
 impl TextEditState {

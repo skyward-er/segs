@@ -1,7 +1,7 @@
 use std::{fmt, time::SystemTime};
 
+use ahash::{HashMap, HashMapExt};
 use chrono::{DateTime, Local};
-use egui::ahash::{HashMap, HashMapExt};
 use egui::{Align, Button, Frame, Grid, Id, Label, Layout, Margin, Panel, RichText, ScrollArea, Ui};
 use segs_ui::{
     components::panel_header::PanelHeader,
@@ -63,7 +63,7 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
             .min_size(260.)
             .max_size(400.)
             .frame(panel_frame)
-            .show_inside(ui, |ui| show_contents(ui, &mut state, appctx));
+            .show(ui, |ui| show_contents(ui, &mut state, appctx));
     } else {
         // Keep following widget identities stable while this conditional panel is absent
         ui.skip_ahead_auto_ids(1);

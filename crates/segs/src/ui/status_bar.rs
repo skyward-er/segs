@@ -25,7 +25,7 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
     let response = Panel::bottom("status_bar")
         .show_separator_line(false)
         .frame(Frame::new().fill(ui.style().visuals.panel_fill))
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6., 0.);
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| {

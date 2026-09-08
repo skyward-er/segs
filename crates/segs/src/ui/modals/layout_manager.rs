@@ -399,7 +399,9 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
 
             if let Some(center_separator) = center_separator_response {
                 let content_rect = ui.min_rect();
-                let separator_style = ui.style().separator_style(center_separator.widget_state());
+                let separator_style = ui
+                    .style()
+                    .separator_style(&Default::default(), center_separator.widget_state());
                 let title_separator_y =
                     manager_content_top - ui.spacing().item_spacing.y - separator_style.spacing / 2.;
 
@@ -411,7 +413,9 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 );
 
                 if let Some(search_separator) = search_separator_response {
-                    let search_separator_style = ui.style().separator_style(search_separator.widget_state());
+                    let search_separator_style = ui
+                        .style()
+                        .separator_style(&Default::default(), search_separator.widget_state());
                     let modal_left = content_rect.left() - modal_inner_margin.leftf();
 
                     // Join the search separator to the modal border and center divider
@@ -794,9 +798,9 @@ mod tests {
     #[test]
     fn duplicate_cursor_uses_the_end_of_the_complete_value() {
         // ASCII duplicate names should place the cursor after the complete suggested value.
-        assert_eq!(cursor_at_text_end("Flight Copy").index, 11);
+        assert_eq!(cursor_at_text_end("Flight Copy").index, egui::text::CharIndex(11));
 
         // Cursor placement should count characters rather than UTF-8 bytes.
-        assert_eq!(cursor_at_text_end("Café Copy").index, 9);
+        assert_eq!(cursor_at_text_end("Café Copy").index, egui::text::CharIndex(9));
     }
 }

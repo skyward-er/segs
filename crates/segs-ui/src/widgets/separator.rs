@@ -6,7 +6,9 @@ use crate::style::{CtxStyleExt, Style, UiStyleExt};
 /// [`crate::Layout`]).
 ///
 /// ```
+/// # egui::__run_test_ui(|ui| {
 /// ui.add(egui::Separator::default());
+/// # });
 /// ```
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct Separator {

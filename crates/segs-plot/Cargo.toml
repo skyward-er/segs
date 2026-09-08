@@ -8,6 +8,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ahash.workspace = true
 egui = { workspace = true, default-features = false }
 emath = { workspace = true, default-features = false }
 serde = { workspace = true, optional = true }

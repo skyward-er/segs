@@ -1,8 +1,9 @@
 use std::{f32::consts::FRAC_PI_2, hash::Hash, ops::Range, sync::Arc};
 
+use ahash::HashSet;
 use egui::{
     Align, CursorIcon, Frame, Id, Layout, Margin, Rect, Response, ScrollArea, Sense, TextStyle, TextWrapMode, Ui, Vec2,
-    WidgetInfo, WidgetText, WidgetType, ahash::HashSet, pos2, vec2,
+    WidgetInfo, WidgetText, WidgetType, pos2, vec2,
 };
 use segs_assets::icons::{CaretDown, Check, Icon};
 
@@ -220,7 +221,6 @@ where
         let list_output = ui
             .allocate_ui_with_layout(vec2(list_width, list_height), Layout::top_down(Align::Min), |ui| {
                 // Contain scroll content and remove the shadow-like overflow fade
-                ui.visuals_mut().clip_rect_margin = 0.;
                 ui.spacing_mut().scroll.fade.strength = 0.;
                 ui.spacing_mut().item_spacing.y = layout.row_spacing;
                 ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);

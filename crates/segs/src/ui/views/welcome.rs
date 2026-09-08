@@ -10,7 +10,7 @@ pub struct WelcomeView;
 
 impl ViewTrait for WelcomeView {
     fn show_main_view(&mut self, ui: &mut egui::Ui, appctx: &mut AppContext) {
-        CentralPanel::default().show_inside(ui, |ui| {
+        CentralPanel::default().show(ui, |ui| {
             ui.with_layout(Layout::top_down(Align::Center), |ui| {
                 ui.add_space((ui.available_height() * 0.35).max(32.));
                 ui.add(Label::new(RichText::new("No layout selected").size(24.)).selectable(false));
