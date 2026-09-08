@@ -25,9 +25,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_icon = load_app_icon();
     let options = eframe::NativeOptions {
         viewport: ViewportBuilder::default()
-            .with_title_shown(false)
-            .with_titlebar_shown(false)
-            .with_fullsize_content_view(true)
             .with_drag_and_drop(true)
             .with_icon(app_icon),
         ..Default::default()
