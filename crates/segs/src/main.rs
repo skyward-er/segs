@@ -24,9 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_memory(utils::get_memory_dirpath()).expect("Failed to initialize memory system");
     let app_icon = load_app_icon();
     let options = eframe::NativeOptions {
-        viewport: ViewportBuilder::default()
-            .with_drag_and_drop(true)
-            .with_icon(app_icon),
+        viewport: ViewportBuilder::default().with_drag_and_drop(true).with_icon(app_icon),
         ..Default::default()
     };
     eframe::run_native("SEGS", options, Box::new(|cc| Ok(Box::new(App::new(cc, args)?))))

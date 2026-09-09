@@ -1,6 +1,7 @@
 pub mod atoms;
 pub mod buttons;
 pub mod labels;
+pub mod plot;
 mod searchable_combo_box;
 mod separator;
 pub mod text;

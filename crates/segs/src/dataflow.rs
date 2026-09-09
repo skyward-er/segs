@@ -95,9 +95,16 @@ impl fmt::Display for DataType {
     }
 }
 
+/// Chronologically ordered samples received for one data field.
+///
+/// Samples in every variant have monotonically nondecreasing timestamps, which
+/// allows consumers to select time ranges with binary search.
 pub enum DataStream {
+    /// Floating-point samples ordered by timestamp.
     F64(Vec<DataPoint<f64>>),
+    /// Integer samples ordered by timestamp.
     I64(Vec<DataPoint<i64>>),
+    /// Text samples ordered by timestamp.
     String(Vec<DataPoint<String>>),
 }
 
