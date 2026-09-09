@@ -38,6 +38,22 @@ Use `cargo run` to launch the application when manual UI verification is relevan
 - If tests were requested, prefer focused tests colocated in the owning module. Name tests after the behavior and expected outcome
 - Rely on compilation, formatting, linting, or manual QA verification to test the code
 
+# Layout schema migrations
+
+Layout JSON is versioned by `CURRENT_LAYOUT_SCHEMA` and upgraded through the migration module before it is deserialized into the current model. Treat every change to persisted layout data—including fields or variants in widget types—as a schema change.
+
+When changing persisted layout or widget data:
+
+1. Increment `CURRENT_LAYOUT_SCHEMA` exactly once for the new wire format.
+2. Add one version module and migration from the previous version to the new version. Define its `NEXT_SCHEMA_VERSION`, use that constant when updating the JSON version marker, and return it from `migrate` after the transformation is complete.
+3. Add the version to the dispatcher by calling its `migrate` function directly from the matching schema arm. The dispatcher must use the returned version to select the next step; do not duplicate or hardcode the next version there. Migrations must remain adjacent and run sequentially so every supported older version follows the same path to current.
+4. Perform field additions, removals, renames, representation changes, and default insertion explicitly in that migration. A Serde default may still be useful for current-model construction or defensive parsing, but it is not a substitute for a versioned migration.
+5. Preserve existing persisted values and layout metadata unless the schema change explicitly requires transforming them. Migration alone must not update user-facing modification timestamps.
+6. Extend the focused progressive-migration test with the previous wire shape and assert the final current representation. Do not expose production APIs solely for this test.
+7. Keep the Layout Manager's persisted-schema metadata and explicit upgrade action working. Loading migrates in memory; saving, renaming, duplicating, or explicitly upgrading writes the current schema.
+
+Keep migration code in the layout subsystem. Before editing a persisted type, inspect its serialized JSON shape and the latest migration so the new step matches the actual wire representation rather than the Rust field layout alone.
+
 # Rust documentation
 
 - Always write rustdoc for functions, structs, enums, and their fields or variants
@@ -146,4 +162,3 @@ fn process_outgoing(&mut self, data_store: &mut DataStore) {
     self.schedule_pending_timeout();
 }
 ```
-

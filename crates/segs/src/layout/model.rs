@@ -9,7 +9,8 @@ use crate::ui::{
     widgets::{WidgetData, WidgetVariant},
 };
 
-pub const CURRENT_LAYOUT_SCHEMA: u32 = 1;
+/// Latest layout schema emitted by the application.
+pub const CURRENT_LAYOUT_SCHEMA: u32 = 2;
 const ADDED_WIDGET_ID_NAMESPACE: &str = "layout_added_widget";
 
 /// Complete persisted representation of a named widget layout.

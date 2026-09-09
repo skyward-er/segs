@@ -7,7 +7,10 @@ use std::{
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use super::{CURRENT_LAYOUT_SCHEMA, Layout};
+use super::{
+    Layout,
+    migration::{LayoutMigrationError, MigratedLayout, migrate},
+};
 
 #[derive(Debug, Error)]
 pub enum LayoutStoreError {
@@ -41,7 +44,7 @@ impl LayoutStore {
     }
 
     /// Loads all valid JSON layouts and reports malformed entries as warnings.
-    pub fn load_all(&self) -> Result<(Vec<Layout>, Vec<String>), LayoutStoreError> {
+    pub(super) fn load_all(&self) -> Result<(Vec<MigratedLayout>, Vec<String>), LayoutStoreError> {
         fs::create_dir_all(&self.directory)?;
         let mut paths = fs::read_dir(&self.directory)?
             .filter_map(Result::ok)
@@ -61,16 +64,16 @@ impl LayoutStore {
         Ok((layouts, warnings))
     }
 
-    fn load_path(&self, path: &Path) -> Result<Layout, LayoutStoreError> {
+    fn load_path(&self, path: &Path) -> Result<MigratedLayout, LayoutStoreError> {
         let bytes = fs::read(path)?;
-        let layout: Layout = serde_json::from_slice(&bytes)?;
-        if layout.schema_version != CURRENT_LAYOUT_SCHEMA {
-            return Err(LayoutStoreError::UnsupportedSchema(layout.slug));
+        let migrated = migrate(&bytes).map_err(|error| match error {
+            LayoutMigrationError::Json(error) => LayoutStoreError::Json(error),
+            LayoutMigrationError::UnsupportedSchema(slug) => LayoutStoreError::UnsupportedSchema(slug),
+        })?;
+        if path.file_stem().and_then(|stem| stem.to_str()) != Some(migrated.layout.slug.as_str()) {
+            return Err(LayoutStoreError::SlugMismatch(migrated.layout.slug));
         }
-        if path.file_stem().and_then(|stem| stem.to_str()) != Some(layout.slug.as_str()) {
-            return Err(LayoutStoreError::SlugMismatch(layout.slug));
-        }
-        Ok(layout)
+        Ok(migrated)
     }
 
     /// Returns whether a layout file exists for the slug.

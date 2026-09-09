@@ -14,7 +14,7 @@ use segs_memory::MemoryExt;
 use segs_ui::{containers::Modal, widgets::text::TextEdit};
 
 use crate::{
-    layout::LayoutManager,
+    layout::{CURRENT_LAYOUT_SCHEMA, LayoutManager},
     ui::{
         layout::{clear_any_control_error, clear_control_error, set_control_error, show_control_error},
         popups::DeleteConfirmationPopup,
@@ -173,6 +173,7 @@ enum ManagerCommand {
     Duplicate(String, String),
     Rename(String, String),
     ToggleDefault(String, Id),
+    Upgrade(String, Id),
 }
 
 /// Describes whether the inline editor should remain open, cancel, or submit.
@@ -305,26 +306,38 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 ui.vertical(|ui| {
                     ui.set_width(380.);
                     ui.set_height(content_height);
-                    let Some((slug, name, created_at, modified_at, widget_count, grid_cols, grid_rows)) =
-                        selected.as_deref().and_then(|slug| layouts.layout(slug)).map(|layout| {
-                            (
-                                layout.slug.clone(),
-                                layout.name.clone(),
-                                layout
-                                    .created_at
-                                    .with_timezone(&Local)
-                                    .format("%Y-%m-%d %H:%M")
-                                    .to_string(),
-                                layout
-                                    .modified_at
-                                    .with_timezone(&Local)
-                                    .format("%Y-%m-%d %H:%M")
-                                    .to_string(),
-                                layout.widgets.len(),
-                                layout.grid_settings.cols,
-                                layout.grid_settings.rows,
-                            )
-                        })
+                    let metadata = selected.as_deref().and_then(|slug| {
+                        let layout = layouts.layout(slug)?;
+                        let schema_version = layouts.persisted_schema_version(slug)?;
+                        Some((
+                            layout.slug.clone(),
+                            layout.name.clone(),
+                            layout
+                                .created_at
+                                .with_timezone(&Local)
+                                .format("%Y-%m-%d %H:%M")
+                                .to_string(),
+                            layout
+                                .modified_at
+                                .with_timezone(&Local)
+                                .format("%Y-%m-%d %H:%M")
+                                .to_string(),
+                            layout.widgets.len(),
+                            layout.grid_settings.cols,
+                            layout.grid_settings.rows,
+                            schema_version,
+                        ))
+                    });
+                    let Some((
+                        slug,
+                        name,
+                        created_at,
+                        modified_at,
+                        widget_count,
+                        grid_cols,
+                        grid_rows,
+                        schema_version,
+                    )) = metadata
                     else {
                         ui.heading(RichText::new("No layout selected").weak());
                         return;
@@ -337,6 +350,22 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     metadata_row(ui, "Modified", &modified_at);
                     metadata_row(ui, "Widgets", &widget_count.to_string());
                     metadata_row(ui, "Grid", &format!("{grid_cols} × {grid_rows}"));
+                    let schema_label = if schema_version == CURRENT_LAYOUT_SCHEMA {
+                        format!("{schema_version} (current)")
+                    } else {
+                        format!("{schema_version} (current: {CURRENT_LAYOUT_SCHEMA})")
+                    };
+                    if let Some(upgrade) = schema_metadata_row(ui, &schema_label, schema_version, edit.is_none()) {
+                        if upgrade.clicked() {
+                            command = Some(ManagerCommand::Upgrade(slug.clone(), upgrade.id));
+                        }
+                        let showing_error = show_control_error(ui, &upgrade);
+                        if upgrade.hovered() && !showing_error {
+                            Tooltip::for_widget(&upgrade).show(|ui| {
+                                ui.label(format!("Upgrade to schema {CURRENT_LAYOUT_SCHEMA}"));
+                            });
+                        }
+                    }
 
                     ui.add_space(16.);
                     ui.horizontal(|ui| {
@@ -485,6 +514,12 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                 let new_default = (layouts.default_slug() != Some(slug.as_str())).then_some(slug.as_str());
                 clear_control_error(ui, owner);
                 if let Err(error) = layouts.set_default(new_default) {
+                    set_control_error(ui, owner, error);
+                }
+            }
+            ManagerCommand::Upgrade(slug, owner) => {
+                clear_control_error(ui, owner);
+                if let Err(error) = layouts.upgrade(&slug) {
                     set_control_error(ui, owner, error);
                 }
             }
@@ -735,6 +770,25 @@ fn metadata_row(ui: &mut Ui, label: &str, value: &str) {
         label_ui.label(RichText::new(label).weak());
         ui.label(value);
     });
+}
+
+/// Shows schema metadata and returns its upgrade button when the file is outdated.
+fn schema_metadata_row(ui: &mut Ui, value: &str, schema_version: u32, enabled: bool) -> Option<Response> {
+    let mut upgrade = None;
+    ui.horizontal(|ui| {
+        let (label_rect, _) = ui.allocate_exact_size(Vec2::new(60., 18.), Sense::hover());
+        let mut label_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(label_rect)
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        label_ui.label(RichText::new("Schema").weak());
+        ui.label(value);
+        if schema_version != CURRENT_LAYOUT_SCHEMA {
+            upgrade = Some(ui.add_enabled(enabled, Button::new("Upgrade")));
+        }
+    });
+    upgrade
 }
 
 #[cfg(test)]

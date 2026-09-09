@@ -9,7 +9,8 @@ use rand::random;
 use thiserror::Error;
 
 use super::{
-    Layout, LayoutNameError,
+    CURRENT_LAYOUT_SCHEMA, Layout, LayoutNameError,
+    migration::MigratedLayout,
     model::{renamed_slug, slug_with_suffix, validated_display_name},
     persistence::{LayoutStore, LayoutStoreError},
 };
@@ -35,11 +36,38 @@ struct ActiveLayout {
     saved: Layout,
 }
 
+/// Keeps a current-shaped layout alongside the schema version persisted on disk.
+#[derive(Debug, Clone)]
+struct StoredLayout {
+    layout: Layout,
+    persisted_schema_version: u32,
+}
+
+impl StoredLayout {
+    /// Creates an entry whose persisted representation already uses the current schema.
+    fn current(layout: Layout) -> Self {
+        Self {
+            layout,
+            persisted_schema_version: CURRENT_LAYOUT_SCHEMA,
+        }
+    }
+}
+
+impl From<MigratedLayout> for StoredLayout {
+    /// Preserves the source schema while adopting the migrated current representation.
+    fn from(migrated: MigratedLayout) -> Self {
+        Self {
+            layout: migrated.layout,
+            persisted_schema_version: migrated.persisted_schema_version,
+        }
+    }
+}
+
 /// Owns the saved-layout catalog, active working copy, and persistence operations.
 #[derive(Debug)]
 pub struct LayoutManager {
     store: LayoutStore,
-    layouts: BTreeMap<String, Layout>,
+    layouts: BTreeMap<String, StoredLayout>,
     active: Option<ActiveLayout>,
     default_slug: Option<String>,
     default_update: Option<Option<String>>,
@@ -51,9 +79,10 @@ impl LayoutManager {
     pub fn load(directory: PathBuf, requested_default: Option<String>) -> Result<Self, LayoutManagerError> {
         let store = LayoutStore::new(directory);
         let (loaded, mut warnings) = store.load_all()?;
-        let mut layouts = BTreeMap::new();
+        let mut layouts = BTreeMap::<String, StoredLayout>::new();
         let mut names = HashSet::<String>::new();
-        for layout in loaded {
+        for migrated in loaded {
+            let layout = &migrated.layout;
             // Ignore invalid entries without preventing the rest of the catalog from loading
             if validated_display_name(&layout.name).as_deref() != Ok(layout.name.as_str())
                 || renamed_slug(&layout.name, &layout.slug).as_deref() != Some(layout.slug.as_str())
@@ -70,7 +99,7 @@ impl LayoutManager {
                 continue;
             }
             names.insert(layout.name.clone());
-            layouts.insert(layout.slug.clone(), layout);
+            layouts.insert(layout.slug.clone(), migrated.into());
         }
 
         let had_requested_default = requested_default.is_some();
@@ -85,7 +114,7 @@ impl LayoutManager {
         let active = default_slug
             .as_ref()
             .and_then(|slug| layouts.get(slug))
-            .cloned()
+            .map(|stored| stored.layout.clone())
             .map(|layout| ActiveLayout {
                 working: layout.clone(),
                 saved: layout,
@@ -103,7 +132,7 @@ impl LayoutManager {
 
     /// Iterates over saved layouts in slug order.
     pub fn layouts(&self) -> impl Iterator<Item = &Layout> {
-        self.layouts.values()
+        self.layouts.values().map(|stored| &stored.layout)
     }
 
     /// Returns the directory containing the persisted layout catalog.
@@ -113,7 +142,16 @@ impl LayoutManager {
 
     /// Returns a saved layout by slug.
     pub fn layout(&self, slug: &str) -> Option<&Layout> {
-        self.layouts.get(slug)
+        self.layouts.get(slug).map(|stored| &stored.layout)
+    }
+
+    /// Returns the schema version currently persisted for a saved layout.
+    ///
+    /// The returned version describes the file on disk, while [`Self::layout`]
+    /// always returns the migrated current in-memory representation. Returns
+    /// [`None`] when `slug` is not present in the catalog.
+    pub fn persisted_schema_version(&self, slug: &str) -> Option<u32> {
+        self.layouts.get(slug).map(|stored| stored.persisted_schema_version)
     }
 
     /// Returns the active in-memory working layout.
@@ -153,7 +191,7 @@ impl LayoutManager {
         let layout = self
             .layouts
             .get(slug)
-            .cloned()
+            .map(|stored| stored.layout.clone())
             .ok_or_else(|| LayoutManagerError::NotFound(slug.to_owned()))?;
         self.active = Some(ActiveLayout {
             working: layout.clone(),
@@ -168,7 +206,7 @@ impl LayoutManager {
         let slug = self.new_slug(&name);
         let layout = Layout::empty(name, slug.clone());
         self.store.save(&layout)?;
-        self.layouts.insert(slug.clone(), layout.clone());
+        self.layouts.insert(slug.clone(), StoredLayout::current(layout.clone()));
         self.active = Some(ActiveLayout {
             working: layout.clone(),
             saved: layout,
@@ -182,7 +220,7 @@ impl LayoutManager {
         let mut layout = self
             .layouts
             .get(source_slug)
-            .cloned()
+            .map(|stored| stored.layout.clone())
             .ok_or_else(|| LayoutManagerError::NotFound(source_slug.to_owned()))?;
         let now = Utc::now();
         layout.slug = self.new_slug(&name);
@@ -191,7 +229,7 @@ impl LayoutManager {
         layout.modified_at = now;
         self.store.save(&layout)?;
         let slug = layout.slug.clone();
-        self.layouts.insert(slug.clone(), layout.clone());
+        self.layouts.insert(slug.clone(), StoredLayout::current(layout.clone()));
         self.active = Some(ActiveLayout {
             working: layout.clone(),
             saved: layout,
@@ -205,7 +243,7 @@ impl LayoutManager {
         let mut saved = self
             .layouts
             .get(slug)
-            .cloned()
+            .map(|stored| stored.layout.clone())
             .ok_or_else(|| LayoutManagerError::NotFound(slug.to_owned()))?;
         let new_slug = renamed_slug(&name, slug).ok_or_else(|| LayoutManagerError::InvalidSlug(slug.to_owned()))?;
         if new_slug != slug && (self.layouts.contains_key(&new_slug) || self.store.contains(&new_slug)) {
@@ -216,7 +254,8 @@ impl LayoutManager {
         saved.modified_at = Utc::now();
         self.store.rename(slug, &saved)?;
         self.layouts.remove(slug);
-        self.layouts.insert(new_slug.clone(), saved.clone());
+        self.layouts
+            .insert(new_slug.clone(), StoredLayout::current(saved.clone()));
 
         // Keep the working changes while replacing their saved baseline with the renamed file
         if let Some(active) = &mut self.active
@@ -243,7 +282,30 @@ impl LayoutManager {
         active.working.modified_at = Utc::now();
         self.store.save(&active.working)?;
         active.saved = active.working.clone();
-        self.layouts.insert(active.working.slug.clone(), active.working.clone());
+        self.layouts.insert(
+            active.working.slug.clone(),
+            StoredLayout::current(active.working.clone()),
+        );
+        Ok(())
+    }
+
+    /// Rewrites a saved layout using the current schema without saving working edits.
+    ///
+    /// The file is atomically replaced with the already migrated saved baseline.
+    /// Returns [`LayoutManagerError::NotFound`] when `slug` is not present and a
+    /// storage error when the upgraded file cannot be written.
+    pub fn upgrade(&mut self, slug: &str) -> Result<(), LayoutManagerError> {
+        let stored = self
+            .layouts
+            .get_mut(slug)
+            .ok_or_else(|| LayoutManagerError::NotFound(slug.to_owned()))?;
+        if stored.persisted_schema_version == CURRENT_LAYOUT_SCHEMA {
+            return Ok(());
+        }
+
+        // Persist the catalog baseline so active working edits remain untouched
+        self.store.save(&stored.layout)?;
+        stored.persisted_schema_version = CURRENT_LAYOUT_SCHEMA;
         Ok(())
     }
 
@@ -297,7 +359,7 @@ impl LayoutManager {
         if self
             .layouts
             .values()
-            .any(|layout| layout.slug != excluding.unwrap_or_default() && layout.name == name)
+            .any(|stored| stored.layout.slug != excluding.unwrap_or_default() && stored.layout.name == name)
         {
             return Err(LayoutNameError::Duplicate(name).into());
         }
@@ -404,7 +466,9 @@ mod tests {
         let directory = TestDirectory::new();
         let mut manager = LayoutManager::load(directory.0.clone(), None).unwrap();
         let occupied = Layout::empty("Flight".into(), "flight-00000007".into());
-        manager.layouts.insert(occupied.slug.clone(), occupied);
+        manager
+            .layouts
+            .insert(occupied.slug.clone(), StoredLayout::current(occupied));
 
         // The generator should reject the occupied suffix and accept the next value
         let mut suffixes = [7, 8].into_iter();

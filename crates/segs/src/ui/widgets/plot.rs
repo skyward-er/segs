@@ -24,16 +24,12 @@ pub struct PlotWidget {
     /// Stream plotted with timestamps on X and sample values on Y.
     stream: Option<StreamKey>,
     /// Configured width of the live history window in seconds.
-    #[serde(default = "default_history_seconds")]
     history_seconds: String,
     /// Whether the vertical range is calculated from visible samples.
-    #[serde(default = "default_auto_y_bounds")]
     auto_y_bounds: bool,
     /// Configured lower vertical bound used when automatic bounds are disabled.
-    #[serde(default = "default_y_min")]
     y_min: String,
     /// Configured upper vertical bound used when automatic bounds are disabled.
-    #[serde(default = "default_y_max")]
     y_max: String,
 }
 
