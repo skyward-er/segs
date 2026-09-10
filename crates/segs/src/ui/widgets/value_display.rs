@@ -17,7 +17,8 @@ use crate::{
     },
 };
 
-const DEFAULT_TEXT_SIZE: f32 = 32.;
+const DEFAULT_TEXT_SIZE: i64 = 32;
+const TEXT_SIZE_SETTING_WIDTH: f32 = 96.;
 const LABEL_TEXT_SIZE_SCALE: f32 = 0.75;
 const MIN_LABEL_TEXT_SIZE: f32 = 1.;
 const MIN_VALUE_TEXT_SIZE: f32 = MIN_LABEL_TEXT_SIZE / LABEL_TEXT_SIZE_SCALE;
@@ -32,7 +33,7 @@ pub struct ValueDisplayWidget {
     label: String,
     stream: Option<StreamKey>,
     auto_size: bool,
-    text_size: String,
+    text_size: i64,
 }
 
 impl Default for ValueDisplayWidget {
@@ -42,7 +43,7 @@ impl Default for ValueDisplayWidget {
             label: "Value".to_owned(),
             stream: None,
             auto_size: true,
-            text_size: DEFAULT_TEXT_SIZE.to_string(),
+            text_size: DEFAULT_TEXT_SIZE,
         }
     }
 }
@@ -56,7 +57,7 @@ impl WidgetTrait for ValueDisplayWidget {
         let value_text_size = if self.auto_size {
             cached_auto_text_size(ui, &self.label, &value, container.size(), spacing)
         } else {
-            configured_text_size(&self.text_size)
+            self.text_size as f32
         };
         let label_text_size = value_text_size * LABEL_TEXT_SIZE_SCALE;
 
@@ -93,7 +94,14 @@ impl WidgetTrait for ValueDisplayWidget {
         ];
 
         if show_text_size {
-            settings.push(WidgetSetting::text_box("text_size", "Text size", &mut self.text_size));
+            settings.push(WidgetSetting::integer_with_width(
+                "text_size",
+                "Text size",
+                &mut self.text_size,
+                2..=500,
+                1,
+                TEXT_SIZE_SETTING_WIDTH,
+            ));
         }
 
         settings
@@ -123,15 +131,6 @@ struct AutoSizeCache {
     input_hash: u64,
     text_size: f32,
     updated_at: f64,
-}
-
-/// Parses a configured text size, falling back when the text box contains an invalid value.
-fn configured_text_size(text_size: &str) -> f32 {
-    text_size
-        .parse::<f32>()
-        .ok()
-        .filter(|size| size.is_finite() && *size >= MIN_VALUE_TEXT_SIZE)
-        .unwrap_or(DEFAULT_TEXT_SIZE)
 }
 
 /// Returns a cached auto size, debouncing recomputation while the widget rect changes.
@@ -182,7 +181,7 @@ fn cached_auto_text_size(ui: &Ui, label: &str, value: &str, available_size: Vec2
 /// Computes a whole-point value text size that fits both lines inside the widget margin.
 fn compute_auto_text_size(ui: &Ui, label: &str, value: &str, available_size: Vec2, spacing: f32) -> f32 {
     if label.is_empty() && value.is_empty() {
-        return DEFAULT_TEXT_SIZE;
+        return DEFAULT_TEXT_SIZE as f32;
     }
 
     let app_style = ui.app_style();

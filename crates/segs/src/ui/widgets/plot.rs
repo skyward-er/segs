@@ -24,13 +24,13 @@ pub struct PlotWidget {
     /// Stream plotted with timestamps on X and sample values on Y.
     stream: Option<StreamKey>,
     /// Configured width of the live history window in seconds.
-    history_seconds: String,
+    history_seconds: f64,
     /// Whether the vertical range is calculated from visible samples.
     auto_y_bounds: bool,
     /// Configured lower vertical bound used when automatic bounds are disabled.
-    y_min: String,
+    y_min: f64,
     /// Configured upper vertical bound used when automatic bounds are disabled.
-    y_max: String,
+    y_max: f64,
 }
 
 impl Default for PlotWidget {
@@ -53,8 +53,8 @@ impl WidgetTrait for PlotWidget {
         let plot_id = ui.id().with("plot");
         let settings = LineSettings::default();
         let stroke = Stroke::new(settings.width, settings.color);
-        let history_seconds = configured_history_seconds(&self.history_seconds);
-        let y_bounds = configured_y_bounds(self.auto_y_bounds, &self.y_min, &self.y_max);
+        let history_seconds = self.history_seconds;
+        let y_bounds = configured_y_bounds(self.auto_y_bounds, self.y_min, self.y_max);
         let y_configuration = YConfiguration::from_bounds(y_bounds.as_ref());
         let reset = y_configuration_changed(ui, plot_id, y_configuration);
 
@@ -123,15 +123,20 @@ impl WidgetTrait for PlotWidget {
         // Always expose the history and vertical bounds mode
         let auto_y_bounds = self.auto_y_bounds;
         let mut settings = vec![
-            WidgetSetting::text_box("history_seconds", "History (s)", &mut self.history_seconds),
+            WidgetSetting::float(
+                "history_seconds",
+                "History (s)",
+                &mut self.history_seconds,
+                f64::from_bits(1)..=f64::MAX,
+            ),
             WidgetSetting::checkbox("auto_y_bounds", "Auto Y bounds", &mut self.auto_y_bounds),
         ];
 
         // Show fixed bounds only while they are relevant
         if !auto_y_bounds {
             settings.extend([
-                WidgetSetting::text_box("y_min", "Y minimum", &mut self.y_min),
-                WidgetSetting::text_box("y_max", "Y maximum", &mut self.y_max),
+                WidgetSetting::float("y_min", "Y minimum", &mut self.y_min, f64::MIN..=f64::MAX),
+                WidgetSetting::float("y_max", "Y maximum", &mut self.y_max, f64::MIN..=f64::MAX),
             ]);
         }
 
@@ -143,39 +148,28 @@ impl WidgetTrait for PlotWidget {
     }
 }
 
-fn default_history_seconds() -> String {
-    DEFAULT_HISTORY_SECONDS.to_string()
+const fn default_history_seconds() -> f64 {
+    DEFAULT_HISTORY_SECONDS
 }
 
 const fn default_auto_y_bounds() -> bool {
     true
 }
 
-fn default_y_min() -> String {
-    DEFAULT_Y_MIN.to_string()
+const fn default_y_min() -> f64 {
+    DEFAULT_Y_MIN
 }
 
-fn default_y_max() -> String {
-    DEFAULT_Y_MAX.to_string()
+const fn default_y_max() -> f64 {
+    DEFAULT_Y_MAX
 }
 
-fn configured_history_seconds(history_seconds: &str) -> f64 {
-    // Accept only finite positive durations and fall back to the widget default
-    history_seconds
-        .parse::<f64>()
-        .ok()
-        .filter(|seconds| seconds.is_finite() && *seconds > 0.)
-        .unwrap_or(DEFAULT_HISTORY_SECONDS)
-}
-
-fn configured_y_bounds(auto_y_bounds: bool, y_min: &str, y_max: &str) -> Option<RangeInclusive<f64>> {
+fn configured_y_bounds(auto_y_bounds: bool, y_min: f64, y_max: f64) -> Option<RangeInclusive<f64>> {
     // Use automatic bounds unless both configured endpoints form a finite increasing range
     if auto_y_bounds {
         return None;
     }
-    let min = y_min.parse::<f64>().ok().filter(|value| value.is_finite())?;
-    let max = y_max.parse::<f64>().ok().filter(|value| value.is_finite())?;
-    (min < max).then_some(min..=max)
+    (y_min.is_finite() && y_max.is_finite() && y_min < y_max).then_some(y_min..=y_max)
 }
 
 fn plot_options(

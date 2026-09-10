@@ -27,6 +27,9 @@ use crate::style::CtxStyleExt;
 
 type LayouterFn<'t> = &'t mut dyn FnMut(&Ui, &dyn TextBuffer, f32) -> Arc<Galley>;
 
+const DEFAULT_MARGIN: Margin = Margin::symmetric(4, 2);
+const FRAME_EXPANSION: f32 = 0.5;
+
 /// A text region that the user can edit the contents of.
 ///
 /// See also [`Ui::text_edit_singleline`] and [`Ui::text_edit_multiline`].
@@ -132,7 +135,7 @@ impl<'t> TextEdit<'t> {
             text_color: None,
             layouter: None,
             password: false,
-            margin: Margin::symmetric(4, 2),
+            margin: DEFAULT_MARGIN,
             multiline: true,
             interactive: true,
             desired_width: None,
@@ -445,7 +448,7 @@ impl TextEdit<'_> {
             });
 
             // Paint the frame behind the text content
-            let frame_rect = output.response.rect.expand(0.5);
+            let frame_rect = frame_rect(output.response.rect);
             let shape = if is_mutable {
                 epaint::RectShape::new(frame_rect, 3, background_color, Stroke::NONE, StrokeKind::Inside)
             } else {
@@ -856,6 +859,21 @@ impl TextEdit<'_> {
             cursor_range,
         }
     }
+}
+
+/// Returns the default single-line editor height in logical points.
+///
+/// The returned height includes the default font row and vertical margins.
+pub fn default_singleline_height(ui: &Ui) -> f32 {
+    let font_id = FontSelection::default().resolve(ui.style());
+    ui.fonts_mut(|fonts| fonts.row_height(&font_id)) + DEFAULT_MARGIN.sum().y
+}
+
+/// Returns the painted text-edit frame around an allocated response rectangle.
+///
+/// The returned rectangle includes the symmetric frame expansion.
+pub(super) fn frame_rect(response_rect: Rect) -> Rect {
+    response_rect.expand(FRAME_EXPANSION)
 }
 
 fn mask_if_password(is_password: bool, text: &str) -> String {

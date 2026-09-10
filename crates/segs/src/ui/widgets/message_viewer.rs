@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-const DEFAULT_TEXT_SIZE: f32 = 12.;
+const DEFAULT_TEXT_SIZE: i64 = 12;
 const HEADER_TEXT_SIZE_SCALE: f32 = 1.25;
 const DEFAULT_STALE_AFTER_SECONDS: f64 = 5.;
 const INNER_MARGIN: i8 = 2;
@@ -33,11 +33,11 @@ pub struct MessageViewerWidget {
     /// Persistent leaf names parallel to `streams`.
     stream_names: Vec<String>,
     /// Configured row text size in logical points.
-    text_size: String,
+    text_size: i64,
     /// Whether values are highlighted after no new samples have been received.
     show_stale_warning: bool,
     /// Duration in seconds before highlighting a non-recent value.
-    stale_after: String,
+    stale_after: f64,
 }
 
 impl Default for MessageViewerWidget {
@@ -47,18 +47,18 @@ impl Default for MessageViewerWidget {
             header: "Values".to_owned(),
             streams: Vec::new(),
             stream_names: Vec::new(),
-            text_size: DEFAULT_TEXT_SIZE.to_string(),
+            text_size: DEFAULT_TEXT_SIZE,
             show_stale_warning: true,
-            stale_after: DEFAULT_STALE_AFTER_SECONDS.to_string(),
+            stale_after: DEFAULT_STALE_AFTER_SECONDS,
         }
     }
 }
 
 impl WidgetTrait for MessageViewerWidget {
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
-        // Parse the display settings and restore age tracking for the selected streams
-        let text_size = configured_text_size(&self.text_size);
-        let stale_after = configured_stale_after(&self.stale_after);
+        // Restore display settings and age tracking for the selected streams
+        let text_size = self.text_size as f32;
+        let stale_after = self.stale_after;
         let age_state_id = ui.id().with(AGE_STATE_ID);
         let now = ui.input(|input| input.time);
         let mut age_state = ui.mem().get_temp_or_default::<AgeState>(age_state_id);
@@ -273,14 +273,15 @@ impl WidgetTrait for MessageViewerWidget {
         let show_stale_after = self.show_stale_warning;
         let mut settings = vec![
             WidgetSetting::text_box("header", "Header", &mut self.header),
-            WidgetSetting::text_box("text_size", "Text size", &mut self.text_size),
+            WidgetSetting::integer("text_size", "Text size", &mut self.text_size, 1..=i64::MAX, 1),
             WidgetSetting::checkbox("show_stale_warning", "Show stale warning", &mut self.show_stale_warning),
         ];
         if show_stale_after {
-            settings.push(WidgetSetting::text_box(
+            settings.push(WidgetSetting::float(
                 "stale_after",
                 "Stale after (s)",
                 &mut self.stale_after,
+                f64::from_bits(1)..=f64::MAX,
             ));
         }
 
@@ -334,24 +335,6 @@ struct AgeObservation {
     observed_at: f64,
 }
 
-/// Parses a positive configured text size, falling back for invalid input.
-fn configured_text_size(text_size: &str) -> f32 {
-    text_size
-        .parse::<f32>()
-        .ok()
-        .filter(|size| size.is_finite() && *size > 0.)
-        .unwrap_or(DEFAULT_TEXT_SIZE)
-}
-
-/// Parses a positive stale threshold in seconds, falling back for invalid input.
-fn configured_stale_after(stale_after: &str) -> f64 {
-    stale_after
-        .parse::<f64>()
-        .ok()
-        .filter(|seconds| seconds.is_finite() && *seconds > 0.)
-        .unwrap_or(DEFAULT_STALE_AFTER_SECONDS)
-}
-
 /// Returns the first text row's baseline relative to the galley's top edge.
 fn galley_baseline(galley: &egui::Galley) -> f32 {
     galley
@@ -401,9 +384,9 @@ mod tests {
             header: "Telemetry".to_owned(),
             streams: vec![StreamKey::mock()],
             stream_names: vec!["Altitude".to_owned()],
-            text_size: "18".to_owned(),
+            text_size: 18,
             show_stale_warning: false,
-            stale_after: "2.5".to_owned(),
+            stale_after: 2.5,
         };
 
         let json = serde_json::to_string(&widget).unwrap();
