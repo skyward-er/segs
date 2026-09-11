@@ -216,7 +216,7 @@ impl<'a, D: DirectionTrait> ResizablePanel<'a, D> {
                 let separator_size = dir.side_vec2(separator_width, max_cross);
 
                 let (rect_first, _) = ui.allocate_exact_size(side_first_size, Sense::empty());
-                let (rect_sep, response_sep) = ui.allocate_exact_size(separator_size, Sense::drag());
+                let (rect_sep, response_sep) = ui.allocate_exact_size(separator_size, Sense::DRAG);
                 let (rect_second, _) = ui.allocate_exact_size(side_second_size, Sense::empty());
 
                 // Show children UIs.

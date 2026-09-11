@@ -108,7 +108,7 @@ impl ViewTrait for ConfigurationView {
 fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
     show_snapping_guide(ui, grid);
 
-    let grid_response = ui.allocate_rect(grid.rect, Sense::click());
+    let grid_response = ui.allocate_rect(grid.rect, Sense::CLICK);
 
     let drag_in_progress = egui::DragAndDrop::has_payload_of_type::<WidgetDragPayload>(ui.ctx());
     let pointer = ui.ctx().pointer_interact_pos();
@@ -123,7 +123,7 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
             .widgets
         {
             let rect = grid.to_screen_rect(widget.grect);
-            let response = ui.interact(rect, widget.id.with("edit_interaction"), Sense::click_and_drag());
+            let response = ui.interact(rect, widget.id.with("edit_interaction"), Sense::CLICK | Sense::DRAG);
 
             if response.clicked() {
                 set_selected_widget(ui, Some(widget.id));

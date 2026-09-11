@@ -196,7 +196,7 @@ fn status_bar_btn(ui: &mut egui::Ui, atoms: Vec<ContentAtoms>) -> Response {
     let btn_size = Vec2::new(content_width, content_height) + inner_margin * 2.0;
 
     // Allocate space for the button
-    let (btn_rect, response) = ui.allocate_exact_size(btn_size, Sense::click());
+    let (btn_rect, response) = ui.allocate_exact_size(btn_size, Sense::CLICK);
 
     // Only paint if visible
     if ui.is_rect_visible(btn_rect) {

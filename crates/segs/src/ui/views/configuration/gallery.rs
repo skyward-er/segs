@@ -45,7 +45,7 @@ pub fn show(ui: &mut Ui, data_store: &mut DataStore) {
         });
 
         let drag_response = ui
-            .interact(card.response.rect, card_id.with("drag_source"), Sense::drag())
+            .interact(card.response.rect, card_id.with("drag_source"), Sense::DRAG)
             .on_hover_cursor(egui::CursorIcon::Grab);
         if drag_response.drag_started() {
             egui::DragAndDrop::set_payload(
