@@ -6,7 +6,7 @@ use crate::{
     ui::{
         modals::{
             LayoutManagerModal, LayoutManagerModalResponse, SaveDiscardModal, SaveDiscardModalChoice,
-            SaveDiscardModalResponse,
+            SaveDiscardModalResponse, select_active_layout,
         },
         popups::{SaveDiscardChoice, SaveDiscardConfirmationPopup},
         views::ViewTarget,
@@ -51,7 +51,9 @@ struct ControlError {
 }
 
 /// Opens the full layout manager.
-fn open_manager(ui: &Ui, _layouts: &LayoutManager) {
+fn open_manager(ui: &Ui, layouts: &LayoutManager) {
+    // Initialize the catalog selection from the active layout
+    select_active_layout(ui, layouts);
     ui.mem().insert_temp(Id::new(MANAGER_OPEN_ID), true);
 }
 

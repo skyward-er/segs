@@ -110,6 +110,11 @@ fn set_selected_slug(ui: &Ui, slug: Option<String>) {
     }
 }
 
+/// Selects the active layout when the manager is next shown.
+pub(in crate::ui) fn select_active_layout(ui: &Ui, layouts: &LayoutManager) {
+    set_selected_slug(ui, layouts.active_slug().map(str::to_owned));
+}
+
 /// Returns the current manager search query.
 fn search_query(ui: &Ui) -> String {
     ui.mem().get_temp_or_default(Id::new(SEARCH_QUERY_ID))
