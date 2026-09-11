@@ -5,6 +5,7 @@ use egui::{Align, CursorIcon, Frame, Layout, Panel, Response, Theme, Ui, Vec2};
 use segs_assets::icons::{self, Icon};
 use segs_memory::MemoryExt;
 use segs_ui::{
+    components::Tooltip,
     style::CtxStyleExt,
     widgets::buttons::{StatusBarButton, UnpaddedStatusBarButton},
 };
@@ -55,6 +56,11 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
     }
     ui.mem().insert_temp(source_id, source_selection);
 
+    // Apply the global shortcut before deriving the command button's visual state
+    if ui.input_mut(|input| input.consume_shortcut(&command_panel::TOGGLE_SHORTCUT)) {
+        command_panel::toggle(ui);
+    }
+
     let icon = if command_panel::is_open(ui) {
         icons::Terminal2::solid()
     } else {
@@ -64,7 +70,11 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         .padded()
         .add_icon(icon)
         .add_text("Commands");
-    if ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked() {
+    let response = ui.add(button).on_hover_cursor(CursorIcon::PointingHand);
+    Tooltip::new(&response, "Toggle Command Panel")
+        .shortcut(command_panel::TOGGLE_SHORTCUT)
+        .show();
+    if response.clicked() {
         command_panel::toggle(ui);
     }
 

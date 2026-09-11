@@ -2,9 +2,12 @@ use std::{fmt, time::SystemTime};
 
 use ahash::{HashMap, HashMapExt};
 use chrono::{DateTime, Local};
-use egui::{Align, Button, Frame, Grid, Id, Label, Layout, Margin, Panel, RichText, ScrollArea, Ui};
+use egui::{
+    Align, Button, Frame, Grid, Id, Key, KeyboardShortcut, Label, Layout, Margin, Modifiers, Panel, RichText,
+    ScrollArea, Sense, Ui, vec2,
+};
 use segs_ui::{
-    components::panel_header::PanelHeader,
+    components::{Tooltip, panel_header::PanelHeader},
     containers::Card,
     style::CtxStyleExt,
     widgets::{
@@ -33,7 +36,12 @@ const SEND_BUTTON_TOP_SPACING: f32 = 4.;
 const MESSAGE_SELECTOR_MAX_ROWS: usize = 8;
 const COMMAND_PANEL_ID: &str = "command_panel";
 const COMMAND_PANEL_OPEN_ID: &str = "command_panel_open";
+const COMMAND_PANEL_FOCUS_REQUEST_ID: &str = "command_panel_focus_request";
 const COMMAND_PANEL_STATE_ID: &str = "command_panel_state";
+const SEND_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Enter);
+
+/// Keyboard shortcut that toggles the global command panel.
+pub const TOGGLE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::B);
 
 /// Holds the global command composer and latest panel-issued sequence.
 #[derive(Clone, Default)]
@@ -54,7 +62,11 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
         .data_mut(|data| data.remove_temp::<CommandPanelState>(state_id))
         .unwrap_or_default();
     state.sync_adapter(appctx.data_adapter.as_ref());
+    let request_initial_focus = ui
+        .data(|data| data.get_temp::<bool>(Id::new(COMMAND_PANEL_FOCUS_REQUEST_ID)))
+        .unwrap_or(false);
 
+    // Render the panel and forward one-shot focus requests to its first control
     let app_style = ui.app_style();
     let panel_frame = Frame::new().fill(app_style.main_panels_fill);
     if is_open(ui) {
@@ -63,7 +75,9 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
             .min_size(260.)
             .max_size(400.)
             .frame(panel_frame)
-            .show(ui, |ui| show_contents(ui, &mut state, appctx));
+            .show(ui, |ui| {
+                show_contents(ui, &mut state, appctx, request_initial_focus);
+            });
     } else {
         // Keep following widget identities stable while this conditional panel is absent
         ui.skip_ahead_auto_ids(1);
@@ -72,14 +86,25 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
     ui.data_mut(|data| data.insert_temp(state_id, state));
 }
 
+/// Reports whether the global command panel is currently open.
+///
+/// The returned value is `true` while the panel should be rendered.
 pub fn is_open(ui: &Ui) -> bool {
     ui.data(|data| data.get_temp(Id::new(COMMAND_PANEL_OPEN_ID)))
         .unwrap_or(false)
 }
 
+/// Toggles the global command panel and requests initial focus when opening it.
 pub fn toggle(ui: &mut Ui) {
     let open = is_open(ui);
-    ui.data_mut(|data| data.insert_temp(Id::new(COMMAND_PANEL_OPEN_ID), !open));
+    ui.data_mut(|data| {
+        data.insert_temp(Id::new(COMMAND_PANEL_OPEN_ID), !open);
+        if open {
+            data.remove_temp::<bool>(Id::new(COMMAND_PANEL_FOCUS_REQUEST_ID));
+        } else {
+            data.insert_temp(Id::new(COMMAND_PANEL_FOCUS_REQUEST_ID), true);
+        }
+    });
 }
 
 #[derive(Clone, Default)]
@@ -129,7 +154,7 @@ impl CommandPanelState {
     }
 }
 
-fn show_contents(ui: &mut Ui, state: &mut CommandPanelState, appctx: &mut AppContext) {
+fn show_contents(ui: &mut Ui, state: &mut CommandPanelState, appctx: &mut AppContext, request_initial_focus: bool) {
     ui.add(PanelHeader::new("COMMANDS").subtitle("Send commands to targets"));
 
     let Some(adapter) = appctx.data_adapter.as_ref() else {
@@ -155,14 +180,24 @@ fn show_contents(ui: &mut Ui, state: &mut CommandPanelState, appctx: &mut AppCon
         .max_height(composer_height)
         .auto_shrink([false, true])
         .content_margin(composer_margin)
-        .show(ui, |ui| show_composer(ui, state, protocol, &mut appctx.data_store));
+        .show(ui, |ui| {
+            show_composer(ui, state, protocol, &mut appctx.data_store, request_initial_focus);
+        });
 
     ui.spacing_mut().item_spacing.y = panel_item_spacing;
     ui.add(Separator::default().spacing(0.));
     show_latest_sequence(ui, state.latest_sequence, protocol, &appctx.data_store);
 }
 
-fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor, store: &mut DataStore) {
+fn show_composer(
+    ui: &mut Ui,
+    state: &mut CommandPanelState,
+    protocol: &ProtocolDescriptor,
+    store: &mut DataStore,
+    request_initial_focus: bool,
+) {
+    // Reserve the panel-wide shortcut before focused controls can interpret Enter
+    let shortcut_pressed = ui.input_mut(|input| input.consume_shortcut(&SEND_SHORTCUT));
     ui.spacing_mut().item_spacing.y = COMPOSER_ITEM_SPACING;
 
     // Align command selection controls to one shared label column
@@ -170,7 +205,7 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
         .num_columns(2)
         .spacing([8., SELECTION_ROW_SPACING])
         .show(ui, |ui| {
-            show_target_selector(ui, state);
+            show_target_selector(ui, state, request_initial_focus);
             ui.end_row();
             // Leave the final row open to avoid reserving trailing row spacing
             show_message_selector(ui, state, protocol)
@@ -208,7 +243,29 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
     if has_fields {
         ui.add_space(SEND_BUTTON_TOP_SPACING);
     }
-    if ui.add_enabled(ready, Button::new("Send")).clicked() {
+
+    // Mirror egui's active button visuals while the valid send shortcut is held
+    let shortcut_down = ready
+        && ui.input(|input| {
+            input.key_down(SEND_SHORTCUT.logical_key) && input.modifiers.matches_logically(SEND_SHORTCUT.modifiers)
+        });
+
+    // Accept pointer clicks or the panel-wide shortcut without adding Send to focus traversal
+    let send_row_size = vec2(ui.available_width(), ui.spacing().interact_size.y);
+    let response = ui
+        .allocate_ui_with_layout(send_row_size, Layout::right_to_left(Align::Center), |ui| {
+            if shortcut_down {
+                let active = ui.visuals().widgets.active;
+                ui.visuals_mut().widgets.inactive = active;
+                ui.visuals_mut().widgets.hovered = active;
+            }
+            let send_button = Button::new("Send").sense(Sense::click() - Sense::focusable_noninteractive());
+            ui.add_enabled(ready, send_button)
+        })
+        .inner;
+    Tooltip::new(&response, "Send Command").shortcut(SEND_SHORTCUT).show();
+
+    if ready && (response.clicked() || shortcut_pressed) {
         let message_key = state.message.expect("send requires a selected message");
         let target = state.target.expect("send requires a selected target");
         let fields = parse_fields(&protocol.message_schemas[&message_key].fields, &state.drafts)
@@ -222,7 +279,7 @@ fn show_composer(ui: &mut Ui, state: &mut CommandPanelState, protocol: &Protocol
     }
 }
 
-fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState) {
+fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, request_initial_focus: bool) {
     let Some(choices) = state.target_choices.as_ref() else {
         return;
     };
@@ -232,14 +289,21 @@ fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState) {
     let selector_id = ui.make_persistent_id(("command_target_selector", adapter_token));
 
     ui.label("Target");
-    ui.add_enabled_ui(!choices.is_empty(), |ui| {
-        ui.add(
-            SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.target))
-                .empty_selection_text("Select a target")
-                .search_hint("Search targets…")
-                .empty_results_text("No matching targets."),
-        );
-    });
+    let response = ui
+        .add_enabled_ui(!choices.is_empty(), |ui| {
+            ui.add(
+                SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.target))
+                    .empty_selection_text("Select a target")
+                    .search_hint("Search targets…")
+                    .empty_results_text("No matching targets."),
+            )
+        })
+        .inner;
+    if request_initial_focus && response.enabled() {
+        // Consume initial focus only after an enabled first control accepts it
+        response.request_focus();
+        ui.data_mut(|data| data.remove_temp::<bool>(Id::new(COMMAND_PANEL_FOCUS_REQUEST_ID)));
+    }
 }
 
 fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) -> bool {

@@ -88,6 +88,7 @@ where
     let empty_selection = selected_text.is_none();
     let trigger_text = selected_text.map_or(empty_selection_text, WidgetText::from);
     let trigger = allocate_trigger(ui, trigger_text);
+    let trigger_id = trigger.response.id;
     let popup_id = id.with("popup");
     let state_id = popup_id.with("state");
     let was_open = Popup::is_id_open(ui.ctx(), popup_id);
@@ -180,9 +181,11 @@ where
                 );
                 state.rows_valid = true;
             }
+
+            // Prevent the Enter press that opened the popup from also activating its first row
             let action = if navigation_input.toggle_selection {
                 RowAction::ToggleSelection
-            } else if navigation_input.activate {
+            } else if navigation_input.activate && !opening {
                 RowAction::Activate
             } else {
                 RowAction::None
@@ -221,12 +224,17 @@ where
             if changes.selection_event && !S::MULTIPLE {
                 ui.memory_mut(|memory| {
                     memory.surrender_focus(search_response.id);
-                    memory.move_focus(FocusDirection::None);
+                    memory.request_focus(trigger_id);
                 });
                 ui.close();
             }
             changes.selection
         });
+
+    // Restore focus after keyboard dismissal so traversal resumes from the trigger
+    if was_open && ui.input(|input| input.key_pressed(Key::Escape)) {
+        trigger.response.request_focus();
+    }
 
     // Keep hierarchy expansion but clear transient popup state after closing
     let changed = popup.is_some_and(|response| response.inner);
