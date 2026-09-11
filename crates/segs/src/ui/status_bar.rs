@@ -82,16 +82,22 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         .layouts
         .active()
         .map_or("No layout selected", |layout| layout.name.as_str());
+
+    // Apply the global shortcut before rendering the layout manager button
+    if ui.input_mut(|input| input.consume_shortcut(&layout::TOGGLE_SHORTCUT)) {
+        layout::toggle_manager(ui, &appctx.layouts);
+    }
+
     let layout_button = UnpaddedStatusBarButton::default()
         .padded()
         .add_icon(icons::Layout::outline())
         .add_text(layout_name);
-    let layout_response = ui
-        .add(layout_button)
-        .on_hover_cursor(CursorIcon::PointingHand)
-        .on_hover_text("Open Layout Manager");
+    let layout_response = ui.add(layout_button).on_hover_cursor(CursorIcon::PointingHand);
+    Tooltip::new(&layout_response, "Layout Manager")
+        .shortcut(layout::TOGGLE_SHORTCUT)
+        .show();
     if layout_response.clicked() {
-        layout::request_open_manager(ui, &appctx.layouts);
+        layout::toggle_manager(ui, &appctx.layouts);
     }
     layout::show_open_manager_prompt(ui, &mut appctx.layouts, &layout_response);
 }

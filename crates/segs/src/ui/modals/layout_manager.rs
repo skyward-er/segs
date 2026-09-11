@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use chrono::Local;
 use egui::{
-    Align, Align2, Button, Frame, Id, Key, Layout, Margin, Modifiers, Response, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, TextEdit as EguiTextEdit, Tooltip, Ui, UiBuilder, Vec2,
+    Align, Align2, Button, FocusDirection, Frame, Id, Key, Layout, Margin, Modifiers, Response, RichText, ScrollArea,
+    Sense, Stroke, StrokeKind, TextEdit as EguiTextEdit, Tooltip, Ui, UiBuilder, Vec2,
     text::{CCursor, CCursorRange},
     vec2,
 };
@@ -115,6 +115,12 @@ pub(in crate::ui) fn select_active_layout(ui: &Ui, layouts: &LayoutManager) {
     set_selected_slug(ui, layouts.active_slug().map(str::to_owned));
 }
 
+/// Clears modal operations that must not survive closing the layout manager.
+pub(in crate::ui) fn clear_transient_state(ui: &Ui) {
+    set_inline_edit(ui, None);
+    set_delete_confirmation(ui, None);
+}
+
 /// Returns the current manager search query.
 fn search_query(ui: &Ui) -> String {
     ui.mem().get_temp_or_default(Id::new(SEARCH_QUERY_ID))
@@ -209,6 +215,36 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
         selected = results.first().map(|result| result.slug.clone());
     }
 
+    // Reserve list navigation before the focused search editor handles these keys
+    let navigation_enabled = edit.is_none() && pending_delete.is_none();
+    let (move_up, move_down, activate_selected) = if navigation_enabled {
+        ui.input_mut(|input| {
+            (
+                input.count_and_consume_key(Modifiers::NONE, Key::ArrowUp),
+                input.count_and_consume_key(Modifiers::NONE, Key::ArrowDown),
+                input.consume_key(Modifiers::NONE, Key::Enter),
+            )
+        })
+    } else {
+        (0, 0, false)
+    };
+    if move_up > 0 || move_down > 0 {
+        ui.memory_mut(|memory| memory.move_focus(FocusDirection::None));
+    }
+
+    // Move within the filtered result order while clamping at either boundary
+    let selection_delta = move_down as isize - move_up as isize;
+    let mut selection_moved = false;
+    if selection_delta != 0 && !results.is_empty() {
+        let current = selected
+            .as_ref()
+            .and_then(|slug| results.iter().position(|result| &result.slug == slug))
+            .unwrap_or(0);
+        let next = current.saturating_add_signed(selection_delta).min(results.len() - 1);
+        selection_moved = next != current;
+        selected = Some(results[next].slug.clone());
+    }
+
     let modal_frame = Frame::popup(ui.style());
     let modal_inner_margin = modal_frame.inner_margin;
     let response = Modal::new(Id::new(MANAGER_MODAL_ID), "Layout Manager")
@@ -235,6 +271,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     let reserved_height = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
                     let list_height = (ui.available_height() - reserved_height).max(64.);
                     ScrollArea::vertical()
+                        .animated(false)
                         .max_height(list_height)
                         .min_scrolled_height(list_height)
                         .auto_shrink([true, false])
@@ -251,7 +288,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                                         should_close = true;
                                     }
                                 } else {
-                                    show_layout_row(ui, layouts, slug, &result.name, &mut selected);
+                                    show_layout_row(ui, layouts, slug, &result.name, &mut selected, selection_moved);
                                 }
                             }
 
@@ -375,7 +412,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
                     ui.add_space(16.);
                     ui.horizontal(|ui| {
                         let open = ui.add_enabled(edit.is_none(), Button::new("Open"));
-                        if open.clicked() {
+                        if open.clicked() || activate_selected {
                             command = Some(ManagerCommand::Open(slug.clone(), open.id));
                         }
                         show_control_error(ui, &open);
@@ -472,8 +509,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
     set_delete_confirmation(ui, pending_delete);
     if response.should_close() {
         should_close = true;
-        set_inline_edit(ui, None);
-        set_delete_confirmation(ui, None);
+        clear_transient_state(ui);
         clear_any_control_error(ui);
     }
 
@@ -532,8 +568,7 @@ fn show_manager(ui: &mut Ui, layouts: &mut LayoutManager) -> LayoutManagerModalR
     }
 
     if should_close {
-        set_inline_edit(ui, None);
-        set_delete_confirmation(ui, None);
+        clear_transient_state(ui);
     }
 
     LayoutManagerModalResponse {
@@ -550,7 +585,14 @@ fn retain_search_focus(search_response: &Response, inline_edit_active: bool) {
 }
 
 /// Shows a saved layout as one full-width selectable row.
-fn show_layout_row(ui: &mut Ui, layouts: &LayoutManager, slug: &str, name: &str, selected: &mut Option<String>) {
+fn show_layout_row(
+    ui: &mut Ui,
+    layouts: &LayoutManager,
+    slug: &str,
+    name: &str,
+    selected: &mut Option<String>,
+    reveal_keyboard_selection: bool,
+) {
     let mut text = name.to_owned();
     if layouts.active_slug() == Some(slug) {
         text.push_str("  • Active");
@@ -562,6 +604,9 @@ fn show_layout_row(ui: &mut Ui, layouts: &LayoutManager, slug: &str, name: &str,
         button = button.right_text("    ");
     }
     let response = ui.add(button);
+    if reveal_keyboard_selection && selected_row {
+        response.scroll_to_me(None);
+    }
     if response.clicked() {
         *selected = Some(slug.to_owned());
     }

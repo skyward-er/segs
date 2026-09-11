@@ -1,4 +1,4 @@
-use egui::{Align2, Id, Response, Tooltip, Ui};
+use egui::{Align2, Id, Key, KeyboardShortcut, Modifiers, Response, Tooltip, Ui};
 use segs_memory::MemoryExt;
 
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     ui::{
         modals::{
             LayoutManagerModal, LayoutManagerModalResponse, SaveDiscardModal, SaveDiscardModalChoice,
-            SaveDiscardModalResponse, select_active_layout,
+            SaveDiscardModalResponse, clear_layout_manager_transient_state, select_active_layout,
         },
         popups::{SaveDiscardChoice, SaveDiscardConfirmationPopup},
         views::ViewTarget,
@@ -19,6 +19,15 @@ const CLOSE_CONFIRMATION_ID: &str = "layout_close_confirmation";
 const CONTROL_ERROR_ID: &str = "layout_control_error";
 const TRANSITION_ID: &str = "layout_view_transition";
 const CLOSE_REQUEST_ID: &str = "layout_close_request";
+
+/// Keyboard shortcut that toggles the layout manager.
+pub const TOGGLE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(
+    Modifiers {
+        alt: true,
+        ..Modifiers::COMMAND
+    },
+    Key::L,
+);
 
 /// Records the operation to continue after unsaved changes are resolved.
 #[derive(Clone, Debug)]
@@ -71,6 +80,17 @@ pub fn request_open_manager(ui: &Ui, layouts: &LayoutManager) {
         );
     } else {
         open_manager(ui, layouts);
+    }
+}
+
+/// Opens the layout manager through the dirty-layout guard or closes it immediately.
+pub fn toggle_manager(ui: &Ui, layouts: &LayoutManager) {
+    if manager_is_open(ui) {
+        set_manager_open(ui, false);
+        clear_layout_manager_transient_state(ui);
+        clear_any_control_error(ui);
+    } else {
+        request_open_manager(ui, layouts);
     }
 }
 
