@@ -273,7 +273,14 @@ impl WidgetTrait for MessageViewerWidget {
         let show_stale_after = self.show_stale_warning;
         let mut settings = vec![
             WidgetSetting::text_box("header", "Header", &mut self.header),
-            WidgetSetting::integer("text_size", "Text size", &mut self.text_size, 1..=i64::MAX, 1),
+            WidgetSetting::integer(
+                "text_size",
+                "Text size",
+                &mut self.text_size,
+                1..=i64::MAX,
+                Some(1),
+                None,
+            ),
             WidgetSetting::checkbox("show_stale_warning", "Show stale warning", &mut self.show_stale_warning),
         ];
         if show_stale_after {
@@ -282,6 +289,8 @@ impl WidgetTrait for MessageViewerWidget {
                 "Stale after (s)",
                 &mut self.stale_after,
                 f64::from_bits(1)..=f64::MAX,
+                None,
+                None,
             ));
         }
 

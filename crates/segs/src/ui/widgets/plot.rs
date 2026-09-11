@@ -1,6 +1,6 @@
 use std::ops::RangeInclusive;
 
-use egui::{Id, Stroke, Ui};
+use egui::{Color32, Id, Stroke, Ui};
 use segs_memory::MemoryExt;
 use segs_plot::mapped_line;
 use segs_ui::widgets::plot::{LineSettings, PlotOptions, plot_widget};
@@ -14,15 +14,26 @@ use crate::{
     },
 };
 
-const DEFAULT_HISTORY_SECONDS: f64 = 90.;
+const DEFAULT_HISTORY_SECONDS: f64 = 60.;
+const HISTORY_STEP_VALUE: f64 = 60.;
+const STEP_VALUE_SETTING_WIDTH: f32 = 96.;
 const DEFAULT_Y_MIN: f64 = 0.;
 const DEFAULT_Y_MAX: f64 = 1.;
+const DEFAULT_LINE_WIDTH: f64 = 1.5;
+const MINIMUM_LINE_WIDTH: f64 = 0.25;
+const MAXIMUM_LINE_WIDTH: f64 = 10.;
+const LINE_WIDTH_STEP: f64 = 0.25;
+const DEFAULT_LINE_COLOR: Color32 = Color32::BLUE;
 
 /// Displays one selected numeric data stream as a time-series line.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlotWidget {
     /// Stream plotted with timestamps on X and sample values on Y.
     stream: Option<StreamKey>,
+    /// Opaque color used to draw the plotted line.
+    line_color: Color32,
+    /// Stroke width of the plotted line in logical points.
+    line_width: f64,
     /// Configured width of the live history window in seconds.
     history_seconds: f64,
     /// Whether the vertical range is calculated from visible samples.
@@ -38,10 +49,12 @@ impl Default for PlotWidget {
     fn default() -> Self {
         Self {
             stream: None,
-            history_seconds: default_history_seconds(),
-            auto_y_bounds: default_auto_y_bounds(),
-            y_min: default_y_min(),
-            y_max: default_y_max(),
+            line_color: DEFAULT_LINE_COLOR,
+            line_width: DEFAULT_LINE_WIDTH,
+            history_seconds: DEFAULT_HISTORY_SECONDS,
+            auto_y_bounds: true,
+            y_min: DEFAULT_Y_MIN,
+            y_max: DEFAULT_Y_MAX,
         }
     }
 }
@@ -51,7 +64,10 @@ impl WidgetTrait for PlotWidget {
         // Borrow the selected stream directly from the central store
         let stream = self.stream.and_then(|key| data_store.stream(key));
         let plot_id = ui.id().with("plot");
-        let settings = LineSettings::default();
+        let settings = LineSettings {
+            width: effective_line_width(self.line_width),
+            color: self.line_color.to_opaque(),
+        };
         let stroke = Stroke::new(settings.width, settings.color);
         let history_seconds = self.history_seconds;
         let y_bounds = configured_y_bounds(self.auto_y_bounds, self.y_min, self.y_max);
@@ -120,14 +136,25 @@ impl WidgetTrait for PlotWidget {
     }
 
     fn settings(&mut self) -> Vec<WidgetSetting<'_>> {
-        // Always expose the history and vertical bounds mode
+        // Always expose line appearance, history, and vertical bounds mode
         let auto_y_bounds = self.auto_y_bounds;
         let mut settings = vec![
             WidgetSetting::float(
                 "history_seconds",
                 "History (s)",
                 &mut self.history_seconds,
-                f64::from_bits(1)..=f64::MAX,
+                1.0..=f64::MAX,
+                Some(HISTORY_STEP_VALUE),
+                Some(STEP_VALUE_SETTING_WIDTH),
+            ),
+            WidgetSetting::color("line_color", "Line color", &mut self.line_color),
+            WidgetSetting::float(
+                "line_width",
+                "Line width",
+                &mut self.line_width,
+                MINIMUM_LINE_WIDTH..=MAXIMUM_LINE_WIDTH,
+                Some(LINE_WIDTH_STEP),
+                Some(STEP_VALUE_SETTING_WIDTH),
             ),
             WidgetSetting::checkbox("auto_y_bounds", "Auto Y bounds", &mut self.auto_y_bounds),
         ];
@@ -135,8 +162,8 @@ impl WidgetTrait for PlotWidget {
         // Show fixed bounds only while they are relevant
         if !auto_y_bounds {
             settings.extend([
-                WidgetSetting::float("y_min", "Y minimum", &mut self.y_min, f64::MIN..=f64::MAX),
-                WidgetSetting::float("y_max", "Y maximum", &mut self.y_max, f64::MIN..=f64::MAX),
+                WidgetSetting::float("y_min", "Y minimum", &mut self.y_min, f64::MIN..=f64::MAX, None, None),
+                WidgetSetting::float("y_max", "Y maximum", &mut self.y_max, f64::MIN..=f64::MAX, None, None),
             ]);
         }
 
@@ -148,20 +175,13 @@ impl WidgetTrait for PlotWidget {
     }
 }
 
-const fn default_history_seconds() -> f64 {
-    DEFAULT_HISTORY_SECONDS
-}
-
-const fn default_auto_y_bounds() -> bool {
-    true
-}
-
-const fn default_y_min() -> f64 {
-    DEFAULT_Y_MIN
-}
-
-const fn default_y_max() -> f64 {
-    DEFAULT_Y_MAX
+fn effective_line_width(line_width: f64) -> f32 {
+    // Keep malformed persisted values from producing invalid rendering geometry
+    if line_width.is_finite() {
+        line_width.clamp(MINIMUM_LINE_WIDTH, MAXIMUM_LINE_WIDTH) as f32
+    } else {
+        DEFAULT_LINE_WIDTH as f32
+    }
 }
 
 fn configured_y_bounds(auto_y_bounds: bool, y_min: f64, y_max: f64) -> Option<RangeInclusive<f64>> {

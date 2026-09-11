@@ -2,12 +2,12 @@ mod stream_selector;
 
 use std::ops::RangeInclusive;
 
-use egui::{Align, ComboBox, Layout, RichText, TextStyle, Ui, vec2};
+use egui::{Align, ComboBox, Layout, RichText, TextStyle, Ui, color_picker, vec2};
 use segs_ui::{
     style::CtxStyleExt,
     widgets::{
         Separator, UiWidgetExt,
-        text::{IntegerStepper, NumericStepper, TextEdit, ValueEdit, default_singleline_height},
+        text::{FloatStepper, IntegerStepper, TextEdit, ValueEdit, default_singleline_height},
     },
 };
 
@@ -127,6 +127,13 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
             let width = ui.available_width();
             ui.add(TextEdit::singleline(value).id_source(setting_id).desired_width(width));
         }
+        WidgetSetting::Color { value, .. } => {
+            // Keep widget colors opaque even when loading a manually edited layout
+            *value = value.to_opaque();
+            ui.push_id(setting_id, |ui| {
+                color_picker::color_edit_button_srgba(ui, value, color_picker::Alpha::Opaque)
+            });
+        }
         WidgetSetting::Integer {
             value,
             range,
@@ -136,8 +143,14 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
         } => {
             show_integer_setting(ui, setting_id, value, range, step, desired_width);
         }
-        WidgetSetting::Float { value, range, step, .. } => {
-            show_float_setting(ui, setting_id, value, range, step);
+        WidgetSetting::Float {
+            value,
+            range,
+            step,
+            desired_width,
+            ..
+        } => {
+            show_float_setting(ui, setting_id, value, range, step, desired_width);
         }
     }
 }
@@ -158,6 +171,7 @@ fn setting_label(setting: &WidgetSetting<'_>) -> &'static str {
         WidgetSetting::Checkbox { label, .. }
         | WidgetSetting::ComboBox { label, .. }
         | WidgetSetting::TextBox { label, .. }
+        | WidgetSetting::Color { label, .. }
         | WidgetSetting::Integer { label, .. }
         | WidgetSetting::Float { label, .. } => label,
     }
@@ -169,7 +183,9 @@ fn setting_control_height(ui: &Ui, setting: &WidgetSetting<'_>) -> f32 {
         WidgetSetting::TextBox { .. } | WidgetSetting::Integer { .. } | WidgetSetting::Float { .. } => {
             default_singleline_height(ui)
         }
-        WidgetSetting::Checkbox { .. } | WidgetSetting::ComboBox { .. } => ui.spacing().interact_size.y,
+        WidgetSetting::Checkbox { .. } | WidgetSetting::ComboBox { .. } | WidgetSetting::Color { .. } => {
+            ui.spacing().interact_size.y
+        }
     }
 }
 
@@ -178,7 +194,7 @@ fn show_integer_setting(
     setting_id: &'static str,
     value: &mut i64,
     range: RangeInclusive<i64>,
-    step: i64,
+    step: Option<i64>,
     desired_width: Option<f32>,
 ) {
     let hint = integer_range_hint(&range);
@@ -187,13 +203,24 @@ fn show_integer_setting(
         let width = desired_width
             .unwrap_or_else(|| ui.available_width())
             .min(ui.available_width());
-        let output = IntegerStepper::new(value)
-            .range(range)
-            .step(step)
-            .id_salt(setting_id)
-            .desired_width(width)
-            .show(ui);
-        if output.invalid {
+        let invalid = if let Some(step) = step {
+            IntegerStepper::new(value)
+                .range(range)
+                .step(step)
+                .id_salt(setting_id)
+                .desired_width(width)
+                .show(ui)
+                .invalid
+        } else {
+            ValueEdit::new(value)
+                .id(setting_id)
+                .with_width(width)
+                .update_while_editing(true)
+                .range(range)
+                .show_with_status(ui)
+                .invalid
+        };
+        if invalid {
             show_range_hint(ui, hint);
         }
     });
@@ -205,13 +232,16 @@ fn show_float_setting(
     value: &mut f64,
     range: RangeInclusive<f64>,
     step: Option<f64>,
+    desired_width: Option<f32>,
 ) {
     let hint = float_range_hint(&range);
     ui.vertical(|ui| {
         // Use attached controls only for floating-point settings with an explicit step
-        let width = ui.available_width();
+        let width = desired_width
+            .unwrap_or_else(|| ui.available_width())
+            .min(ui.available_width());
         let invalid = if let Some(step) = step {
-            NumericStepper::new(value)
+            FloatStepper::new(value)
                 .range(range)
                 .step(step)
                 .id_salt(setting_id)

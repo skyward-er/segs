@@ -237,11 +237,17 @@ pub struct NumericStepperOutput {
     pub invalid: bool,
 }
 
-/// Compatibility name for an integer-valued [`NumericStepper`].
+/// A whole-number editor with attached decrement and increment buttons.
 pub type IntegerStepper<'a> = NumericStepper<'a, i64>;
 
-/// Compatibility name for the output returned by an [`IntegerStepper`].
+/// Result of rendering an [`IntegerStepper`] with validation status.
 pub type IntegerStepperOutput = NumericStepperOutput;
+
+/// A floating-point editor with attached decrement and increment buttons.
+pub type FloatStepper<'a> = NumericStepper<'a, f64>;
+
+/// Result of rendering a [`FloatStepper`] with validation status.
+pub type FloatStepperOutput = NumericStepperOutput;
 
 mod private {
     pub trait Sealed {}

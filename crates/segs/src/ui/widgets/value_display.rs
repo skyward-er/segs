@@ -94,13 +94,13 @@ impl WidgetTrait for ValueDisplayWidget {
         ];
 
         if show_text_size {
-            settings.push(WidgetSetting::integer_with_width(
+            settings.push(WidgetSetting::integer(
                 "text_size",
                 "Text size",
                 &mut self.text_size,
                 2..=500,
-                1,
-                TEXT_SIZE_SETTING_WIDTH,
+                Some(1),
+                Some(TEXT_SIZE_SETTING_WIDTH),
             ));
         }
 

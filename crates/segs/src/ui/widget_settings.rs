@@ -3,6 +3,7 @@
 
 use std::ops::RangeInclusive;
 
+use egui::Color32;
 use serde::de;
 
 use crate::dataflow::StreamKey;
@@ -59,7 +60,16 @@ pub enum WidgetSetting<'a> {
         /// String value edited in place.
         value: &'a mut String,
     },
-    /// A whole-number setting rendered with decrement and increment controls.
+    /// A color setting rendered with a color picker.
+    Color {
+        /// Stable interaction identifier.
+        id: &'static str,
+        /// User-facing setting label.
+        label: &'static str,
+        /// Opaque color value edited in place.
+        value: &'a mut Color32,
+    },
+    /// A whole-number setting rendered as a numeric field with optional step controls.
     Integer {
         /// Stable interaction identifier.
         id: &'static str,
@@ -69,12 +79,12 @@ pub enum WidgetSetting<'a> {
         value: &'a mut i64,
         /// Inclusive limits applied to typed and stepped values.
         range: RangeInclusive<i64>,
-        /// Positive amount applied by each decrement or increment.
-        step: i64,
+        /// Optional positive amount applied by each decrement or increment.
+        step: Option<i64>,
         /// Optional total control width in logical points.
         desired_width: Option<f32>,
     },
-    /// A floating-point setting rendered as a validated numeric field.
+    /// A floating-point setting rendered as a numeric field with optional step controls.
     Float {
         /// Stable interaction identifier.
         id: &'static str,
@@ -86,6 +96,8 @@ pub enum WidgetSetting<'a> {
         range: RangeInclusive<f64>,
         /// Optional positive amount applied by decrement and increment controls.
         step: Option<f64>,
+        /// Optional total control width in logical points.
+        desired_width: Option<f32>,
     },
 }
 
@@ -121,95 +133,78 @@ impl<'a> WidgetSetting<'a> {
         Self::TextBox { id, label, value }
     }
 
+    /// Creates an opaque color setting.
+    ///
+    /// Returns a setting that edits `value` directly using a color picker.
+    pub fn color(id: &'static str, label: &'static str, value: &'a mut Color32) -> Self {
+        Self::Color { id, label, value }
+    }
+
     /// Creates a bounded whole-number setting.
     ///
-    /// Returns a setting that changes `value` by `step` and clamps edits to
-    /// `range`. The step must be positive and the range must not be empty.
+    /// Returns a setting that clamps edits to `range`, optionally changes
+    /// `value` by `step`, and optionally requests `desired_width` logical
+    /// points. The step and width must be positive when present, and the range
+    /// must not be empty.
     pub fn integer(
         id: &'static str,
         label: &'static str,
         value: &'a mut i64,
         range: RangeInclusive<i64>,
-        step: i64,
+        step: Option<i64>,
+        desired_width: Option<f32>,
     ) -> Self {
-        debug_assert!(step > 0, "integer setting step must be positive");
+        debug_assert!(
+            step.is_none_or(|step| step > 0),
+            "integer setting step must be positive"
+        );
         debug_assert!(!range.is_empty(), "integer setting range must not be empty");
+        debug_assert!(
+            desired_width.is_none_or(|width| width > 0.),
+            "integer setting width must be positive"
+        );
         Self::Integer {
             id,
             label,
             value,
             range,
             step,
-            desired_width: None,
-        }
-    }
-
-    /// Creates a bounded whole-number setting with an explicit total width.
-    ///
-    /// Returns a setting that changes `value` by `step`, clamps edits to
-    /// `range`, and requests `desired_width` logical points. The step and width
-    /// must be positive and the range must not be empty.
-    pub fn integer_with_width(
-        id: &'static str,
-        label: &'static str,
-        value: &'a mut i64,
-        range: RangeInclusive<i64>,
-        step: i64,
-        desired_width: f32,
-    ) -> Self {
-        debug_assert!(step > 0, "integer setting step must be positive");
-        debug_assert!(!range.is_empty(), "integer setting range must not be empty");
-        debug_assert!(desired_width > 0., "integer setting width must be positive");
-        Self::Integer {
-            id,
-            label,
-            value,
-            range,
-            step,
-            desired_width: Some(desired_width),
+            desired_width,
         }
     }
 
     /// Creates a bounded floating-point setting.
     ///
-    /// Returns a setting that edits `value` and clamps finite input to `range`.
-    /// Both range endpoints must be finite and the range must not be empty.
-    pub fn float(id: &'static str, label: &'static str, value: &'a mut f64, range: RangeInclusive<f64>) -> Self {
-        debug_assert!(range.start().is_finite() && range.end().is_finite());
-        debug_assert!(!range.is_empty(), "float setting range must not be empty");
-        Self::Float {
-            id,
-            label,
-            value,
-            range,
-            step: None,
-        }
-    }
-
-    /// Creates a bounded floating-point setting with step controls.
-    ///
-    /// Returns a setting that changes `value` by `step` and clamps edits to
-    /// `range`. The step and range endpoints must be finite, the step must be
-    /// positive, and the range must not be empty.
-    pub fn float_stepper(
+    /// Returns a setting that clamps finite input to `range`, optionally
+    /// changes `value` by `step`, and optionally requests `desired_width`
+    /// logical points. The step must be finite and positive when present, the
+    /// width must be positive when present, and both range endpoints must be
+    /// finite with a non-empty range.
+    pub fn float(
         id: &'static str,
         label: &'static str,
         value: &'a mut f64,
         range: RangeInclusive<f64>,
-        step: f64,
+        step: Option<f64>,
+        desired_width: Option<f32>,
     ) -> Self {
         debug_assert!(
-            step.is_finite() && step > 0.,
+            step.is_none_or(|step| step.is_finite() && step > 0.),
             "float setting step must be finite and positive"
         );
         debug_assert!(range.start().is_finite() && range.end().is_finite());
         debug_assert!(!range.is_empty(), "float setting range must not be empty");
+        debug_assert!(
+            desired_width.is_none_or(|width| width > 0.),
+            "float setting width must be positive"
+        );
         Self::Float {
             id,
             label,
             value,
             range,
-            step: Some(step),
+            step,
+            desired_width,
         }
     }
 
@@ -219,6 +214,7 @@ impl<'a> WidgetSetting<'a> {
             Self::Checkbox { id, .. }
             | Self::ComboBox { id, .. }
             | Self::TextBox { id, .. }
+            | Self::Color { id, .. }
             | Self::Integer { id, .. }
             | Self::Float { id, .. } => id,
         }

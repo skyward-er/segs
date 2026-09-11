@@ -40,6 +40,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
         schema_version = match schema_version {
             FIRST_LAYOUT_SCHEMA => v1::migrate(&mut value),
             v1::NEXT_SCHEMA_VERSION => v2::migrate(&mut value),
+            v2::NEXT_SCHEMA_VERSION => v3::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -111,7 +112,7 @@ mod v2 {
     const DEFAULT_VALUE_DISPLAY_TEXT_SIZE: i64 = 32;
     const DEFAULT_MESSAGE_VIEWER_TEXT_SIZE: i64 = 12;
     const DEFAULT_STALE_AFTER_SECONDS: f64 = 5.;
-    const DEFAULT_HISTORY_SECONDS: f64 = 90.;
+    const DEFAULT_HISTORY_SECONDS: f64 = 60.;
     const DEFAULT_Y_MIN: f64 = 0.;
     const DEFAULT_Y_MAX: f64 = 1.;
     const MIN_VALUE_DISPLAY_TEXT_SIZE: f32 = 1. / 0.75;
@@ -206,6 +207,52 @@ mod v2 {
     }
 }
 
+/// Migration from layout schema v3 to v4.
+mod v3 {
+    use egui::Color32;
+    use serde_json::{Map, Number, Value};
+
+    /// Schema version produced by this migration.
+    pub const NEXT_SCHEMA_VERSION: u32 = 4;
+    const DEFAULT_LINE_WIDTH: f64 = 1.5;
+
+    /// Adds configurable plot line appearance and advances the version marker.
+    ///
+    /// Returns the next schema version after inserting defaults where needed.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Fill missing line settings without replacing values already persisted
+        if let Some(widgets) = layout.get_mut("widgets").and_then(Value::as_array_mut) {
+            for widget in widgets {
+                let Some(plot) = widget
+                    .get_mut("variant")
+                    .and_then(|variant| variant.get_mut("Plot"))
+                    .and_then(Value::as_object_mut)
+                else {
+                    continue;
+                };
+                insert_line_defaults(plot);
+            }
+        }
+
+        // Mark the document ready for current deserialization
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+
+        NEXT_SCHEMA_VERSION
+    }
+
+    /// Inserts the line appearance used before it became configurable.
+    fn insert_line_defaults(plot: &mut Map<String, Value>) {
+        // Serialize the native color type so the migration matches its current wire format
+        plot.entry("line_color")
+            .or_insert_with(|| serde_json::to_value(Color32::BLUE).expect("default line color is serializable"));
+        plot.entry("line_width").or_insert_with(|| {
+            Value::Number(Number::from_f64(DEFAULT_LINE_WIDTH).expect("default line width is finite"))
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Rect, pos2, vec2};
@@ -238,6 +285,8 @@ mod tests {
         plot.remove("auto_y_bounds");
         plot.remove("y_min");
         plot.remove("y_max");
+        plot.remove("line_color");
+        plot.remove("line_width");
         let invalid_plot = value
             .pointer_mut("/widgets/1/variant/Plot")
             .unwrap()
@@ -247,6 +296,11 @@ mod tests {
         invalid_plot.insert("auto_y_bounds".to_owned(), Value::Bool(false));
         invalid_plot.insert("y_min".to_owned(), Value::String("invalid".to_owned()));
         invalid_plot.insert("y_max".to_owned(), Value::String("4".to_owned()));
+        invalid_plot.insert(
+            "line_color".to_owned(),
+            serde_json::to_value(egui::Color32::RED).unwrap(),
+        );
+        invalid_plot.insert("line_width".to_owned(), 2.5.into());
         value["widgets"][2]["variant"]["MessageViewer"]["text_size"] = Value::String("18.6".to_owned());
         value["widgets"][2]["variant"]["MessageViewer"]["stale_after"] = Value::String("invalid".to_owned());
         value["widgets"][3]["variant"]["ValueDisplay"]["text_size"] = Value::String("1.5".to_owned());
@@ -262,11 +316,18 @@ mod tests {
         assert_eq!(plot["auto_y_bounds"], true);
         assert_eq!(plot["y_min"], 0.);
         assert_eq!(plot["y_max"], 1.);
+        assert_eq!(plot["line_color"], serde_json::to_value(egui::Color32::BLUE).unwrap());
+        assert_eq!(plot["line_width"], 1.);
         let invalid_plot = migrated_value.pointer("/widgets/1/variant/Plot").unwrap();
         assert_eq!(invalid_plot["history_seconds"], 90.);
         assert_eq!(invalid_plot["auto_y_bounds"], true);
         assert_eq!(invalid_plot["y_min"], 0.);
         assert_eq!(invalid_plot["y_max"], 4.);
+        assert_eq!(
+            invalid_plot["line_color"],
+            serde_json::to_value(egui::Color32::RED).unwrap()
+        );
+        assert_eq!(invalid_plot["line_width"], 2.5);
         let message_viewer = migrated_value.pointer("/widgets/2/variant/MessageViewer").unwrap();
         assert_eq!(message_viewer["text_size"], 19);
         assert_eq!(message_viewer["stale_after"], 5.);
