@@ -71,7 +71,7 @@ fn show_left_side(ui: &mut Ui, appctx: &mut AppContext) {
         .add_icon(icon)
         .add_text("Commands");
     let response = ui.add(button).on_hover_cursor(CursorIcon::PointingHand);
-    Tooltip::new(&response, "Toggle Command Panel")
+    Tooltip::new(&response, "Command Panel")
         .shortcut(command_panel::TOGGLE_SHORTCUT)
         .show();
     if response.clicked() {
@@ -118,7 +118,7 @@ fn show_source_status(ui: &mut Ui, status: Option<Status>) -> Response {
             .add(button)
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_ui(|ui| {
-                show_status_tooltip(ui, icons::PlugConnectedX, "Disconnected");
+                show_icon_tooltip(ui, icons::PlugConnectedX, "Disconnected");
             });
     };
 
@@ -141,15 +141,15 @@ fn show_source_status(ui: &mut Ui, status: Option<Status>) -> Response {
 
     match status.transport {
         Ethernet { .. } => response.on_hover_ui(|ui| {
-            show_status_tooltip(ui, icons::Ethernet, "Connected");
+            show_icon_tooltip(ui, icons::Ethernet, "Connected");
         }),
         Serial { .. } => response.on_hover_ui(|ui| {
-            show_status_tooltip(ui, icons::Usb, "Connected");
+            show_icon_tooltip(ui, icons::Usb, "Connected");
         }),
     }
 }
 
-fn show_status_tooltip(ui: &mut Ui, icon: impl Icon, text: &str) {
+fn show_icon_tooltip(ui: &mut Ui, icon: impl Icon, text: &str) {
     ui.horizontal(|ui| {
         ui.add(
             icon.to_image()
@@ -169,18 +169,22 @@ fn show_right_side(ui: &mut egui::Ui) {
 fn show_theme_toggle(ui: &mut Ui) {
     let dark_mode = ui.visuals().dark_mode;
 
-    // Show the icon for the theme that will be activated
-    let clicked = if dark_mode {
-        let button = UnpaddedStatusBarButton::default().add_icon(icons::Sun::outline());
-        ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked()
+    let response = if dark_mode {
+        ui.add(UnpaddedStatusBarButton::default().add_icon(icons::Sun::outline()))
     } else {
-        let button = UnpaddedStatusBarButton::default().add_icon(icons::Moon::outline());
-        ui.add(button).on_hover_cursor(CursorIcon::PointingHand).clicked()
-    };
+        ui.add(UnpaddedStatusBarButton::default().add_icon(icons::Moon::outline()))
+    }
+    .on_hover_cursor(CursorIcon::PointingHand);
 
-    // Switch to the opposite theme
-    if clicked {
-        ui.ctx().set_theme(if dark_mode { Theme::Light } else { Theme::Dark });
+    let (tooltip, theme) = if dark_mode {
+        ("Switch to light mode", Theme::Light)
+    } else {
+        ("Switch to dark mode", Theme::Dark)
+    };
+    Tooltip::new(&response, tooltip).show();
+
+    if response.clicked() {
+        ui.ctx().set_theme(theme);
         ui.ctx().request_discard("theme change");
     }
 }
