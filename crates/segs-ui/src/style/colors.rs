@@ -38,8 +38,8 @@ pub const ICON_INACTIVE_ON_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(89, 90,
 pub const ICON_ACTIVE_ON_BACKGROUND_DARK: Color32 = Color32::WHITE;
 pub const ICON_ACTIVE_ON_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(26, 26, 26);
 // ---- Popup stroke color -----------------------------------------------------
-pub const POPUP_STROKE_DARK: Color32 = Color32::from_rgb(57, 59, 66);
-pub const POPUP_STROKE_LIGHT: Color32 = Color32::from_rgb(216, 216, 216);
+pub const POPUP_STROKE_DARK: Color32 = Color32::from_rgba_premultiplied(26, 26, 26, 26);
+pub const POPUP_STROKE_LIGHT: Color32 = Color32::from_black_alpha(20);
 
 // -----------------------------------------------------------------------------
 // Widgets Colors
@@ -96,8 +96,8 @@ pub const SHADOW_MEDIUM_ON_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(226, 22
 pub const SHADOW_STRONG_ON_BACKGROUND_DARK: Color32 = SHADOW_MEDIUM_ON_BACKGROUND_DARK; // FIXME
 pub const SHADOW_STRONG_ON_BACKGROUND_LIGHT: Color32 = Color32::from_rgb(217, 217, 217);
 // ----- Popup shadow color ----------------------------------------------------
-pub const POPUP_SHADOW_DARK: Color32 = Color32::from_rgb(21, 22, 25);
-pub const POPUP_SHADOW_LIGHT: Color32 = Color32::from_rgb(84, 88, 100);
+pub const POPUP_SHADOW_DARK: Color32 = Color32::from_black_alpha(41);
+pub const POPUP_SHADOW_LIGHT: Color32 = Color32::from_black_alpha(26);
 
 // -----------------------------------------------------------------------------
 // Theme Colors (e.g. for accents, highlights, confirmation states)

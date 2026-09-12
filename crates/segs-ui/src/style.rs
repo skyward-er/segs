@@ -318,8 +318,8 @@ fn override_dark_style(style: &mut egui::Style) {
     style.visuals.window_stroke = Stroke::new(1_f32, POPUP_STROKE_DARK);
     style.visuals.window_fill = FOREGROUND_DARK;
     style.visuals.popup_shadow = Shadow {
-        offset: [1, 2],
-        blur: 3,
+        offset: [0, 4],
+        blur: 8,
         spread: 0,
         color: POPUP_SHADOW_DARK,
     };
@@ -337,9 +337,9 @@ fn override_light_style(style: &mut egui::Style) {
     style.visuals.window_stroke = Stroke::new(1_f32, POPUP_STROKE_LIGHT);
     style.visuals.window_fill = FOREGROUND_LIGHT;
     style.visuals.popup_shadow = Shadow {
-        offset: [1, 2],
-        blur: 5,
-        spread: 1,
+        offset: [0, 4],
+        blur: 8,
+        spread: 0,
         color: POPUP_SHADOW_LIGHT,
     };
 
