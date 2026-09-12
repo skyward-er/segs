@@ -63,6 +63,9 @@ struct ControlError {
 fn open_manager(ui: &Ui, layouts: &LayoutManager) {
     // Initialize the catalog selection from the active layout
     select_active_layout(ui, layouts);
+
+    // Prevent the keypress that opened the manager from activating its selection
+    ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Enter));
     ui.mem().insert_temp(Id::new(MANAGER_OPEN_ID), true);
 }
 
