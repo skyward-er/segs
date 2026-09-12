@@ -9,7 +9,6 @@ license.workspace = true
 
 [dependencies]
 ahash.workspace = true
-aho-corasick = "1.1.4"
 chrono = { version = "0.4.42", features = ["serde"] }
 directories = "6.0.0"
 eframe.workspace = true

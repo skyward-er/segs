@@ -585,14 +585,14 @@ pub(super) fn resolve_visible_rows<C>(
     }
 
     if !hierarchical {
-        rows.extend((0..choices.len()).filter(|index| choices.normalized_label(*index).contains(&query)));
+        rows.extend((0..choices.len()).filter(|index| matches_query(choices.normalized_label(*index), &query)));
         return;
     }
 
     // Mark matches, their ancestors, and directly matched group subtrees
     let mut included = vec![false; choices.len()];
     for index in 0..choices.len() {
-        if !choices.normalized_label(index).contains(&query) {
+        if !matches_query(choices.normalized_label(index), &query) {
             continue;
         }
         let mut ancestor = Some(index);
@@ -610,6 +610,13 @@ pub(super) fn resolve_visible_rows<C>(
             .enumerate()
             .filter_map(|(index, included)| included.then_some(index)),
     );
+}
+
+fn matches_query(normalized_label: &str, normalized_query: &str) -> bool {
+    // Match every whitespace-separated fragment without requiring label punctuation or fragment order
+    normalized_query
+        .split_whitespace()
+        .all(|fragment| normalized_label.contains(fragment))
 }
 
 fn show_empty_results(ui: &mut Ui, text: &str, list_margin: Margin, text_margin: Margin) {

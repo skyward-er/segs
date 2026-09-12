@@ -3455,7 +3455,6 @@ name = "segs"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "aho-corasick",
  "argh",
  "bitflags 2.13.1",
  "chrono",

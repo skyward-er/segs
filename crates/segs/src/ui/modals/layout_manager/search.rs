@@ -1,6 +1,5 @@
 use std::{cmp::Ordering, ops::Range, sync::Arc};
 
-use aho_corasick::AhoCorasick;
 use smallvec::SmallVec;
 
 use crate::layout::Layout;
@@ -20,9 +19,18 @@ pub struct CachedSearch {
     pub results: Vec<SearchResult>,
 }
 
-/// Filters layouts case-insensitively and ranks earlier name matches first.
+/// Filters layouts by case-insensitive query fragments and ranks earlier name matches first.
 pub fn search<'a>(layouts: impl IntoIterator<Item = &'a Layout>, query: &str) -> Vec<SearchResult> {
-    if query.is_empty() {
+    // Normalize and keep each query fragment once
+    let normalized_query = query.to_ascii_lowercase();
+    let mut fragments = SmallVec::<[&str; 3]>::new();
+    for fragment in normalized_query.split_whitespace() {
+        if !fragments.contains(&fragment) {
+            fragments.push(fragment);
+        }
+    }
+
+    if fragments.is_empty() {
         let mut results = layouts
             .into_iter()
             .map(|layout| SearchResult {
@@ -35,17 +43,25 @@ pub fn search<'a>(layouts: impl IntoIterator<Item = &'a Layout>, query: &str) ->
         return results;
     }
 
-    let Ok(matcher) = AhoCorasick::new([query.to_ascii_lowercase()]) else {
-        return Vec::new();
-    };
+    // Keep layouts containing every fragment and collect their match positions
     let mut results = layouts
         .into_iter()
         .filter_map(|layout| {
-            let matches = matcher
-                .find_iter(&layout.name.to_ascii_lowercase())
-                .map(|found| found.range())
-                .collect::<SmallVec<_>>();
-            (!matches.is_empty()).then(|| SearchResult {
+            let normalized_name = layout.name.to_ascii_lowercase();
+            let mut matches = SmallVec::<[Range<usize>; 3]>::new();
+            for fragment in &fragments {
+                let previous_len = matches.len();
+                matches.extend(
+                    normalized_name
+                        .match_indices(fragment)
+                        .map(|(start, found)| start..start + found.len()),
+                );
+                if matches.len() == previous_len {
+                    return None;
+                }
+            }
+            matches.sort_unstable_by_key(|found| found.start);
+            Some(SearchResult {
                 slug: layout.slug.clone(),
                 name: layout.name.clone(),
                 matches,
