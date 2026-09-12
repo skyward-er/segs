@@ -25,14 +25,54 @@ impl DataStore {
         Default::default()
     }
 
-    /// Ensures the fixed sample stream used by widget gallery previews exists.
-    pub fn ensure_mock_stream(&mut self) {
-        self.streams.entry(StreamKey::mock()).or_insert_with(|| {
-            DataStream::F64(vec![DataPoint {
-                timestamp: 0.,
-                value: 42.,
-            }])
-        });
+    /// Ensures the live sample stream used by widget gallery previews is current.
+    ///
+    /// The returned duration is the time until the next mock sample should be
+    /// generated and can be used to schedule a repaint.
+    pub fn ensure_mock_stream(&mut self) -> std::time::Duration {
+        const UPDATE_HZ: f64 = 10.;
+        const HISTORY_SECONDS: f64 = 60.;
+        const SIGNAL_FREQUENCY_HZ: f64 = 0.05;
+        const SIGNAL_PHASE_RADIANS: f64 = 0.37;
+        const SIGNAL_CENTER: f64 = 42.;
+        const SIGNAL_AMPLITUDE: f64 = 12.;
+
+        fn signal_value(timestamp: f64) -> f64 {
+            let phase = std::f64::consts::TAU * SIGNAL_FREQUENCY_HZ * timestamp + SIGNAL_PHASE_RADIANS;
+            SIGNAL_CENTER + SIGNAL_AMPLITUDE * phase.sin()
+        }
+
+        let update_interval = 1. / UPDATE_HZ;
+        let current_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+
+        // Determine the fixed-rate samples in the current history window
+        let newest_index = (current_timestamp * UPDATE_HZ).floor() as u64;
+        let history_samples = (HISTORY_SECONDS * UPDATE_HZ).ceil() as u64;
+        let first_index = newest_index.saturating_sub(history_samples);
+
+        // Rebuild the shared stream so all gallery widgets observe the same latest value
+        let stream = self
+            .streams
+            .entry(StreamKey::mock())
+            .or_insert_with(|| DataStream::F64(Vec::new()));
+        if let DataStream::F64(points) = stream {
+            points.clear();
+            points.reserve(history_samples.saturating_add(1) as usize);
+            for index in first_index..=newest_index {
+                let timestamp = index as f64 * update_interval;
+                points.push(DataPoint {
+                    timestamp,
+                    value: signal_value(timestamp),
+                });
+            }
+        }
+
+        // Wake the gallery when the next fixed-rate sample becomes due
+        let next_timestamp = (newest_index + 1) as f64 * update_interval;
+        std::time::Duration::from_secs_f64((next_timestamp - current_timestamp).max(f64::EPSILON))
     }
 
     /// Returns the complete stream associated with `key`.

@@ -14,7 +14,8 @@ use super::{HitRegion, WidgetDragPayload, WidgetDragSource, next_drag_session};
 
 /// Draws gallery cards and starts widget drags.
 pub fn show(ui: &mut Ui, data_store: &mut DataStore) {
-    data_store.ensure_mock_stream();
+    let repaint_after = data_store.ensure_mock_stream();
+    ui.ctx().request_repaint_after(repaint_after);
 
     for (index, variant) in WidgetVariant::gallery().into_iter().enumerate() {
         let mut preview = variant.clone();
