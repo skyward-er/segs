@@ -22,10 +22,10 @@ pub fn get_layouts_dirpath() -> PathBuf {
 
 #[cfg(debug_assertions)]
 fn project_dirs() -> ProjectDirs {
-    directories::ProjectDirs::from("eu", "skyward", "segs-dev").expect("Could not determine project directories")
+    directories::ProjectDirs::from("eu", "skywarder", "segs2-dev").expect("Could not determine project directories")
 }
 
 #[cfg(not(debug_assertions))]
 fn project_dirs() -> ProjectDirs {
-    directories::ProjectDirs::from("eu", "skyward", "segs").expect("Could not determine project directories")
+    directories::ProjectDirs::from("eu", "skywarder", "segs2").expect("Could not determine project directories")
 }

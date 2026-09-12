@@ -7,6 +7,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "segs2"
+path = "src/main.rs"
+
+[package.metadata.winresource]
+ProductName = "SEGS 2"
+InternalName = "segs2"
+OriginalFilename = "segs2.exe"
+
 [dependencies]
 ahash.workspace = true
 chrono = { version = "0.4.42", features = ["serde"] }
@@ -30,3 +39,6 @@ tempfile = "3.24.0"
 thiserror.workspace = true
 argh = "0.1.19"
 bitflags = "2.12.1"
+
+[build-dependencies]
+winresource = "0.1.31"

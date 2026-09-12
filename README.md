@@ -23,7 +23,31 @@ Skyward Enhanced Ground Software (in short **SEGS**) is a team effort that aims 
 
 ## Installation
 
-Since we are in the early stages of development, we do not provide a binary release yet. However, you can build the project from source.
+Since we are in the early stages of development, we do not provide a binary release yet. Install SEGS 2 from source on Linux, Windows, or macOS with Cargo:
+
+```sh
+cargo install --path crates/segs --locked
+```
+
+Cargo installs `segs2` into its configured platform-specific binary directory.
+
+On Linux, register the desktop entry and icon for the current user after
+installing the binary:
+
+```sh
+./scripts/linux-install-desktop.sh install
+```
+
+Remove only the Linux desktop integration without touching SEGS 2 or a
+separately installed SEGS v1 binary:
+
+```sh
+./scripts/linux-install-desktop.sh uninstall
+```
+
+Run the script without a subcommand to print its usage. It honors
+`XDG_DATA_HOME` for the desktop entry and icon and otherwise uses
+`$HOME/.local/share`.
 
 <!-- TODO: ADD BINARY RELEASE CI TASK -->
 

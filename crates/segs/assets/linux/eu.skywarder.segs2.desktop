@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SEGS 2
+Comment=Skyward Enhanced Ground Software
+Exec=segs2
+TryExec=segs2
+Icon=eu.skywarder.segs2
+Terminal=false
+Categories=Science;Engineering;
+StartupWMClass=segs2
