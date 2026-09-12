@@ -163,29 +163,6 @@ fn show_status_tooltip(ui: &mut Ui, icon: impl Icon, text: &str) {
 fn show_right_side(ui: &mut egui::Ui) {
     // Place the theme toggle first so it is rightmost in the right-to-left layout
     show_theme_toggle(ui);
-
-    // Show notification controls
-    let notifications_id = ui.id().with("status_bar_notifications");
-    let mut notifications_visible: bool = ui.mem().get_temp_or_default(notifications_id);
-
-    let bell_icon = if notifications_visible {
-        icons::Bell::solid()
-    } else {
-        icons::Bell::outline()
-    };
-    let btn = UnpaddedStatusBarButton::default().add_icon(bell_icon);
-    let res = ui.add(btn);
-    if res.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-        notifications_visible = !notifications_visible;
-    }
-    ui.mem().insert_temp(notifications_id, notifications_visible);
-
-    // Show quick command controls
-    let btn = UnpaddedStatusBarButton::default()
-        .padded()
-        .add_icon(icons::Lightning)
-        .add_text("Quick Commands");
-    ui.add(btn);
 }
 
 /// Shows the theme toggle and switches between the light and dark themes when clicked.
