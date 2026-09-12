@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use egui::{Color32, Id, Stroke, Ui};
 use segs_memory::MemoryExt;
-use segs_plot::mapped_line;
+use segs_plot::{HoverPosition, format_number, mapped_line};
 use segs_ui::widgets::plot::{LineSettings, PlotOptions, plot_widget};
 use serde::{Deserialize, Serialize};
 
@@ -24,12 +24,17 @@ const MINIMUM_LINE_WIDTH: f64 = 0.25;
 const MAXIMUM_LINE_WIDTH: f64 = 10.;
 const LINE_WIDTH_STEP: f64 = 0.25;
 const DEFAULT_LINE_COLOR: Color32 = Color32::BLUE;
+const UNKNOWN_STREAM_NAME: &str = "Unknown stream";
 
 /// Displays one selected numeric data stream as a time-series line.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlotWidget {
     /// Stream plotted with timestamps on X and sample values on Y.
     stream: Option<StreamKey>,
+    /// Descriptor field name captured when the stream was selected.
+    stream_name: String,
+    /// Whether the latest stream value is shown over the plot.
+    show_latest_value: bool,
     /// Opaque color used to draw the plotted line.
     line_color: Color32,
     /// Stroke width of the plotted line in logical points.
@@ -49,6 +54,8 @@ impl Default for PlotWidget {
     fn default() -> Self {
         Self {
             stream: None,
+            stream_name: UNKNOWN_STREAM_NAME.to_owned(),
+            show_latest_value: true,
             line_color: DEFAULT_LINE_COLOR,
             line_width: DEFAULT_LINE_WIDTH,
             history_seconds: DEFAULT_HISTORY_SECONDS,
@@ -81,58 +88,82 @@ impl WidgetTrait for PlotWidget {
             Some(DataStream::String(_)) | None => None,
         };
         let (options, live_range) = plot_options(latest_timestamp, history_seconds, y_bounds, reset);
+        let persistent_label = self
+            .show_latest_value
+            .then(|| persistent_label(self.stream, &self.stream_name, stream));
 
         // Select a statically dispatched mapper for the borrowed numeric stream
         match stream {
             Some(DataStream::F64(points)) => {
-                plot_widget(ui, plot_id, &options, |plot_ui| {
-                    let following = plot_ui.auto_bounds().x || plot_ui.response().double_clicked();
-                    let range = if following {
-                        live_range.clone().unwrap_or_else(|| plot_ui.plot_bounds().range_x())
-                    } else {
-                        plot_ui.plot_bounds().range_x()
-                    };
-                    let points = points_in_range(points, range, !following);
+                plot_widget(
+                    ui,
+                    plot_id,
+                    &options,
+                    persistent_label.as_deref(),
+                    hover_label,
+                    |plot_ui| {
+                        let following = plot_ui.auto_bounds().x || plot_ui.response().double_clicked();
+                        let range = if following {
+                            live_range.clone().unwrap_or_else(|| plot_ui.plot_bounds().range_x())
+                        } else {
+                            plot_ui.plot_bounds().range_x()
+                        };
+                        let points = points_in_range(points, range, !following);
 
-                    // Map the selected borrowed suffix directly into the rendered path
-                    if !points.is_empty() {
-                        plot_ui.add(mapped_line(
-                            "Stream",
-                            points,
-                            |point| (point.timestamp, point.value),
-                            stroke,
-                        ));
-                    }
-                })
+                        // Map the selected borrowed suffix directly into the rendered path
+                        if !points.is_empty() {
+                            plot_ui.add(mapped_line(
+                                &self.stream_name,
+                                points,
+                                |point| (point.timestamp, point.value),
+                                stroke,
+                            ));
+                        }
+                    },
+                )
             }
             Some(DataStream::I64(points)) => {
-                plot_widget(ui, plot_id, &options, |plot_ui| {
-                    let following = plot_ui.auto_bounds().x || plot_ui.response().double_clicked();
-                    let range = if following {
-                        live_range.clone().unwrap_or_else(|| plot_ui.plot_bounds().range_x())
-                    } else {
-                        plot_ui.plot_bounds().range_x()
-                    };
-                    let points = points_in_range(points, range, !following);
+                plot_widget(
+                    ui,
+                    plot_id,
+                    &options,
+                    persistent_label.as_deref(),
+                    hover_label,
+                    |plot_ui| {
+                        let following = plot_ui.auto_bounds().x || plot_ui.response().double_clicked();
+                        let range = if following {
+                            live_range.clone().unwrap_or_else(|| plot_ui.plot_bounds().range_x())
+                        } else {
+                            plot_ui.plot_bounds().range_x()
+                        };
+                        let points = points_in_range(points, range, !following);
 
-                    // Map the selected borrowed suffix directly into the rendered path
-                    if !points.is_empty() {
-                        plot_ui.add(mapped_line(
-                            "Stream",
-                            points,
-                            |point| (point.timestamp, point.value as f64),
-                            stroke,
-                        ));
-                    }
-                })
+                        // Map the selected borrowed suffix directly into the rendered path
+                        if !points.is_empty() {
+                            plot_ui.add(mapped_line(
+                                &self.stream_name,
+                                points,
+                                |point| (point.timestamp, point.value as f64),
+                                stroke,
+                            ));
+                        }
+                    },
+                )
             }
             // Retain plot interaction state while no numeric data is available
-            Some(DataStream::String(_)) | None => plot_widget(ui, plot_id, &options, |_| {}),
+            Some(DataStream::String(_)) | None => {
+                plot_widget(ui, plot_id, &options, persistent_label.as_deref(), hover_label, |_| {})
+            }
         };
     }
 
     fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>> {
-        vec![WidgetDataSetting::single_stream("stream", "Stream", &mut self.stream)]
+        vec![WidgetDataSetting::single_stream_with_name(
+            "stream",
+            "Stream",
+            &mut self.stream,
+            &mut self.stream_name,
+        )]
     }
 
     fn settings(&mut self) -> Vec<WidgetSetting<'_>> {
@@ -156,6 +187,7 @@ impl WidgetTrait for PlotWidget {
                 Some(LINE_WIDTH_STEP),
                 Some(STEP_VALUE_SETTING_WIDTH),
             ),
+            WidgetSetting::checkbox("show_latest_value", "Show latest value", &mut self.show_latest_value),
             WidgetSetting::checkbox("auto_y_bounds", "Auto Y bounds", &mut self.auto_y_bounds),
         ];
 
@@ -173,6 +205,36 @@ impl WidgetTrait for PlotWidget {
     fn display_name(&self) -> &'static str {
         "Plot"
     }
+}
+
+/// Returns the persistent plot badge for the selected stream and its latest value.
+fn persistent_label(stream_key: Option<StreamKey>, stream_name: &str, stream: Option<&DataStream>) -> String {
+    // Distinguish an unconfigured widget from a configured stream without samples
+    if stream_key.is_none() {
+        return "No stream selected".to_owned();
+    }
+    let value = stream
+        .and_then(DataStream::last)
+        .map_or_else(|| "No data".to_owned(), |(_, value)| format!("{value:.3}"));
+    format!("{stream_name}: {value}")
+}
+
+/// Formats the nearest plotted sample as a time-series hover label.
+///
+/// Returns `None` when the pointer is not near an actual sample.
+fn hover_label(position: &HoverPosition<'_>) -> Option<String> {
+    // Ignore free plot coordinates so labels represent real samples only
+    let HoverPosition::NearDataPoint {
+        plot_name, position, ..
+    } = position
+    else {
+        return None;
+    };
+    Some(format!(
+        "{plot_name}\nTime: {} s\nValue: {}",
+        format_number(position.x, 3),
+        format_number(position.y, 3),
+    ))
 }
 
 fn effective_line_width(line_width: f64) -> f32 {

@@ -10,7 +10,7 @@ use crate::ui::{
 };
 
 /// Latest layout schema emitted by the application.
-pub const CURRENT_LAYOUT_SCHEMA: u32 = 4;
+pub const CURRENT_LAYOUT_SCHEMA: u32 = 5;
 const ADDED_WIDGET_ID_NAMESPACE: &str = "layout_added_widget";
 
 /// Complete persisted representation of a named widget layout.

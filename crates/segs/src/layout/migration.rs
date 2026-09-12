@@ -41,6 +41,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
             FIRST_LAYOUT_SCHEMA => v1::migrate(&mut value),
             v1::NEXT_SCHEMA_VERSION => v2::migrate(&mut value),
             v2::NEXT_SCHEMA_VERSION => v3::migrate(&mut value),
+            v3::NEXT_SCHEMA_VERSION => v4::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -253,6 +254,42 @@ mod v3 {
     }
 }
 
+/// Migration from layout schema v4 to v5.
+mod v4 {
+    use serde_json::Value;
+
+    /// Schema version produced by this migration.
+    pub const NEXT_SCHEMA_VERSION: u32 = 5;
+
+    /// Adds the persisted plot label settings and advances the version marker.
+    ///
+    /// Returns the next schema version after inserting the unknown-name sentinel.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Add label defaults without guessing stream names from opaque keys
+        if let Some(widgets) = layout.get_mut("widgets").and_then(Value::as_array_mut) {
+            for widget in widgets {
+                let Some(plot) = widget
+                    .get_mut("variant")
+                    .and_then(|variant| variant.get_mut("Plot"))
+                    .and_then(Value::as_object_mut)
+                else {
+                    continue;
+                };
+                plot.entry("stream_name")
+                    .or_insert_with(|| Value::String("Unknown stream".to_owned()));
+                plot.entry("show_latest_value").or_insert(Value::Bool(true));
+            }
+        }
+
+        // Mark the document ready for current deserialization
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+
+        NEXT_SCHEMA_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Rect, pos2, vec2};
@@ -287,6 +324,8 @@ mod tests {
         plot.remove("y_max");
         plot.remove("line_color");
         plot.remove("line_width");
+        plot.remove("stream_name");
+        plot.remove("show_latest_value");
         let invalid_plot = value
             .pointer_mut("/widgets/1/variant/Plot")
             .unwrap()
@@ -301,6 +340,8 @@ mod tests {
             serde_json::to_value(egui::Color32::RED).unwrap(),
         );
         invalid_plot.insert("line_width".to_owned(), 2.5.into());
+        invalid_plot.remove("stream_name");
+        invalid_plot.remove("show_latest_value");
         value["widgets"][2]["variant"]["MessageViewer"]["text_size"] = Value::String("18.6".to_owned());
         value["widgets"][2]["variant"]["MessageViewer"]["stale_after"] = Value::String("invalid".to_owned());
         value["widgets"][3]["variant"]["ValueDisplay"]["text_size"] = Value::String("1.5".to_owned());
@@ -317,9 +358,11 @@ mod tests {
         assert_eq!(plot["y_min"], 0.);
         assert_eq!(plot["y_max"], 1.);
         assert_eq!(plot["line_color"], serde_json::to_value(egui::Color32::BLUE).unwrap());
-        assert_eq!(plot["line_width"], 1.);
+        assert_eq!(plot["line_width"], 1.5);
+        assert_eq!(plot["stream_name"], "Unknown stream");
+        assert_eq!(plot["show_latest_value"], true);
         let invalid_plot = migrated_value.pointer("/widgets/1/variant/Plot").unwrap();
-        assert_eq!(invalid_plot["history_seconds"], 90.);
+        assert_eq!(invalid_plot["history_seconds"], 60.);
         assert_eq!(invalid_plot["auto_y_bounds"], true);
         assert_eq!(invalid_plot["y_min"], 0.);
         assert_eq!(invalid_plot["y_max"], 4.);
@@ -328,6 +371,8 @@ mod tests {
             serde_json::to_value(egui::Color32::RED).unwrap()
         );
         assert_eq!(invalid_plot["line_width"], 2.5);
+        assert_eq!(invalid_plot["stream_name"], "Unknown stream");
+        assert_eq!(invalid_plot["show_latest_value"], true);
         let message_viewer = migrated_value.pointer("/widgets/2/variant/MessageViewer").unwrap();
         assert_eq!(message_viewer["text_size"], 19);
         assert_eq!(message_viewer["stale_after"], 5.);

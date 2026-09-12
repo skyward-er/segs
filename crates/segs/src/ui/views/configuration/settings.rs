@@ -62,8 +62,10 @@ fn show_data_settings(ui: &mut Ui, settings: Vec<WidgetDataSetting<'_>>, adapter
     for setting in settings {
         let setting_id = setting.id();
         ui.push_id(setting_id, |ui| match setting {
-            WidgetDataSetting::SingleStream { label, stream, .. } => {
-                stream_selector::show(ui, label, stream, adapter);
+            WidgetDataSetting::SingleStream {
+                label, stream, name, ..
+            } => {
+                stream_selector::show(ui, label, stream, name, adapter);
             }
             WidgetDataSetting::MultipleStreams {
                 label, streams, names, ..

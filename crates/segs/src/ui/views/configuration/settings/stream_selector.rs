@@ -14,8 +14,14 @@ use self::choices::resolve_choices;
 const FIELD_SELECTOR_MAX_ROWS: usize = 13;
 
 /// Renders the source and stream controls for a widget data setting.
-pub fn show(ui: &mut Ui, label: &str, stream: &mut Option<StreamKey>, adapter: Option<&DataAdapterInstance>) {
-    show_selection(ui, label, StreamSelection::Single(stream), adapter);
+pub fn show(
+    ui: &mut Ui,
+    label: &str,
+    stream: &mut Option<StreamKey>,
+    name: Option<&mut String>,
+    adapter: Option<&DataAdapterInstance>,
+) {
+    show_selection(ui, label, StreamSelection::Single { stream, name }, adapter);
 }
 
 /// Renders the source and multiple-field controls for a widget data setting.
@@ -31,7 +37,10 @@ pub fn show_multiple(
 
 /// The widget-owned stream storage accepted by the shared selector.
 enum StreamSelection<'a> {
-    Single(&'a mut Option<StreamKey>),
+    Single {
+        stream: &'a mut Option<StreamKey>,
+        name: Option<&'a mut String>,
+    },
     Multiple {
         streams: &'a mut Vec<StreamKey>,
         names: Option<&'a mut Vec<String>>,
@@ -59,7 +68,7 @@ fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adap
 
     // Resolve the selected source from persisted widget state
     let selected_source_key = match &selection {
-        StreamSelection::Single(stream) => stream.as_ref().map(|stream| stream.source_key),
+        StreamSelection::Single { stream, .. } => stream.as_ref().map(|stream| stream.source_key),
         StreamSelection::Multiple { streams, .. } => streams.first().map(|stream| stream.source_key),
     };
 
@@ -73,7 +82,8 @@ fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adap
 
             // Leave the final row open to avoid reserving trailing row spacing
             match selection {
-                StreamSelection::Single(stream) => {
+                StreamSelection::Single { stream, name } => {
+                    let previous_stream = *stream;
                     let data_key = show_single_field_selection(
                         ui,
                         field_selector_id,
@@ -83,7 +93,18 @@ fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adap
                         source_key.is_some(),
                     );
                     if let Some(source_key) = source_key {
-                        *stream = data_key.map(|data_key| StreamKey { source_key, data_key });
+                        let selected_stream = data_key.map(|data_key| StreamKey { source_key, data_key });
+
+                        // Persist the descriptor name only when the effective selection changes
+                        if selected_stream != previous_stream
+                            && let Some(name) = name
+                        {
+                            *name = selected_stream
+                                .and_then(|stream| hierarchy.label_for(&stream.data_key))
+                                .unwrap_or("Unknown stream")
+                                .to_owned();
+                        }
+                        *stream = selected_stream;
                     }
                 }
                 StreamSelection::Multiple { streams, names } => {

@@ -227,9 +227,14 @@ impl<'a> WidgetSetting<'a> {
 /// settings panel can render them separately.
 pub enum WidgetDataSetting<'a> {
     SingleStream {
+        /// Stable interaction identifier.
         id: &'static str,
+        /// User-facing setting label.
         label: &'static str,
+        /// Selected stream edited in place.
         stream: &'a mut Option<StreamKey>,
+        /// Optional descriptor name persisted beside the selected stream.
+        name: Option<&'a mut String>,
     },
     MultipleStreams {
         id: &'static str,
@@ -241,7 +246,27 @@ pub enum WidgetDataSetting<'a> {
 
 impl<'a> WidgetDataSetting<'a> {
     pub fn single_stream(id: &'static str, label: &'static str, stream: &'a mut Option<StreamKey>) -> Self {
-        Self::SingleStream { id, label, stream }
+        Self::SingleStream {
+            id,
+            label,
+            stream,
+            name: None,
+        }
+    }
+
+    /// Creates a single-stream setting with a parallel persistent display name.
+    pub fn single_stream_with_name(
+        id: &'static str,
+        label: &'static str,
+        stream: &'a mut Option<StreamKey>,
+        name: &'a mut String,
+    ) -> Self {
+        Self::SingleStream {
+            id,
+            label,
+            stream,
+            name: Some(name),
+        }
     }
 
     pub fn multiple_streams(id: &'static str, label: &'static str, streams: &'a mut Vec<StreamKey>) -> Self {

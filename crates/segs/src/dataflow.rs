@@ -147,28 +147,30 @@ pub enum DataValue {
 impl fmt::Display for DataValue {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::U8(value) => write!(formatter, "{}", value),
-            Self::U16(value) => write!(formatter, "{}", value),
-            Self::U32(value) => write!(formatter, "{}", value),
-            Self::U64(value) => write!(formatter, "{}", value),
-            Self::I8(value) => write!(formatter, "{}", value),
-            Self::I16(value) => write!(formatter, "{}", value),
-            Self::I32(value) => write!(formatter, "{}", value),
-            Self::I64(value) => write!(formatter, "{}", value),
+            Self::U8(value) => value.fmt(formatter),
+            Self::U16(value) => value.fmt(formatter),
+            Self::U32(value) => value.fmt(formatter),
+            Self::U64(value) => value.fmt(formatter),
+            Self::I8(value) => value.fmt(formatter),
+            Self::I16(value) => value.fmt(formatter),
+            Self::I32(value) => value.fmt(formatter),
+            Self::I64(value) => value.fmt(formatter),
+            Self::F32(value) if formatter.precision().is_some() => value.fmt(formatter),
             Self::F32(value) => {
-                // Format floats with bounded precision while retaining a visible fractional component
+                // Use bounded adaptive formatting when no precision was requested
                 let mut buffer = [0; f32::FORMATTED_SIZE_DECIMAL];
                 let formatted = value.to_lexical_with_options::<STANDARD>(&mut buffer, &FLOAT_FORMAT_OPTIONS);
                 formatter.write_str(std::str::from_utf8(formatted).map_err(|_| fmt::Error)?)
             }
+            Self::F64(value) if formatter.precision().is_some() => value.fmt(formatter),
             Self::F64(value) => {
-                // Format floats with bounded precision while retaining a visible fractional component
+                // Use bounded adaptive formatting when no precision was requested
                 let mut buffer = [0; f64::FORMATTED_SIZE_DECIMAL];
                 let formatted = value.to_lexical_with_options::<STANDARD>(&mut buffer, &FLOAT_FORMAT_OPTIONS);
                 formatter.write_str(std::str::from_utf8(formatted).map_err(|_| fmt::Error)?)
             }
-            Self::Bool(value) => write!(formatter, "{}", value),
-            Self::String(value) => write!(formatter, "{}", value),
+            Self::Bool(value) => value.fmt(formatter),
+            Self::String(value) => value.fmt(formatter),
         }
     }
 }
