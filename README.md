@@ -30,24 +30,56 @@ cargo install --path crates/segs --locked
 ```
 
 Cargo installs `segs2` into its configured platform-specific binary directory.
+Cargo does not provide a post-install hook, so desktop integration is a separate
+step.
 
-On Linux, register the desktop entry and icon for the current user after
-installing the binary:
+On Linux, register the desktop entry and icon for the current user:
 
 ```sh
 ./scripts/linux-install-desktop.sh install
 ```
 
-Remove only the Linux desktop integration without touching SEGS 2 or a
-separately installed SEGS v1 binary:
+On Windows, register a shortcut in the current user's Start Menu:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-desktop.ps1 install
+```
+
+On macOS, create an application wrapper in `~/Applications` for Spotlight and
+Launch Services:
+
+```sh
+./scripts/macos-install-desktop.sh install
+```
+
+The binary path is optional. Each script searches `PATH` and the usual Cargo
+installation directories. Pass the path explicitly when using another install
+location:
+
+```sh
+./scripts/linux-install-desktop.sh install "/path/to/segs2"
+./scripts/macos-install-desktop.sh install "/path/to/segs2"
+```
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-desktop.ps1 install -BinaryPath "C:\path\to\segs2.exe"
+```
+
+Use the `uninstall` subcommand with the script for the current platform to
+remove only its desktop integration. This does not remove the Cargo-installed
+binary, application data, or a separately installed SEGS v1 application:
 
 ```sh
 ./scripts/linux-install-desktop.sh uninstall
+./scripts/macos-install-desktop.sh uninstall
 ```
 
-Run the script without a subcommand to print its usage. It honors
-`XDG_DATA_HOME` for the desktop entry and icon and otherwise uses
-`$HOME/.local/share`.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-install-desktop.ps1 uninstall
+```
+
+Run a script without a subcommand to print its usage. The Linux helper honors
+`XDG_DATA_HOME` and otherwise uses `$HOME/.local/share`.
 
 <!-- TODO: ADD BINARY RELEASE CI TASK -->
 
