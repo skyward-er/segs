@@ -120,6 +120,8 @@ impl DataAdapter for SkywardMavlinkAdapter {
         // Start the optional receive logger before incoming frames are consumed
         #[cfg(feature = "skyward-mavlink-logging")]
         let (log_tx, logger) = logging::MessageLogger::start(profile.clone())?;
+        #[cfg(feature = "skyward-mavlink-logging")]
+        let rx_log_tx = log_tx.clone();
 
         let rx_conn = connection.clone();
         let rx_stop_flag = stop_flag.clone();
@@ -139,7 +141,7 @@ impl DataAdapter for SkywardMavlinkAdapter {
                         // Queue a copy for disk logging without blocking frame processing
                         #[cfg(feature = "skyward-mavlink-logging")]
                         if logging_available
-                            && log_tx
+                            && rx_log_tx
                                 .send(logging::LogEntry::new(
                                     created_at.elapsed().as_secs_f64(),
                                     frame.clone(),
@@ -173,15 +175,43 @@ impl DataAdapter for SkywardMavlinkAdapter {
         });
 
         let tx_conn = connection.clone();
+        let tx_stop_flag = stop_flag.clone();
         let tx_ctx = ctx.clone();
         let tx_thread_stats = tx_stats.clone();
         // TX thread: sends outgoing MAVLink frames and notifies the UI of errors
         thread::spawn(move || {
-            // Get the next outgoing frame
-            while let Ok(outgoing) = outgoing_rx.recv() {
+            #[cfg(feature = "skyward-mavlink-logging")]
+            let mut logging_available = true;
+
+            loop {
+                // Wait for an outgoing frame while remaining responsive to shutdown
+                if tx_stop_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+                let outgoing = match outgoing_rx.recv_timeout(Duration::from_secs(1)) {
+                    Ok(outgoing) => outgoing,
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                };
+
+                #[cfg(feature = "skyward-mavlink-logging")]
+                let logged_frame = outgoing.frame.clone();
+
                 // Send the frame out
                 match tx_conn.send_frame(outgoing.frame) {
-                    Ok(_) => tx_thread_stats.lock().unwrap().record_success(Instant::now()),
+                    Ok(_) => {
+                        tx_thread_stats.lock().unwrap().record_success(Instant::now());
+
+                        // Queue successfully sent frames in the shared logger
+                        #[cfg(feature = "skyward-mavlink-logging")]
+                        if logging_available
+                            && log_tx
+                                .send(logging::LogEntry::new(created_at.elapsed().as_secs_f64(), logged_frame))
+                                .is_err()
+                        {
+                            logging_available = false;
+                        }
+                    }
                     Err(error) => {
                         tx_thread_stats.lock().unwrap().record_error();
                         eprintln!("Failed to send MAVLink message: {error}");
