@@ -4,16 +4,25 @@ use std::path::PathBuf;
 
 use directories::ProjectDirs;
 
+/// Returns the platform directory containing all application data.
+///
+/// The returned path uses the development or production SEGS identity selected
+/// for the current build.
+#[inline]
+pub(super) fn get_data_dirpath() -> PathBuf {
+    project_dirs().data_dir().to_path_buf()
+}
+
 /// Returns the directory path where the app's memory data should be stored.
 #[inline]
 pub fn get_memory_dirpath() -> PathBuf {
-    project_dirs().data_dir().to_path_buf().join("metadata")
+    get_data_dirpath().join("metadata")
 }
 
 /// Returns the directory containing user-created layouts.
 #[inline]
 pub fn get_layouts_dirpath() -> PathBuf {
-    project_dirs().data_dir().to_path_buf().join("layouts")
+    get_data_dirpath().join("layouts")
 }
 
 // We use different directories for development and production to avoid

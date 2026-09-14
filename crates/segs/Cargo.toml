@@ -16,9 +16,14 @@ ProductName = "SEGS 2"
 InternalName = "segs2"
 OriginalFilename = "segs2.exe"
 
+[features]
+default = ["skyward-mavlink-logging"]
+skyward-mavlink-logging = ["dep:csv"]
+
 [dependencies]
 ahash.workspace = true
 chrono = { version = "0.4.42", features = ["serde"] }
+csv = { version = "1.4.0", optional = true }
 directories = "6.0.0"
 eframe.workspace = true
 egui = { workspace = true, features = ["serde"] }

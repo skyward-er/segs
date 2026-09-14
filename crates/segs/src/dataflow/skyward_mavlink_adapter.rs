@@ -26,6 +26,9 @@ use crate::dataflow::{
 };
 use crate::dataflow::{CommandId, CommandSequence, CommandStatus, MessageKey};
 
+#[cfg(feature = "skyward-mavlink-logging")]
+mod logging;
+
 /// Component ID used for telemetry messages. All other values are used for command request-response correlation.
 const TELEMETRY_COMPONENT_ID: u8 = 0;
 const TC_MESSAGE_SUFFIX: &str = "_TC";
@@ -60,6 +63,9 @@ pub struct SkywardMavlinkAdapter {
     /// TODO: move caching logic to [DataAdapterInstance]
     protocol: ProtocolDescriptor,
     created_at: Instant,
+    /// Background CSV logger for received MAVLink frames.
+    #[cfg(feature = "skyward-mavlink-logging")]
+    logger: Option<logging::MessageLogger>,
 }
 
 impl DataAdapter for SkywardMavlinkAdapter {
@@ -111,17 +117,37 @@ impl DataAdapter for SkywardMavlinkAdapter {
         let rx_stats = Arc::new(Mutex::new(IoStats::new(created_at)));
         let tx_stats = Arc::new(Mutex::new(IoStats::new(created_at)));
 
+        // Start the optional receive logger before incoming frames are consumed
+        #[cfg(feature = "skyward-mavlink-logging")]
+        let (log_tx, logger) = logging::MessageLogger::start(profile.clone())?;
+
         let rx_conn = connection.clone();
         let rx_stop_flag = stop_flag.clone();
         let rx_ctx = ctx.clone();
         let rx_thread_stats = rx_stats.clone();
         // RX thread: receives incoming MAVLink frames and notifies the UI to update
         thread::spawn(move || {
+            #[cfg(feature = "skyward-mavlink-logging")]
+            let mut logging_available = true;
+
             while !rx_stop_flag.load(Ordering::Relaxed) {
                 // Receive the frame
                 match rx_conn.recv_frame() {
                     Ok(frame) => {
                         rx_thread_stats.lock().unwrap().record_success(Instant::now());
+
+                        // Queue a copy for disk logging without blocking frame processing
+                        #[cfg(feature = "skyward-mavlink-logging")]
+                        if logging_available
+                            && log_tx
+                                .send(logging::LogEntry::new(
+                                    created_at.elapsed().as_secs_f64(),
+                                    frame.clone(),
+                                ))
+                                .is_err()
+                        {
+                            logging_available = false;
+                        }
 
                         // Send the frame to the incoming channel
                         let Ok(_) = incoming_tx.send(frame) else {
@@ -191,6 +217,8 @@ impl DataAdapter for SkywardMavlinkAdapter {
             wack_message_id,
             nack_message_id,
             created_at,
+            #[cfg(feature = "skyward-mavlink-logging")]
+            logger: Some(logger),
         })
     }
 
@@ -313,6 +341,12 @@ impl DataAdapter for SkywardMavlinkAdapter {
 impl Drop for SkywardMavlinkAdapter {
     fn drop(&mut self) {
         self.stop_flag.store(true, Ordering::Relaxed);
+
+        // Drain queued records after the RX thread observes the stop request
+        #[cfg(feature = "skyward-mavlink-logging")]
+        if let Some(logger) = self.logger.take() {
+            logger.join();
+        }
     }
 }
 
