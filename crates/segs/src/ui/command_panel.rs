@@ -449,6 +449,9 @@ fn show_command_card(
 ) {
     let descriptor = &protocol.message_schemas[&command.key];
     Card::new().show(ui, |ui| {
+        // Keep cards aligned regardless of whether their contents naturally fill the row
+        ui.take_available_width();
+
         ui.horizontal(|ui| {
             ui.label(RichText::new(&descriptor.name).strong());
             if let Some(status) = status {
