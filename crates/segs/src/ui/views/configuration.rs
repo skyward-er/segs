@@ -71,7 +71,7 @@ impl ViewTrait for ConfigurationView {
             .frame(panel_frame)
             .show(ui, |ui| {
                 show_panel(ui, "WIDGET GALLERY", "Drag to add to the layout", |ui| {
-                    gallery::show(ui, &mut appctx.data_store);
+                    gallery::show(ui);
                 });
             });
 

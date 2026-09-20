@@ -6,11 +6,11 @@ use thiserror::Error;
 
 use crate::ui::{
     grid::{GRect, GridSettings},
-    widgets::{WidgetData, WidgetVariant},
+    widgets::{WidgetData, WidgetTrait, WidgetVariant},
 };
 
 /// Latest layout schema emitted by the application.
-pub const CURRENT_LAYOUT_SCHEMA: u32 = 5;
+pub const CURRENT_LAYOUT_SCHEMA: u32 = 6;
 const ADDED_WIDGET_ID_NAMESPACE: &str = "layout_added_widget";
 
 /// Complete persisted representation of a named widget layout.
@@ -59,6 +59,13 @@ impl Layout {
     /// Removes the widget with the given id when it is present.
     pub fn remove_widget(&mut self, id: Id) {
         self.widgets.retain(|widget| widget.id != id);
+    }
+
+    /// Removes invalid widget drafts before this layout is persisted.
+    pub(super) fn prepare_for_save(&mut self) {
+        for widget in &mut self.widgets {
+            widget.variant.prepare_for_save();
+        }
     }
 }
 

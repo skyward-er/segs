@@ -385,13 +385,15 @@ fn format_stale_age(age: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::dataflow::testing::stream_key;
+
     use super::*;
 
     #[test]
     fn stream_names_round_trip_through_json() {
         let widget = MessageViewerWidget {
             header: "Telemetry".to_owned(),
-            streams: vec![StreamKey::mock()],
+            streams: vec![stream_key(0, 0)],
             stream_names: vec!["Altitude".to_owned()],
             text_size: 18,
             show_stale_warning: false,
@@ -406,7 +408,7 @@ mod tests {
 
     #[test]
     fn age_resets_when_the_observed_sample_changes() {
-        let stream = StreamKey::mock();
+        let stream = stream_key(0, 0);
         let mut state = AgeState::default();
 
         assert_eq!(state.observe(stream, 1., 10.), 0.);

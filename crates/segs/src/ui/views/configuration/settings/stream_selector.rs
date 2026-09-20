@@ -7,7 +7,10 @@ use segs_ui::widgets::{
     MultipleSelection, SearchableComboBox, SearchableComboBoxHierarchy, SearchableComboBoxList, SingleSelection,
 };
 
-use crate::dataflow::{DataKey, SourceKey, StreamKey, adapter::DataAdapterInstance};
+use crate::{
+    dataflow::{DataKey, SourceKey, StreamKey, adapter::DataAdapterInstance},
+    ui::widget_settings::StreamValueFilter,
+};
 
 use self::choices::resolve_choices;
 
@@ -19,9 +22,10 @@ pub fn show(
     label: &str,
     stream: &mut Option<StreamKey>,
     name: Option<&mut String>,
+    filter: StreamValueFilter,
     adapter: Option<&DataAdapterInstance>,
 ) {
-    show_selection(ui, label, StreamSelection::Single { stream, name }, adapter);
+    show_selection(ui, label, StreamSelection::Single { stream, name }, filter, adapter);
 }
 
 /// Renders the source and multiple-field controls for a widget data setting.
@@ -30,9 +34,10 @@ pub fn show_multiple(
     label: &str,
     streams: &mut Vec<StreamKey>,
     names: Option<&mut Vec<String>>,
+    filter: StreamValueFilter,
     adapter: Option<&DataAdapterInstance>,
 ) {
-    show_selection(ui, label, StreamSelection::Multiple { streams, names }, adapter);
+    show_selection(ui, label, StreamSelection::Multiple { streams, names }, filter, adapter);
 }
 
 /// The widget-owned stream storage accepted by the shared selector.
@@ -47,7 +52,13 @@ enum StreamSelection<'a> {
     },
 }
 
-fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adapter: Option<&DataAdapterInstance>) {
+fn show_selection(
+    ui: &mut Ui,
+    label: &str,
+    selection: StreamSelection<'_>,
+    filter: StreamValueFilter,
+    adapter: Option<&DataAdapterInstance>,
+) {
     // Validate the adapter before rendering controls backed by its protocol
     let Some(adapter) = adapter else {
         ui.weak("No data source configured.");
@@ -62,7 +73,7 @@ fn show_selection(ui: &mut Ui, label: &str, selection: StreamSelection<'_>, adap
         ui.weak("No streams available.");
         return;
     }
-    let (source_choices, hierarchy) = resolve_choices(ui.ctx(), protocol, adapter.token());
+    let (source_choices, hierarchy) = resolve_choices(ui.ctx(), protocol, adapter.token(), filter);
     let source_selector_id = ui.make_persistent_id(("stream_source_selector", adapter.token()));
     let field_selector_id = ui.make_persistent_id(("stream_field_selector", adapter.token()));
 

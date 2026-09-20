@@ -11,6 +11,8 @@ use segs_ui::{
     },
 };
 
+use crate::ui::components::mapping_table;
+
 use crate::{
     dataflow::adapter::DataAdapterInstance,
     ui::{
@@ -63,14 +65,22 @@ fn show_data_settings(ui: &mut Ui, settings: Vec<WidgetDataSetting<'_>>, adapter
         let setting_id = setting.id();
         ui.push_id(setting_id, |ui| match setting {
             WidgetDataSetting::SingleStream {
-                label, stream, name, ..
+                label,
+                stream,
+                name,
+                filter,
+                ..
             } => {
-                stream_selector::show(ui, label, stream, name, adapter);
+                stream_selector::show(ui, label, stream, name, filter, adapter);
             }
             WidgetDataSetting::MultipleStreams {
-                label, streams, names, ..
+                label,
+                streams,
+                names,
+                filter,
+                ..
             } => {
-                stream_selector::show_multiple(ui, label, streams, names, adapter);
+                stream_selector::show_multiple(ui, label, streams, names, filter, adapter);
             }
         });
     }
@@ -83,6 +93,17 @@ fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>) {
     let setting_count = settings.len();
 
     for (index, setting) in settings.into_iter().enumerate() {
+        if let WidgetSetting::IntegerTextMappings { id, label, mappings } = setting {
+            ui.push_id(id, |ui| {
+                ui.label(RichText::new(label).strong());
+                mapping_table::show(ui, mappings);
+            });
+            if index + 1 < setting_count {
+                ui.add_space(additional_row_spacing);
+            }
+            continue;
+        }
+
         let label = setting_label(&setting);
         let label_height = setting_control_height(ui, &setting);
         ui.horizontal_top(|ui| {
@@ -154,6 +175,9 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
         } => {
             show_float_setting(ui, setting_id, value, range, step, desired_width);
         }
+        WidgetSetting::IntegerTextMappings { .. } => {
+            unreachable!("mapping settings are rendered as full-width sections")
+        }
     }
 }
 
@@ -161,10 +185,13 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
 fn settings_label_width(ui: &Ui, settings: &[WidgetSetting<'_>]) -> f32 {
     let font_id = TextStyle::Body.resolve(ui.style());
     let color = ui.visuals().text_color();
-    settings.iter().fold(0., |width, setting| {
-        let label = setting_label(setting).to_owned();
-        width.max(ui.painter().layout_no_wrap(label, font_id.clone(), color).size().x)
-    })
+    settings
+        .iter()
+        .filter(|setting| !matches!(setting, WidgetSetting::IntegerTextMappings { .. }))
+        .fold(0., |width, setting| {
+            let label = setting_label(setting).to_owned();
+            width.max(ui.painter().layout_no_wrap(label, font_id.clone(), color).size().x)
+        })
 }
 
 /// Returns the user-facing label for a setting.
@@ -175,7 +202,8 @@ fn setting_label(setting: &WidgetSetting<'_>) -> &'static str {
         | WidgetSetting::TextBox { label, .. }
         | WidgetSetting::Color { label, .. }
         | WidgetSetting::Integer { label, .. }
-        | WidgetSetting::Float { label, .. } => label,
+        | WidgetSetting::Float { label, .. }
+        | WidgetSetting::IntegerTextMappings { label, .. } => label,
     }
 }
 
@@ -188,6 +216,7 @@ fn setting_control_height(ui: &Ui, setting: &WidgetSetting<'_>) -> f32 {
         WidgetSetting::Checkbox { .. } | WidgetSetting::ComboBox { .. } | WidgetSetting::Color { .. } => {
             ui.spacing().interact_size.y
         }
+        WidgetSetting::IntegerTextMappings { .. } => 0.,
     }
 }
 

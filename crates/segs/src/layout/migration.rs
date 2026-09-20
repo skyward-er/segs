@@ -42,6 +42,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
             v1::NEXT_SCHEMA_VERSION => v2::migrate(&mut value),
             v2::NEXT_SCHEMA_VERSION => v3::migrate(&mut value),
             v3::NEXT_SCHEMA_VERSION => v4::migrate(&mut value),
+            v4::NEXT_SCHEMA_VERSION => v5::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -282,6 +283,26 @@ mod v4 {
         }
 
         // Mark the document ready for current deserialization
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+
+        NEXT_SCHEMA_VERSION
+    }
+}
+
+/// Migration from layout schema v5 to v6.
+mod v5 {
+    use serde_json::Value;
+
+    /// Schema version produced by this migration.
+    pub const NEXT_SCHEMA_VERSION: u32 = 6;
+
+    /// Advances layouts to the schema that supports mapped value widgets.
+    ///
+    /// Returns the next schema version without changing existing widget data.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Existing widget variants retain the same wire representation
         if let Some(layout) = layout.as_object_mut() {
             layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
         }

@@ -2,6 +2,7 @@
 
 pub mod adapter;
 pub mod mapping;
+pub mod preview;
 pub mod protocol;
 pub mod skyward_mavlink_adapter;
 pub mod store;
@@ -43,16 +44,6 @@ pub struct StreamKey {
     pub data_key: DataKey,
 }
 
-impl StreamKey {
-    /// A stream key that is always available from a mock [`DataStore`].
-    pub const fn mock() -> Self {
-        Self {
-            source_key: SourceKey(0),
-            data_key: DataKey(0),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct DataPoint<T> {
     /// Floating-point timestamp in seconds
@@ -60,7 +51,7 @@ pub struct DataPoint<T> {
     pub value: T,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DataType {
     U8,
     U16,
@@ -219,6 +210,13 @@ pub struct CommandSequence {
 #[cfg(test)]
 pub mod testing {
     use super::*;
+
+    pub const fn stream_key(source_key: u32, data_key: u64) -> StreamKey {
+        StreamKey {
+            source_key: SourceKey(source_key),
+            data_key: DataKey(data_key),
+        }
+    }
 
     pub const fn message_key(value: u64) -> MessageKey {
         MessageKey(value)

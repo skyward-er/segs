@@ -1,4 +1,4 @@
-use egui::{CursorIcon, Id, Rect, Response, Sense, Ui, Vec2, Widget, vec2};
+use egui::{CursorIcon, Id, Rect, Response, Sense, StrokeKind, Ui, Vec2, Widget, vec2};
 use segs_assets::icons::Icon;
 
 const DEFAULT_ICON_SIZE: Vec2 = vec2(24., 24.);
@@ -88,22 +88,25 @@ impl<'a> Widget for IconBtn<'a> {
     }
 }
 
+/// Paints an icon button with hover, press, and keyboard-focus feedback.
+/// Returns the original interaction response with a pointing-hand hover cursor.
 fn icon_toggle(ui: &mut Ui, icon: Box<dyn Icon>, rect: Rect, response: Response, padding: f32) -> Response {
-    // Paint the button
+    // Paint interaction feedback within the allocated button bounds
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         let rounded = 6.;
         let is_active = response.is_pointer_button_down_on();
         let is_hovered = response.hovered();
-        if is_hovered || is_active {
-            let bg_color = if is_active {
-                ui.visuals().widgets.active.bg_fill
-            } else {
-                ui.visuals().widgets.hovered.bg_fill
-            };
-            painter.rect_filled(rect.shrink(1.), rounded, bg_color);
+        let has_focus = response.has_focus();
+        let visuals = ui.style().interact(&response);
+        if is_hovered || is_active || has_focus {
+            painter.rect_filled(rect.shrink(1.), rounded, visuals.bg_fill);
+        }
+        if has_focus {
+            painter.rect_stroke(rect.shrink(1.), rounded, visuals.fg_stroke, StrokeKind::Inside);
         }
 
+        // Preserve the icon's padding and normal foreground color
         let icon_rect = rect.shrink(padding);
         let icon_color = ui.visuals().text_color();
         icon.to_image()

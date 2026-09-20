@@ -4,9 +4,17 @@
 use std::ops::RangeInclusive;
 
 use egui::Color32;
-use serde::de;
 
-use crate::dataflow::StreamKey;
+use crate::{dataflow::StreamKey, ui::components::mapping_table::IntegerTextMapping};
+
+/// Restricts the values offered by a widget data-stream setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StreamValueFilter {
+    /// Offer every selectable stream.
+    Any,
+    /// Offer only streams represented as integer values.
+    Integer,
+}
 
 /// One selectable value displayed by a widget settings combobox.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,6 +106,15 @@ pub enum WidgetSetting<'a> {
         step: Option<f64>,
         /// Optional total control width in logical points.
         desired_width: Option<f32>,
+    },
+    /// An ordered integer-to-text mapping rendered as a full-width editable table.
+    IntegerTextMappings {
+        /// Stable interaction identifier.
+        id: &'static str,
+        /// User-facing heading rendered by the settings panel.
+        label: &'static str,
+        /// Mapping rows edited in place, including unfinished integer drafts.
+        mappings: &'a mut Vec<IntegerTextMapping>,
     },
 }
 
@@ -208,6 +225,16 @@ impl<'a> WidgetSetting<'a> {
         }
     }
 
+    /// Creates an integer-to-text mapping table under a standard heading and ID scope.
+    /// Returns a setting that edits rows in place without reordering active drafts.
+    pub fn integer_text_mappings(
+        id: &'static str,
+        label: &'static str,
+        mappings: &'a mut Vec<IntegerTextMapping>,
+    ) -> Self {
+        Self::IntegerTextMappings { id, label, mappings }
+    }
+
     /// Returns the stable interaction identifier for this setting.
     pub fn id(&self) -> &'static str {
         match self {
@@ -216,7 +243,8 @@ impl<'a> WidgetSetting<'a> {
             | Self::TextBox { id, .. }
             | Self::Color { id, .. }
             | Self::Integer { id, .. }
-            | Self::Float { id, .. } => id,
+            | Self::Float { id, .. }
+            | Self::IntegerTextMappings { id, .. } => id,
         }
     }
 }
@@ -235,12 +263,16 @@ pub enum WidgetDataSetting<'a> {
         stream: &'a mut Option<StreamKey>,
         /// Optional descriptor name persisted beside the selected stream.
         name: Option<&'a mut String>,
+        /// Value-type restriction applied by the stream selector.
+        filter: StreamValueFilter,
     },
     MultipleStreams {
         id: &'static str,
         label: &'static str,
         streams: &'a mut Vec<StreamKey>,
         names: Option<&'a mut Vec<String>>,
+        /// Value-type restriction applied by the stream selector.
+        filter: StreamValueFilter,
     },
 }
 
@@ -251,6 +283,20 @@ impl<'a> WidgetDataSetting<'a> {
             label,
             stream,
             name: None,
+            filter: StreamValueFilter::Any,
+        }
+    }
+
+    /// Creates a single-stream setting restricted to integer-valued streams.
+    ///
+    /// Returns a setting that edits `stream` and filters incompatible choices.
+    pub fn integer_stream(id: &'static str, label: &'static str, stream: &'a mut Option<StreamKey>) -> Self {
+        Self::SingleStream {
+            id,
+            label,
+            stream,
+            name: None,
+            filter: StreamValueFilter::Integer,
         }
     }
 
@@ -266,6 +312,7 @@ impl<'a> WidgetDataSetting<'a> {
             label,
             stream,
             name: Some(name),
+            filter: StreamValueFilter::Any,
         }
     }
 
@@ -275,6 +322,7 @@ impl<'a> WidgetDataSetting<'a> {
             label,
             streams,
             names: None,
+            filter: StreamValueFilter::Any,
         }
     }
 
@@ -290,6 +338,7 @@ impl<'a> WidgetDataSetting<'a> {
             label,
             streams,
             names: Some(names),
+            filter: StreamValueFilter::Any,
         }
     }
 

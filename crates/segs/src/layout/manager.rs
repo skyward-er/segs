@@ -279,9 +279,16 @@ impl LayoutManager {
             .active
             .as_mut()
             .ok_or_else(|| LayoutManagerError::NotFound("active".into()))?;
-        active.working.modified_at = Utc::now();
-        self.store.save(&active.working)?;
-        active.saved = active.working.clone();
+
+        // Sanitize a clone so failed persistence leaves editable drafts untouched
+        let mut layout = active.working.clone();
+        layout.prepare_for_save();
+        layout.modified_at = Utc::now();
+        self.store.save(&layout)?;
+
+        // Adopt only the successfully persisted representation as both baselines
+        active.working = layout.clone();
+        active.saved = layout;
         self.layouts.insert(
             active.working.slug.clone(),
             StoredLayout::current(active.working.clone()),

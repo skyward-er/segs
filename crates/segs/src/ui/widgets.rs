@@ -1,8 +1,10 @@
+mod mapped_value;
 mod message_viewer;
 mod plot;
 mod value_display;
 
 use enum_dispatch::enum_dispatch;
+pub use mapped_value::MappedValueWidget;
 pub use message_viewer::MessageViewerWidget;
 pub use plot::PlotWidget;
 pub use value_display::ValueDisplayWidget;
@@ -31,6 +33,7 @@ pub struct WidgetData {
 #[enum_dispatch(WidgetTrait)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WidgetVariant {
+    MappedValue(MappedValueWidget),
     MessageViewer(MessageViewerWidget),
     Plot(PlotWidget),
     ValueDisplay(ValueDisplayWidget),
@@ -41,6 +44,7 @@ impl WidgetVariant {
     pub fn gallery() -> Vec<Self> {
         vec![
             ValueDisplayWidget::default().into(),
+            MappedValueWidget::default().into(),
             PlotWidget::default().into(),
             MessageViewerWidget::default().into(),
         ]
@@ -49,6 +53,18 @@ impl WidgetVariant {
 
 #[enum_dispatch]
 pub trait WidgetTrait {
+    /// Binds a gallery-only clone to isolated sample data without changing defaults.
+    /// Widgets may override this to provide their own sample configuration.
+    fn configure_preview(&mut self, preview: &crate::dataflow::preview::PreviewContext) {
+        for mut setting in self.data_settings() {
+            setting.set_stream_if_empty(preview.numeric_stream);
+        }
+    }
+
+    /// Normalizes transient drafts before persistence, doing nothing by default.
+    /// Called on a save clone so failed writes leave the working widget untouched.
+    fn prepare_for_save(&mut self) {}
+
     /// Show the content of the widget.
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore);
 
