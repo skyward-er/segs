@@ -39,7 +39,7 @@ impl View {
         match target {
             ViewTarget::Welcome => Self::Welcome(welcome::WelcomeView),
             ViewTarget::Operator => Self::Operator(operator::OperatorView),
-            ViewTarget::Configuration => Self::Configuration(configuration::ConfigurationView),
+            ViewTarget::Configuration => Self::Configuration(configuration::ConfigurationView::default()),
         }
     }
 }

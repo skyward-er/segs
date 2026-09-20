@@ -12,6 +12,7 @@ use segs_ui::{components::panel_header::PanelHeader, style::CtxStyleExt, widgets
 
 use crate::{
     app::AppContext,
+    dataflow::preview::PreviewContext,
     ui::{
         components::{
             widget_editor::{
@@ -39,7 +40,10 @@ static NEXT_DRAG_SESSION: AtomicU64 = AtomicU64::new(1);
 /// View subtype representing the different configuration views available when
 /// the user is in the Configuration mode.
 #[derive(Default)]
-pub struct ConfigurationView;
+pub struct ConfigurationView {
+    /// Synthetic data retained for the duration of this editing session.
+    preview: PreviewContext,
+}
 
 enum WidgetDragSource {
     Layout(Id),
@@ -71,7 +75,7 @@ impl ViewTrait for ConfigurationView {
             .frame(panel_frame)
             .show(ui, |ui| {
                 show_panel(ui, "WIDGET GALLERY", "Drag to add to the layout", |ui| {
-                    gallery::show(ui);
+                    gallery::show(ui, &mut self.preview);
                 });
             });
 

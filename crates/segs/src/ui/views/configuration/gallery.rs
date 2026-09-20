@@ -13,14 +13,14 @@ use crate::{
 use super::{HitRegion, WidgetDragPayload, WidgetDragSource, next_drag_session};
 
 /// Draws gallery cards and starts widget drags.
-pub fn show(ui: &mut Ui) {
-    // Construct an isolated store so preview keys never touch live telemetry
-    let mut samples = PreviewContext::new();
-    ui.ctx().request_repaint_after(samples.repaint_after);
+pub fn show(ui: &mut Ui, samples: &mut PreviewContext) {
+    // Update the retained sample streams only when their next values are due
+    let repaint_after = samples.update();
+    ui.ctx().request_repaint_after(repaint_after);
 
     for (index, variant) in WidgetVariant::gallery().into_iter().enumerate() {
         let mut preview = variant.clone();
-        preview.configure_preview(&samples);
+        preview.configure_preview(samples);
 
         let name = variant.display_name();
         let card_id = Id::new(("widget_gallery_card", index, name));
