@@ -432,10 +432,10 @@ fn show_disabled_widget(
 fn show_rejected_tint(ui: &Ui, rect: Rect) {
     let error = ui.visuals().error_fg_color;
     let tint = Color32::from_rgba_unmultiplied(error.r(), error.g(), error.b(), 48);
-    ui.painter().rect_filled(rect, 1., tint);
+    ui.painter().rect_filled(rect, 0., tint);
     ui.painter().rect_stroke(
         rect,
-        1.,
+        0.,
         Stroke::new(1.5_f32, error.gamma_multiply(0.8)),
         StrokeKind::Middle,
     );

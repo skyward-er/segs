@@ -11,6 +11,8 @@ const SELECTION_OUTLINE_STRENGTH: f32 = 0.75;
 const HOVER_DARKEN_ALPHA: u8 = 40;
 const REMOVE_BUTTON_SIZE: Vec2 = vec2(28., 28.);
 const REMOVE_BUTTON_PADDING: f32 = 4.;
+const RESIZE_GRAB_SIZE: f32 = 8.;
+const RESIZE_GRAB_MAX_FRACTION: f32 = 0.25;
 
 /// Replaces a color's alpha value.
 fn with_alpha(color: Color32, alpha: u8) -> Color32 {
@@ -21,7 +23,7 @@ fn with_alpha(color: Color32, alpha: u8) -> Color32 {
 pub fn show_selection(ui: &Ui, rect: Rect) {
     ui.painter().rect_filled(
         rect,
-        CornerRadius::same(1),
+        CornerRadius::ZERO,
         with_alpha(ui.app_style().accent_fill, SELECTION_TINT_ALPHA),
     );
 
@@ -32,11 +34,8 @@ pub fn show_selection(ui: &Ui, rect: Rect) {
 
 /// Draws the widget hover tint.
 pub fn show_hover(ui: &Ui, rect: Rect) {
-    ui.painter().rect_filled(
-        rect,
-        CornerRadius::same(1),
-        with_alpha(Color32::BLACK, HOVER_DARKEN_ALPHA),
-    );
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, with_alpha(Color32::BLACK, HOVER_DARKEN_ALPHA));
 }
 
 /// Draws the widget edit outline.
@@ -48,7 +47,7 @@ pub fn show_outline(ui: &Ui, rect: Rect) {
 fn paint_outline(ui: &Ui, rect: Rect, stroke: Stroke) {
     ui.ctx()
         .layer_painter(ui.layer_id())
-        .rect_stroke(rect, 1., stroke, StrokeKind::Outside);
+        .rect_stroke(rect, CornerRadius::ZERO, stroke, StrokeKind::Middle);
 }
 
 /// Draws the remove button and reports clicks.
@@ -115,13 +114,18 @@ pub fn clamp_rect_to(rect: Rect, bounds: Rect) -> Rect {
 
 /// Finds the widget region under the pointer.
 pub fn hit_region(rect: Rect, pointer: Pos2) -> HitRegion {
-    let inner_rect = rect.shrink(4.0);
-    let outer_rect = rect.expand(4.0);
-
-    if !outer_rect.contains(pointer) {
+    if !rect.contains(pointer) {
         return HitRegion::OUTSIDE;
     }
 
+    // Preserve the central half of small widgets as a move target
+    let grab_inset = vec2(
+        RESIZE_GRAB_SIZE.min(rect.width() * RESIZE_GRAB_MAX_FRACTION),
+        RESIZE_GRAB_SIZE.min(rect.height() * RESIZE_GRAB_MAX_FRACTION),
+    );
+    let inner_rect = rect.shrink2(grab_inset);
+
+    // Resolve each axis independently so intersecting edge bands form corner handles
     let Pos2 { x, y } = pointer;
     let mut hit_region = HitRegion::empty();
 

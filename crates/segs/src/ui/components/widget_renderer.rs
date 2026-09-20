@@ -30,7 +30,7 @@ pub fn show_widgets<'a>(
 /// Draws one widget in the standard visual container.
 pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, data_store: &mut DataStore) {
     let app_style = ui.app_style();
-    let corner_radius = CornerRadius::same(1);
+    let corner_radius = CornerRadius::ZERO;
 
     ui.scope_builder(UiBuilder::new().id(id.with("_container")).max_rect(rect), |ui| {
         // Paint the background outside disabled content opacity
@@ -46,7 +46,7 @@ pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, data
                 response.rect,
                 corner_radius,
                 app_style.main_view_stroke,
-                StrokeKind::Outside,
+                StrokeKind::Middle,
             );
             ui.set_clip_rect(rect);
             widget.show(ui, data_store);
