@@ -39,6 +39,17 @@ impl ComboBoxOption {
 /// Values are borrowed directly from the widget configuration, so edits made
 /// by the panel are immediately reflected by the widget.
 pub enum WidgetSetting<'a> {
+    /// Directed command configurations shown below the state mapping editor.
+    StateTransitions {
+        /// Stable settings identity.
+        id: &'static str,
+        /// Full-width section heading.
+        label: &'static str,
+        /// State mappings defining the available source and destination states.
+        mappings: &'a mut Vec<IntegerTextMapping>,
+        /// Persisted directed command drafts.
+        transitions: &'a mut Vec<crate::ui::components::state_transitions::StateTransition>,
+    },
     /// A boolean setting rendered as a checkbox.
     Checkbox {
         /// Stable interaction identifier.
@@ -239,6 +250,7 @@ impl<'a> WidgetSetting<'a> {
     pub fn id(&self) -> &'static str {
         match self {
             Self::Checkbox { id, .. }
+            | Self::StateTransitions { id, .. }
             | Self::ComboBox { id, .. }
             | Self::TextBox { id, .. }
             | Self::Color { id, .. }

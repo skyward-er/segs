@@ -1,6 +1,8 @@
 pub mod buttons;
 pub mod centered_value;
+pub mod command_editor;
 pub mod mapping_table;
+pub mod state_transitions;
 pub mod value_edits;
 pub mod widget_editor;
 pub mod widget_renderer;

@@ -1,12 +1,9 @@
 use egui::{CornerRadius, Id, Rect, Sense, StrokeKind, Ui, UiBuilder, Vec2, pos2};
 use segs_ui::style::CtxStyleExt;
 
-use crate::{
-    dataflow::store::DataStore,
-    ui::{
-        grid::Grid,
-        widgets::{WidgetData, WidgetTrait, WidgetVariant},
-    },
+use crate::ui::{
+    grid::Grid,
+    widgets::{WidgetData, WidgetRenderContext, WidgetTrait, WidgetVariant},
 };
 
 /// Draws widgets on the grid.
@@ -14,7 +11,7 @@ pub fn show_widgets<'a>(
     ui: &mut Ui,
     widgets: impl IntoIterator<Item = &'a WidgetData>,
     grid: &Grid,
-    data_store: &mut DataStore,
+    context: &mut WidgetRenderContext<'_>,
 ) {
     for widget in widgets {
         show_widget(
@@ -22,13 +19,13 @@ pub fn show_widgets<'a>(
             widget.id,
             grid.to_screen_rect(widget.grect),
             &widget.variant,
-            data_store,
+            context,
         );
     }
 }
 
 /// Draws one widget in the standard visual container.
-pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, data_store: &mut DataStore) {
+pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, context: &mut WidgetRenderContext<'_>) {
     let app_style = ui.app_style();
     let corner_radius = CornerRadius::ZERO;
 
@@ -49,7 +46,7 @@ pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, data
                 StrokeKind::Middle,
             );
             ui.set_clip_rect(rect);
-            widget.show(ui, data_store);
+            widget.show_with_context(ui, context);
         });
     });
 }

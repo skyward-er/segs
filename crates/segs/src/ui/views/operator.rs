@@ -22,7 +22,16 @@ impl ViewTrait for OperatorView {
                     return;
                 };
                 let grid = Grid::new(rect, layout.grid_settings);
-                show_widgets(ui, &layout.widgets, &grid, &mut appctx.data_store);
+                show_widgets(
+                    ui,
+                    &layout.widgets,
+                    &grid,
+                    &mut crate::ui::widgets::WidgetRenderContext {
+                        data_store: &mut appctx.data_store,
+                        adapter: appctx.data_adapter.as_ref(),
+                        allow_commands: true,
+                    },
+                );
             });
     }
 }

@@ -43,6 +43,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
             v2::NEXT_SCHEMA_VERSION => v3::migrate(&mut value),
             v3::NEXT_SCHEMA_VERSION => v4::migrate(&mut value),
             v4::NEXT_SCHEMA_VERSION => v5::migrate(&mut value),
+            v5::NEXT_SCHEMA_VERSION => v6::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -311,6 +312,23 @@ mod v5 {
     }
 }
 
+/// Migration from layout schema v6 to v7.
+mod v6 {
+    use serde_json::Value;
+
+    /// Schema version supporting state machine widgets.
+    pub const NEXT_SCHEMA_VERSION: u32 = 7;
+
+    /// Returns the next schema version without changing existing widgets or metadata.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Existing variants keep their representation when the new variant is introduced
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+        NEXT_SCHEMA_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Rect, pos2, vec2};
@@ -399,5 +417,12 @@ mod tests {
         assert_eq!(message_viewer["stale_after"], 5.);
         let value_display = migrated_value.pointer("/widgets/3/variant/ValueDisplay").unwrap();
         assert_eq!(value_display["text_size"], 2);
+
+        // Verify the previous wire shape advances without changing widgets or metadata
+        let mut previous = migrated_value.clone();
+        previous["schema_version"] = 6.into();
+        let upgraded = migrate(&serde_json::to_vec(&previous).unwrap()).unwrap();
+        assert_eq!(upgraded.persisted_schema_version, 6);
+        assert_eq!(serde_json::to_value(upgraded.layout).unwrap(), migrated_value);
     }
 }

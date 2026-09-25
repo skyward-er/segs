@@ -190,7 +190,7 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
                 .iter()
                 .filter(|widget| Some(widget.id) != dragged_layout_widget),
             grid,
-            &mut appctx.data_store,
+            &mut crate::ui::widgets::WidgetRenderContext::preview(&mut appctx.data_store),
         );
     });
 
@@ -424,7 +424,13 @@ fn show_disabled_widget(
 ) {
     ui.scope(|ui| {
         ui.disable();
-        show_widget(ui, id, rect, variant, data_store);
+        show_widget(
+            ui,
+            id,
+            rect,
+            variant,
+            &mut crate::ui::widgets::WidgetRenderContext::preview(data_store),
+        );
     });
 }
 

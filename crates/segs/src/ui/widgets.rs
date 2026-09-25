@@ -1,12 +1,14 @@
 mod mapped_value;
 mod message_viewer;
 mod plot;
+mod state_machine;
 mod value_display;
 
 use enum_dispatch::enum_dispatch;
 pub use mapped_value::MappedValueWidget;
 pub use message_viewer::MessageViewerWidget;
 pub use plot::PlotWidget;
+pub use state_machine::StateMachineWidget;
 pub use value_display::ValueDisplayWidget;
 
 use egui::{Id, Ui, Vec2};
@@ -36,6 +38,8 @@ pub enum WidgetVariant {
     MappedValue(MappedValueWidget),
     MessageViewer(MessageViewerWidget),
     Plot(PlotWidget),
+    /// Ordered telemetry states with commands for adjacent transitions.
+    StateMachine(StateMachineWidget),
     ValueDisplay(ValueDisplayWidget),
 }
 
@@ -45,6 +49,7 @@ impl WidgetVariant {
         vec![
             ValueDisplayWidget::default().into(),
             MappedValueWidget::default().into(),
+            StateMachineWidget::default().into(),
             PlotWidget::default().into(),
             MessageViewerWidget::default().into(),
         ]
@@ -53,6 +58,11 @@ impl WidgetVariant {
 
 #[enum_dispatch]
 pub trait WidgetTrait {
+    /// Renders with explicit command authority and the active adapter.
+    /// Read-only widgets use their existing datastore-only rendering implementation.
+    fn show_with_context(&self, ui: &mut Ui, context: &mut WidgetRenderContext<'_>) {
+        self.show(ui, context.data_store);
+    }
     /// Binds a gallery-only clone to isolated sample data without changing defaults.
     /// Widgets may override this to provide their own sample configuration.
     fn configure_preview(&mut self, preview: &crate::dataflow::preview::PreviewContext) {
@@ -90,5 +100,26 @@ pub trait WidgetTrait {
     /// Default size of the widget in grid space units. May be more than the minimum size.
     fn default_size(&self) -> Vec2 {
         self.min_size()
+    }
+}
+
+/// Per-render data access and authority for interactive command widgets.
+pub struct WidgetRenderContext<'a> {
+    /// Live or isolated preview data owned by the caller.
+    pub data_store: &'a mut DataStore,
+    /// Active adapter used to validate command descriptors and lifecycle identity.
+    pub adapter: Option<&'a crate::dataflow::adapter::DataAdapterInstance>,
+    /// Whether this surface permits command transmission.
+    pub allow_commands: bool,
+}
+
+impl<'a> WidgetRenderContext<'a> {
+    /// Returns a context that cannot issue commands, suitable for all editor previews.
+    pub fn preview(data_store: &'a mut DataStore) -> Self {
+        Self {
+            data_store,
+            adapter: None,
+            allow_commands: false,
+        }
     }
 }

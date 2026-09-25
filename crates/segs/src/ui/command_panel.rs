@@ -1,6 +1,10 @@
-use std::{fmt, time::SystemTime};
+use crate::ui::components::command_editor::{
+    FieldDraft, ProtocolChoices, fields_are_valid, initialize_drafts, message_selector, parse_fields, protocol_choices,
+    show_field_editors, target_selector,
+};
+use std::{sync::Arc, time::SystemTime};
 
-use ahash::{HashMap, HashMapExt};
+use ahash::HashMap;
 use chrono::{DateTime, Local};
 use egui::{
     Align, Button, Frame, Grid, Id, Key, KeyboardShortcut, Label, Layout, Margin, Modifiers, Panel, RichText,
@@ -11,18 +15,17 @@ use segs_ui::{
     containers::Card,
     style::CtxStyleExt,
     widgets::{
-        SearchableComboBox, SearchableComboBoxList, Separator, SingleSelection,
+        Separator,
         labels::{Badge, SectionHeader},
-        text::ValidationTextEdit,
     },
 };
 
 use crate::{
     app::AppContext,
     dataflow::{
-        Command, CommandId, CommandStatus, DataKey, DataType, DataValue, MessageKey, SourceKey,
+        Command, CommandId, CommandStatus, DataKey, DataValue, MessageKey, SourceKey,
         adapter::{DataAdapterInstance, DataAdapterInstanceToken},
-        protocol::{EnumDescriptor, FieldDescriptor, ProtocolDescriptor},
+        protocol::{FieldDescriptor, ProtocolDescriptor},
         store::DataStore,
     },
 };
@@ -33,7 +36,6 @@ const COMPOSER_VERTICAL_MARGIN: i8 = 8;
 const SELECTION_ROW_SPACING: f32 = 8.;
 const SELECTION_SEPARATOR_SPACING: f32 = 8.;
 const SEND_BUTTON_TOP_SPACING: f32 = 4.;
-const MESSAGE_SELECTOR_MAX_ROWS: usize = 8;
 const COMMAND_PANEL_ID: &str = "command_panel";
 const COMMAND_PANEL_OPEN_ID: &str = "command_panel_open";
 const COMMAND_PANEL_FOCUS_REQUEST_ID: &str = "command_panel_focus_request";
@@ -48,9 +50,9 @@ pub const TOGGLE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::C
 struct CommandPanelState {
     adapter_token: Option<DataAdapterInstanceToken>,
     target: Option<SourceKey>,
-    target_choices: Option<SearchableComboBoxList<SourceKey>>,
     message: Option<MessageKey>,
-    command_choices: Option<SearchableComboBoxList<MessageKey>>,
+    /// Protocol catalogs shared with transition settings, independent of this panel's selections.
+    choices: Option<Arc<ProtocolChoices>>,
     drafts: HashMap<DataKey, FieldDraft>,
     latest_sequence: Option<CommandId>,
 }
@@ -61,7 +63,7 @@ pub fn show(ui: &mut Ui, appctx: &mut AppContext) {
     let mut state = ui
         .data_mut(|data| data.remove_temp::<CommandPanelState>(state_id))
         .unwrap_or_default();
-    state.sync_adapter(appctx.data_adapter.as_ref());
+    state.sync_adapter(ui.ctx(), appctx.data_adapter.as_ref());
     let request_initial_focus = ui
         .data(|data| data.get_temp::<bool>(Id::new(COMMAND_PANEL_FOCUS_REQUEST_ID)))
         .unwrap_or(false);
@@ -107,16 +109,8 @@ pub fn toggle(ui: &mut Ui) {
     });
 }
 
-#[derive(Clone, Default)]
-struct FieldDraft {
-    text: String,
-    touched: bool,
-    selected_enum_variant: Option<usize>,
-    enum_choices: Option<SearchableComboBoxList<usize>>,
-}
-
 impl CommandPanelState {
-    fn sync_adapter(&mut self, adapter: Option<&DataAdapterInstance>) {
+    fn sync_adapter(&mut self, ctx: &egui::Context, adapter: Option<&DataAdapterInstance>) {
         let token = adapter.map(DataAdapterInstance::token);
         let unchanged = match (&self.adapter_token, token) {
             (Some(current), Some(token)) => current == token,
@@ -127,28 +121,10 @@ impl CommandPanelState {
             return;
         }
 
-        let command_choices = adapter.map(|adapter| {
-            let protocol = adapter.describe_protocol();
-            SearchableComboBoxList::new(protocol.command_messages.iter().filter_map(|key| {
-                protocol
-                    .message_schemas
-                    .get(key)
-                    .map(|descriptor| (*key, descriptor.name.clone()))
-            }))
-        });
-        let target_choices = adapter.map(|adapter| {
-            SearchableComboBoxList::new(
-                adapter
-                    .describe_protocol()
-                    .sources
-                    .iter()
-                    .map(|source| (source.key, source.name.clone())),
-            )
-        });
+        // Reset panel-owned inputs while reusing catalogs already built by another editor
         *self = Self {
             adapter_token: token.cloned(),
-            target_choices,
-            command_choices,
+            choices: adapter.map(|adapter| protocol_choices(ctx, adapter)),
             ..Self::default()
         };
     }
@@ -280,7 +256,7 @@ fn show_composer(
 }
 
 fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, request_initial_focus: bool) {
-    let Some(choices) = state.target_choices.as_ref() else {
+    let Some(choices) = state.choices.as_ref() else {
         return;
     };
     let Some(adapter_token) = state.adapter_token.as_ref() else {
@@ -289,16 +265,7 @@ fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, request_init
     let selector_id = ui.make_persistent_id(("command_target_selector", adapter_token));
 
     ui.label("Target");
-    let response = ui
-        .add_enabled_ui(!choices.is_empty(), |ui| {
-            ui.add(
-                SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.target))
-                    .empty_selection_text("Select a target")
-                    .search_hint("Search targets…")
-                    .empty_results_text("No matching targets."),
-            )
-        })
-        .inner;
+    let response = target_selector(ui, selector_id, &choices.targets, &mut state.target);
     if request_initial_focus && response.enabled() {
         // Consume initial focus only after an enabled first control accepts it
         response.request_focus();
@@ -307,7 +274,7 @@ fn show_target_selector(ui: &mut Ui, state: &mut CommandPanelState, request_init
 }
 
 fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &ProtocolDescriptor) -> bool {
-    let Some(choices) = state.command_choices.as_ref() else {
+    let Some(choices) = state.choices.as_ref() else {
         return false;
     };
     let Some(adapter_token) = state.adapter_token.as_ref() else {
@@ -316,93 +283,13 @@ fn show_message_selector(ui: &mut Ui, state: &mut CommandPanelState, protocol: &
     let selector_id = ui.make_persistent_id(("command_message_selector", adapter_token));
 
     ui.label("Command");
-    let response = ui.add(
-        SearchableComboBox::new(selector_id, choices, SingleSelection::new(&mut state.message))
-            .empty_selection_text("Select a command")
-            .max_visible_rows(MESSAGE_SELECTOR_MAX_ROWS)
-            .search_hint("Search command…")
-            .empty_results_text("No matching commands."),
-    );
+    let response = message_selector(ui, selector_id, &choices.commands, &mut state.message);
     if response.changed() {
         let key = state.message.expect("changed command selection must contain a value");
         state.drafts.clear();
         initialize_drafts(&protocol.message_schemas[&key].fields, &mut state.drafts);
     }
     response.changed()
-}
-
-fn show_field_editors(
-    ui: &mut Ui,
-    descriptors: &[FieldDescriptor],
-    drafts: &mut HashMap<DataKey, FieldDraft>,
-    validate_blur: bool,
-) {
-    // Keep widget identities tied to stable form positions rather than command-specific keys
-    for (descriptor_index, descriptor) in descriptors.iter().enumerate() {
-        ui.push_id(("command_field_descriptor", descriptor_index), |ui| match descriptor {
-            FieldDescriptor::Structure { name, fields } => {
-                ui.label(RichText::new(name).strong());
-                ui.indent("children", |ui| {
-                    show_field_editors(ui, fields, drafts, validate_blur);
-                });
-            }
-            FieldDescriptor::Field {
-                name,
-                field_type,
-                data_key,
-            } => {
-                let draft = drafts
-                    .get_mut(data_key)
-                    .expect("Selected message fields must have initialized drafts");
-                let error = draft
-                    .touched
-                    .then(|| parse_field(draft, field_type).err())
-                    .flatten()
-                    .map(|error| error.to_string());
-
-                ui.label(RichText::new(format!("{name} · {field_type}")).size(11.));
-                let mut editor = ValidationTextEdit::new(&mut draft.text)
-                    .id_salt("editor")
-                    .desired_width(ui.available_width());
-                if let Some(error) = error {
-                    editor = editor.error(error);
-                }
-                let response = ui.add(editor);
-                if response.changed() || (validate_blur && response.lost_focus()) {
-                    draft.touched = true;
-                }
-            }
-            FieldDescriptor::EnumField {
-                name,
-                descriptor,
-                data_key,
-            } => {
-                let draft = drafts
-                    .get_mut(data_key)
-                    .expect("Selected message fields must have initialized drafts");
-                let FieldDraft {
-                    selected_enum_variant,
-                    enum_choices,
-                    ..
-                } = draft;
-                let choices = enum_choices
-                    .as_ref()
-                    .expect("Enum field drafts must contain searchable choices");
-
-                ui.label(RichText::new(format!("{name} · {}", descriptor.name)).size(11.));
-                ui.add(
-                    SearchableComboBox::new(
-                        ui.make_persistent_id("enum_selector"),
-                        choices,
-                        SingleSelection::new(selected_enum_variant),
-                    )
-                    .empty_selection_text("Select a value")
-                    .search_hint("Search enum values…")
-                    .empty_results_text("No matching enum values."),
-                );
-            }
-        });
-    }
 }
 
 fn show_latest_sequence(ui: &mut Ui, command_id: Option<CommandId>, protocol: &ProtocolDescriptor, store: &DataStore) {
@@ -521,139 +408,6 @@ fn show_field_values(ui: &mut Ui, descriptors: &[FieldDescriptor], values: &Hash
     }
 }
 
-fn initialize_drafts(descriptors: &[FieldDescriptor], drafts: &mut HashMap<DataKey, FieldDraft>) {
-    for descriptor in descriptors {
-        match descriptor {
-            FieldDescriptor::Structure { fields, .. } => initialize_drafts(fields, drafts),
-            FieldDescriptor::Field { data_key, .. } => {
-                drafts.insert(*data_key, FieldDraft::default());
-            }
-            FieldDescriptor::EnumField {
-                descriptor, data_key, ..
-            } => {
-                drafts.insert(
-                    *data_key,
-                    FieldDraft {
-                        enum_choices: Some(SearchableComboBoxList::new(
-                            descriptor
-                                .variants
-                                .iter()
-                                .enumerate()
-                                .map(|(index, (name, _))| (index, name)),
-                        )),
-                        ..FieldDraft::default()
-                    },
-                );
-            }
-        }
-    }
-}
-
-fn fields_are_valid(descriptors: &[FieldDescriptor], drafts: &HashMap<DataKey, FieldDraft>) -> bool {
-    descriptors.iter().all(|descriptor| match descriptor {
-        FieldDescriptor::Structure { fields, .. } => fields_are_valid(fields, drafts),
-        FieldDescriptor::Field {
-            field_type, data_key, ..
-        } => parse_field(&drafts[data_key], field_type).is_ok(),
-        FieldDescriptor::EnumField {
-            descriptor, data_key, ..
-        } => parse_enum_field(&drafts[data_key], descriptor).is_ok(),
-    })
-}
-
-fn parse_fields(
-    descriptors: &[FieldDescriptor],
-    drafts: &HashMap<DataKey, FieldDraft>,
-) -> Result<HashMap<DataKey, DataValue>, FieldParseError> {
-    let mut values = HashMap::new();
-    collect_parsed_fields(descriptors, drafts, &mut values)?;
-    Ok(values)
-}
-
-fn collect_parsed_fields(
-    descriptors: &[FieldDescriptor],
-    drafts: &HashMap<DataKey, FieldDraft>,
-    values: &mut HashMap<DataKey, DataValue>,
-) -> Result<(), FieldParseError> {
-    for descriptor in descriptors {
-        match descriptor {
-            FieldDescriptor::Structure { fields, .. } => collect_parsed_fields(fields, drafts, values)?,
-            FieldDescriptor::Field {
-                field_type, data_key, ..
-            } => {
-                values.insert(*data_key, parse_field(&drafts[data_key], field_type)?);
-            }
-            FieldDescriptor::EnumField {
-                descriptor, data_key, ..
-            } => {
-                values.insert(*data_key, parse_enum_field(&drafts[data_key], descriptor)?);
-            }
-        }
-    }
-    Ok(())
-}
-
-fn parse_enum_field(draft: &FieldDraft, descriptor: &EnumDescriptor) -> Result<DataValue, FieldParseError> {
-    let index = draft.selected_enum_variant.ok_or(FieldParseError::Missing)?;
-    descriptor
-        .variants
-        .get(index)
-        .map(|(_, value)| value.clone())
-        .ok_or(FieldParseError::Invalid("Selected enum value is unavailable"))
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FieldParseError {
-    Missing,
-    Invalid(&'static str),
-}
-
-impl fmt::Display for FieldParseError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Missing => formatter.write_str("Value is required"),
-            Self::Invalid(err) => write!(formatter, "{err}"),
-        }
-    }
-}
-
-fn parse_field(draft: &FieldDraft, field_type: &DataType) -> Result<DataValue, FieldParseError> {
-    if !draft.touched {
-        return Err(FieldParseError::Missing);
-    }
-    if matches!(field_type, DataType::String) {
-        return Ok(DataValue::String(draft.text.clone()));
-    }
-
-    let text = draft.text.trim();
-    if text.is_empty() {
-        return Err(FieldParseError::Missing);
-    }
-
-    macro_rules! parse {
-        ($value_type:ty, $variant:ident, $expected:literal) => {
-            text.parse::<$value_type>()
-                .map(DataValue::$variant)
-                .map_err(|_| FieldParseError::Invalid($expected))
-        };
-    }
-
-    match field_type {
-        DataType::U8 => parse!(u8, U8, "Value is out of range for unsigned 8-bit"),
-        DataType::U16 => parse!(u16, U16, "Value is out of range for unsigned 16-bit"),
-        DataType::U32 => parse!(u32, U32, "Value is out of range for unsigned 32-bit"),
-        DataType::U64 => parse!(u64, U64, "Value is out of range for unsigned 64-bit"),
-        DataType::I8 => parse!(i8, I8, "Value is out of range for signed 8-bit"),
-        DataType::I16 => parse!(i16, I16, "Value is out of range for signed 16-bit"),
-        DataType::I32 => parse!(i32, I32, "Value is out of range for signed 32-bit"),
-        DataType::I64 => parse!(i64, I64, "Value is out of range for signed 64-bit"),
-        DataType::F32 => parse!(f32, F32, "Value is out of range for single float"),
-        DataType::F64 => parse!(f64, F64, "Value is out of range for double float"),
-        DataType::Bool => parse!(bool, Bool, "Value must be true or false"),
-        DataType::String => unreachable!("DataType::String returns before scalar parsing"),
-    }
-}
-
 fn source_name(protocol: &ProtocolDescriptor, key: SourceKey) -> &str {
     protocol
         .sources
@@ -662,114 +416,4 @@ fn source_name(protocol: &ProtocolDescriptor, key: SourceKey) -> &str {
         .expect("Adapter command target must be a described source")
         .name
         .as_str()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn draft(text: &str) -> FieldDraft {
-        FieldDraft {
-            text: text.into(),
-            touched: true,
-            selected_enum_variant: None,
-            enum_choices: None,
-        }
-    }
-
-    #[test]
-    fn untouched_and_empty_scalar_drafts_are_missing() {
-        assert!(matches!(
-            parse_field(&FieldDraft::default(), &DataType::U8),
-            Err(FieldParseError::Missing)
-        ));
-        assert!(matches!(
-            parse_field(&draft("  "), &DataType::Bool),
-            Err(FieldParseError::Missing)
-        ));
-    }
-
-    #[test]
-    fn parses_every_exact_data_type() {
-        assert!(matches!(
-            parse_field(&draft("255"), &DataType::U8),
-            Ok(DataValue::U8(255))
-        ));
-        assert!(matches!(
-            parse_field(&draft("65535"), &DataType::U16),
-            Ok(DataValue::U16(65535))
-        ));
-        assert!(matches!(
-            parse_field(&draft(" 42 "), &DataType::U32),
-            Ok(DataValue::U32(42))
-        ));
-        assert!(matches!(
-            parse_field(&draft("42"), &DataType::U64),
-            Ok(DataValue::U64(42))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-128"), &DataType::I8),
-            Ok(DataValue::I8(-128))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-42"), &DataType::I16),
-            Ok(DataValue::I16(-42))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-42"), &DataType::I32),
-            Ok(DataValue::I32(-42))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-42"), &DataType::I64),
-            Ok(DataValue::I64(-42))
-        ));
-        assert!(matches!(
-            parse_field(&draft("1.5"), &DataType::F32),
-            Ok(DataValue::F32(1.5))
-        ));
-        assert!(matches!(
-            parse_field(&draft("2.5"), &DataType::F64),
-            Ok(DataValue::F64(2.5))
-        ));
-        assert!(matches!(
-            parse_field(&draft("true"), &DataType::Bool),
-            Ok(DataValue::Bool(true))
-        ));
-        assert!(matches!(
-            parse_field(&draft("  exact text  "), &DataType::String),
-            Ok(DataValue::String(value)) if value == "  exact text  "
-        ));
-        assert!(matches!(
-            parse_field(&draft(""), &DataType::String),
-            Ok(DataValue::String(value)) if value.is_empty()
-        ));
-    }
-
-    #[test]
-    fn rejects_malformed_and_out_of_range_scalars() {
-        assert!(matches!(
-            parse_field(&draft("256"), &DataType::U8),
-            Err(FieldParseError::Invalid(_))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-1"), &DataType::U16),
-            Err(FieldParseError::Invalid(_))
-        ));
-        assert!(matches!(
-            parse_field(&draft("128"), &DataType::I8),
-            Err(FieldParseError::Invalid(_))
-        ));
-        assert!(matches!(
-            parse_field(&draft("-129"), &DataType::I8),
-            Err(FieldParseError::Invalid(_))
-        ));
-        assert!(matches!(
-            parse_field(&draft("yes"), &DataType::Bool),
-            Err(FieldParseError::Invalid(_))
-        ));
-        assert!(matches!(
-            parse_field(&draft("not-a-number"), &DataType::F64),
-            Err(FieldParseError::Invalid(_))
-        ));
-    }
 }

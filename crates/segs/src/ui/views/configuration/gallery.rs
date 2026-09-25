@@ -45,7 +45,7 @@ pub fn show(ui: &mut Ui, samples: &mut PreviewContext) {
                 card_id.with("preview"),
                 preview_rect,
                 &preview,
-                samples.data_store(),
+                &mut crate::ui::widgets::WidgetRenderContext::preview(samples.data_store()),
             );
         });
 

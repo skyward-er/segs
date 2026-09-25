@@ -55,7 +55,7 @@ pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, adapter: Option<&DataA
                 ui.weak("This widget has no settings.");
             }
         } else {
-            show_widget_settings(ui, settings);
+            show_widget_settings(ui, settings, adapter);
         }
     });
 }
@@ -86,13 +86,32 @@ fn show_data_settings(ui: &mut Ui, settings: Vec<WidgetDataSetting<'_>>, adapter
     }
 }
 
-fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>) {
+fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>, adapter: Option<&DataAdapterInstance>) {
     // Measure labels once so top-aligned rows retain one shared value column
     let label_width = settings_label_width(ui, &settings);
     let additional_row_spacing = (SETTINGS_ROW_SPACING - ui.spacing().item_spacing.y).max(0.);
     let setting_count = settings.len();
 
     for (index, setting) in settings.into_iter().enumerate() {
+        if let WidgetSetting::StateTransitions {
+            id,
+            label,
+            mappings,
+            transitions,
+        } = setting
+        {
+            ui.push_id(id, |ui| {
+                ui.label(RichText::new(label).strong());
+                mapping_table::show(ui, mappings);
+                ui.add_space(8.);
+                ui.strong("Transitions");
+                crate::ui::components::state_transitions::show(ui, mappings, transitions, adapter);
+            });
+            if index + 1 < setting_count {
+                ui.add_space(additional_row_spacing);
+            }
+            continue;
+        }
         if let WidgetSetting::IntegerTextMappings { id, label, mappings } = setting {
             ui.push_id(id, |ui| {
                 ui.label(RichText::new(label).strong());
@@ -175,7 +194,7 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
         } => {
             show_float_setting(ui, setting_id, value, range, step, desired_width);
         }
-        WidgetSetting::IntegerTextMappings { .. } => {
+        WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. } => {
             unreachable!("mapping settings are rendered as full-width sections")
         }
     }
@@ -187,7 +206,12 @@ fn settings_label_width(ui: &Ui, settings: &[WidgetSetting<'_>]) -> f32 {
     let color = ui.visuals().text_color();
     settings
         .iter()
-        .filter(|setting| !matches!(setting, WidgetSetting::IntegerTextMappings { .. }))
+        .filter(|setting| {
+            !matches!(
+                setting,
+                WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. }
+            )
+        })
         .fold(0., |width, setting| {
             let label = setting_label(setting).to_owned();
             width.max(ui.painter().layout_no_wrap(label, font_id.clone(), color).size().x)
@@ -198,6 +222,7 @@ fn settings_label_width(ui: &Ui, settings: &[WidgetSetting<'_>]) -> f32 {
 fn setting_label(setting: &WidgetSetting<'_>) -> &'static str {
     match setting {
         WidgetSetting::Checkbox { label, .. }
+        | WidgetSetting::StateTransitions { label, .. }
         | WidgetSetting::ComboBox { label, .. }
         | WidgetSetting::TextBox { label, .. }
         | WidgetSetting::Color { label, .. }
@@ -216,7 +241,7 @@ fn setting_control_height(ui: &Ui, setting: &WidgetSetting<'_>) -> f32 {
         WidgetSetting::Checkbox { .. } | WidgetSetting::ComboBox { .. } | WidgetSetting::Color { .. } => {
             ui.spacing().interact_size.y
         }
-        WidgetSetting::IntegerTextMappings { .. } => 0.,
+        WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. } => 0.,
     }
 }
 
