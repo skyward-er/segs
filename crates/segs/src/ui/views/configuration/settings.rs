@@ -102,7 +102,7 @@ fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>, adapter: 
         {
             ui.push_id(id, |ui| {
                 ui.label(RichText::new(label).strong());
-                mapping_table::show(ui, mappings);
+                mapping_table::show(ui, mappings, false);
                 ui.add_space(8.);
                 ui.strong("Transitions");
                 crate::ui::components::state_transitions::show(ui, mappings, transitions, adapter);
@@ -112,10 +112,16 @@ fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>, adapter: 
             }
             continue;
         }
-        if let WidgetSetting::IntegerTextMappings { id, label, mappings } = setting {
+        if let WidgetSetting::IntegerTextMappings {
+            id,
+            label,
+            mappings,
+            colors,
+        } = setting
+        {
             ui.push_id(id, |ui| {
                 ui.label(RichText::new(label).strong());
-                mapping_table::show(ui, mappings);
+                mapping_table::show(ui, mappings, colors);
             });
             if index + 1 < setting_count {
                 ui.add_space(additional_row_spacing);

@@ -44,6 +44,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
             v3::NEXT_SCHEMA_VERSION => v4::migrate(&mut value),
             v4::NEXT_SCHEMA_VERSION => v5::migrate(&mut value),
             v5::NEXT_SCHEMA_VERSION => v6::migrate(&mut value),
+            v6::NEXT_SCHEMA_VERSION => v7::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -329,14 +330,36 @@ mod v6 {
     }
 }
 
+/// Migration from layout schema v7 to v8.
+mod v7 {
+    use serde_json::Value;
+
+    /// Schema version adding an optional background color to mapped value mappings.
+    pub const NEXT_SCHEMA_VERSION: u32 = 8;
+
+    /// Advances the version marker without inserting colors.
+    ///
+    /// Returns the next schema version. An absent color means a transparent
+    /// background, so existing mappings keep their previous appearance.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Mark the document ready for current deserialization
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+
+        NEXT_SCHEMA_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Rect, pos2, vec2};
+    use serde_json::json;
 
     use super::*;
     use crate::ui::{
         grid::GRect,
-        widgets::{MessageViewerWidget, PlotWidget, ValueDisplayWidget},
+        widgets::{MappedValueWidget, MessageViewerWidget, PlotWidget, ValueDisplayWidget},
     };
 
     #[test]
@@ -348,6 +371,7 @@ mod tests {
         layout.add_widget(PlotWidget::default().into(), rect);
         layout.add_widget(MessageViewerWidget::default().into(), rect);
         layout.add_widget(ValueDisplayWidget::default().into(), rect);
+        layout.add_widget(MappedValueWidget::default().into(), rect);
         let mut value = serde_json::to_value(&layout).unwrap();
         value["schema_version"] = FIRST_LAYOUT_SCHEMA.into();
 
@@ -418,11 +442,17 @@ mod tests {
         let value_display = migrated_value.pointer("/widgets/3/variant/ValueDisplay").unwrap();
         assert_eq!(value_display["text_size"], 2);
 
-        // Verify the previous wire shape advances without changing widgets or metadata
+        // Verify previous mapped value rows advance unchanged with transparent backgrounds
         let mut previous = migrated_value.clone();
-        previous["schema_version"] = 6.into();
+        previous["schema_version"] = 7.into();
+        previous["widgets"][4]["variant"]["MappedValue"]["mappings"] = json!([
+            {"value": 0, "text": "INIT"},
+            {"value": 2, "text": "OK"}
+        ]);
         let upgraded = migrate(&serde_json::to_vec(&previous).unwrap()).unwrap();
-        assert_eq!(upgraded.persisted_schema_version, 6);
-        assert_eq!(serde_json::to_value(upgraded.layout).unwrap(), migrated_value);
+        let mut expected = previous;
+        expected["schema_version"] = CURRENT_LAYOUT_SCHEMA.into();
+        assert_eq!(upgraded.persisted_schema_version, 7);
+        assert_eq!(serde_json::to_value(upgraded.layout).unwrap(), expected);
     }
 }

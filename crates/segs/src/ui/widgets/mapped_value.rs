@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use egui::Ui;
+use egui::{Color32, Ui};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -19,14 +19,14 @@ use crate::{
     },
 };
 
-/// Displays the latest integer stream value through a user-defined text mapping.
+/// Displays the latest integer stream value through a user-defined text and background color mapping.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MappedValueWidget {
     /// Optional label displayed above the mapped value.
     label: String,
     /// Integer stream whose latest value is translated.
     stream: Option<StreamKey>,
-    /// Ordered integer-to-text translations.
+    /// Ordered integer-to-text translations, each with an optional background color.
     #[serde(deserialize_with = "mapping_table::deserialize_mappings")]
     mappings: Vec<IntegerTextMapping>,
     /// Whether text is automatically sized to fit the widget.
@@ -52,30 +52,40 @@ impl WidgetTrait for MappedValueWidget {
     /// Configures sample mappings and the integer stream on a gallery-only clone.
     fn configure_preview(&mut self, preview: &crate::dataflow::preview::PreviewContext) {
         self.stream = Some(preview.integer_stream);
-        self.mappings = [("0", "INIT"), ("1", "INIT ERROR"), ("2", "OK")]
-            .into_iter()
-            .map(|(value, text)| IntegerTextMapping {
-                value: value.to_owned(),
-                text: text.to_owned(),
-            })
-            .collect();
+        self.mappings = [
+            ("0", "INIT", Color32::from_rgb(245, 158, 11)),
+            ("1", "INIT ERROR", Color32::from_rgb(220, 38, 38)),
+            ("2", "OK", Color32::from_rgb(22, 163, 74)),
+        ]
+        .into_iter()
+        .map(|(value, text, color)| IntegerTextMapping {
+            value: value.to_owned(),
+            text: text.to_owned(),
+            color: Some(color),
+        })
+        .collect();
     }
 
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
-        // Resolve the current output and whether it uses a configured mapping
-        let (value, is_mapped) = self.value_text(data_store);
-        let sizing_value = if self.auto_size && is_mapped {
-            self.widest_mapping(ui).unwrap_or(value.as_str())
+        // Resolve the current output, its mapped background and whether a configured mapping matched
+        let current = self.current_mapping(data_store);
+        let (value, fill) = match &current {
+            Ok(mapping) => (mapping.text.as_str(), mapping.color),
+            Err(fallback) => (fallback.as_str(), None),
+        };
+        let sizing_value = if self.auto_size && current.is_ok() {
+            self.widest_mapping(ui).unwrap_or(value)
         } else {
-            value.as_str()
+            value
         };
 
         // Keep mapped-state transitions sized for the widest configured output
         centered_value::show(
             ui,
             &self.label,
-            &value,
+            value,
             sizing_value,
+            fill,
             self.auto_size,
             self.text_size,
             false,
@@ -90,7 +100,7 @@ impl WidgetTrait for MappedValueWidget {
         let show_text_size = !self.auto_size;
         let mut settings = vec![
             WidgetSetting::text_box("label", "Label", &mut self.label),
-            WidgetSetting::integer_text_mappings("mappings", "Mapping", &mut self.mappings),
+            WidgetSetting::integer_text_mappings("mappings", "Mapping", &mut self.mappings, true),
             WidgetSetting::checkbox("auto_size", "Auto size", &mut self.auto_size),
         ];
 
@@ -119,31 +129,29 @@ impl WidgetTrait for MappedValueWidget {
 }
 
 impl MappedValueWidget {
-    /// Returns the current displayed text and whether a configured row matched.
-    fn value_text(&self, data_store: &DataStore) -> (String, bool) {
+    /// Returns the configured row matching the latest stream value.
+    ///
+    /// Returns `Err` with the fallback text to display without a background when
+    /// no stream is configured, no integer sample exists, or no row matches.
+    fn current_mapping(&self, data_store: &DataStore) -> Result<&IntegerTextMapping, String> {
         let Some(stream_key) = self.stream else {
-            return ("No stream".to_owned(), false);
+            return Err("No stream".to_owned());
         };
         let Some(stream) = data_store.stream(stream_key) else {
-            return ("No data".to_owned(), false);
+            return Err("No data".to_owned());
         };
         let DataStream::I64(points) = stream else {
-            return ("Expected integer stream".to_owned(), false);
+            return Err("Expected integer stream".to_owned());
         };
         let Some(value) = points.last().map(|point| point.value) else {
-            return ("No data".to_owned(), false);
+            return Err("No data".to_owned());
         };
 
         // Honor persisted row order so malformed duplicate mappings are deterministic
-        if let Some(mapping) = self
-            .mappings
+        self.mappings
             .iter()
             .find(|mapping| mapping.parsed_value() == Some(value))
-        {
-            (mapping.text.clone(), true)
-        } else {
-            (format!("Unknown ({value})"), false)
-        }
+            .ok_or_else(|| format!("Unknown ({value})"))
     }
 
     /// Returns the widest valid output, or `None` when no valid mapping exists.
@@ -286,20 +294,23 @@ mod tests {
             .map(|(value, text)| IntegerTextMapping {
                 value,
                 text: text.to_owned(),
+                color: None,
             })
             .collect(),
             ..Default::default()
         };
+        let current_text =
+            |widget: &MappedValueWidget| widget.current_mapping(store).map(|mapping| mapping.text.clone());
 
         // Lookup and persistence must agree on which duplicate owns the value
-        assert_eq!(widget.value_text(store), ("first".to_owned(), true));
+        assert_eq!(current_text(&widget), Ok("first".to_owned()));
         widget.prepare_for_save();
-        assert_eq!(widget.value_text(store), ("first".to_owned(), true));
+        assert_eq!(current_text(&widget), Ok("first".to_owned()));
 
         // Empty mapped output remains a match while missing keys use the fallback
         widget.mappings[0].text.clear();
-        assert_eq!(widget.value_text(store), (String::new(), true));
+        assert_eq!(current_text(&widget), Ok(String::new()));
         widget.mappings[0].value = "invalid".to_owned();
-        assert_eq!(widget.value_text(store), (format!("Unknown ({value})"), false));
+        assert_eq!(current_text(&widget), Err(format!("Unknown ({value})")));
     }
 }

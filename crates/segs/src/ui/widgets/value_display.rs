@@ -33,7 +33,16 @@ impl Default for ValueDisplayWidget {
 impl WidgetTrait for ValueDisplayWidget {
     fn show(&self, ui: &mut Ui, data_store: &mut DataStore) {
         let value = self.value_text(data_store);
-        centered_value::show(ui, &self.label, &value, &value, self.auto_size, self.text_size, true);
+        centered_value::show(
+            ui,
+            &self.label,
+            &value,
+            &value,
+            None,
+            self.auto_size,
+            self.text_size,
+            true,
+        );
     }
 
     fn data_settings(&mut self) -> Vec<WidgetDataSetting<'_>> {

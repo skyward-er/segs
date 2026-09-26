@@ -126,6 +126,8 @@ pub enum WidgetSetting<'a> {
         label: &'static str,
         /// Mapping rows edited in place, including unfinished integer drafts.
         mappings: &'a mut Vec<IntegerTextMapping>,
+        /// Whether each row also edits an optional background color shown with its text.
+        colors: bool,
     },
 }
 
@@ -237,13 +239,20 @@ impl<'a> WidgetSetting<'a> {
     }
 
     /// Creates an integer-to-text mapping table under a standard heading and ID scope.
-    /// Returns a setting that edits rows in place without reordering active drafts.
+    /// Returns a setting that edits rows in place without reordering active drafts,
+    /// including an optional per-row background color when `colors` is set.
     pub fn integer_text_mappings(
         id: &'static str,
         label: &'static str,
         mappings: &'a mut Vec<IntegerTextMapping>,
+        colors: bool,
     ) -> Self {
-        Self::IntegerTextMappings { id, label, mappings }
+        Self::IntegerTextMappings {
+            id,
+            label,
+            mappings,
+            colors,
+        }
     }
 
     /// Returns the stable interaction identifier for this setting.
