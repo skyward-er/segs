@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashSet, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
-    sync::Arc,
-};
+use std::collections::HashSet;
 
 use egui::{Color32, Ui};
 use serde::{Deserialize, Serialize};
@@ -155,63 +151,25 @@ impl MappedValueWidget {
     }
 
     /// Returns the widest valid output, or `None` when no valid mapping exists.
-    /// Measurements are cached until ordered mapping contents or fonts change.
+    /// Each first-occurrence output is measured once using egui's shaped-layout cache.
     fn widest_mapping(&self, ui: &Ui) -> Option<&str> {
-        // Fingerprint editable contents without parsing or measuring unchanged rows
-        let mut hasher = DefaultHasher::new();
-        self.mappings.len().hash(&mut hasher);
-        for mapping in &self.mappings {
-            mapping.value.hash(&mut hasher);
-            mapping.text.hash(&mut hasher);
-        }
-        let input_hash = hasher.finish();
-        let fonts = centered_value::font_metrics(ui);
-        let cache_id = ui.id().with("mapped_value_widest");
-        if let Some(cache) = ui.ctx().data(|data| data.get_temp::<WidestMappingCache>(cache_id))
-            && cache.input_hash == input_hash
-            && cache.fonts == fonts
-        {
-            return cache.index.map(|index| self.mappings[index].text.as_str());
-        }
-
-        // Validate and measure each first-occurrence output once on a cache miss
+        // Validate and measure in one pass while preserving the first widest match
         let mut seen = HashSet::new();
         let mut widest = None;
         let mut widest_width = f32::NEG_INFINITY;
-        for (index, mapping) in self.mappings.iter().enumerate() {
+        for mapping in &self.mappings {
             let Some(value) = mapping.parsed_value() else { continue };
             if !seen.insert(value) {
                 continue;
             }
             let width = centered_value::text_width(ui, &mapping.text);
             if width > widest_width {
-                widest = Some(index);
+                widest = Some(mapping.text.as_str());
                 widest_width = width;
             }
         }
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(
-                cache_id,
-                WidestMappingCache {
-                    input_hash,
-                    fonts,
-                    index: widest,
-                },
-            );
-        });
-        widest.map(|index| self.mappings[index].text.as_str())
+        widest
     }
-}
-
-/// Transient widest-output selection, independent of the current stream value.
-#[derive(Clone)]
-struct WidestMappingCache {
-    /// Fingerprint of ordered raw mapping keys and outputs.
-    input_hash: u64,
-    /// Font inputs used to measure the outputs.
-    fonts: Arc<centered_value::FontMetrics>,
-    /// Winning row, or `None` when all rows are invalid.
-    index: Option<usize>,
 }
 
 #[cfg(test)]

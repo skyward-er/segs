@@ -45,7 +45,8 @@ pub fn show_widget(ui: &mut Ui, id: Id, rect: Rect, widget: &WidgetVariant, cont
                 app_style.main_view_stroke,
                 StrokeKind::Middle,
             );
-            ui.set_clip_rect(rect);
+            // Keep widget contents inside both their bounds and the parent viewport
+            ui.shrink_clip_rect(rect);
             widget.show_with_context(ui, context);
         });
     });

@@ -1,3 +1,4 @@
+pub(super) mod auto_size;
 pub mod buttons;
 pub mod centered_value;
 pub mod command_editor;
