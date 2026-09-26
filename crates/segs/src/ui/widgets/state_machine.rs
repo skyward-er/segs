@@ -121,6 +121,7 @@ impl WidgetTrait for StateMachineWidget {
             .map(|(value, text)| IntegerTextMapping {
                 value: value.into(),
                 text: text.into(),
+                color: None,
             })
             .collect();
     }
@@ -223,7 +224,7 @@ impl StateMachineWidget {
             let foreground = if selected {
                 let fill = self.active_color.to_opaque();
                 painter.rect_filled(cell, 0., fill);
-                contrasting_text(fill)
+                centered_value::contrasting_text(fill)
             } else {
                 ui.visuals().text_color()
             };
@@ -366,24 +367,6 @@ fn show_transition(
         };
         runtime.transitions.insert(pair, feedback);
         ui.ctx().request_repaint();
-    }
-}
-
-/// Returns black or white text with the higher contrast against an opaque fill.
-fn contrasting_text(fill: Color32) -> Color32 {
-    let linear = |channel: u8| {
-        let value = f32::from(channel) / 255.;
-        if value <= 0.04045 {
-            value / 12.92
-        } else {
-            ((value + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    let luminance = 0.2126 * linear(fill.r()) + 0.7152 * linear(fill.g()) + 0.0722 * linear(fill.b());
-    if luminance > 0.179 {
-        Color32::BLACK
-    } else {
-        Color32::WHITE
     }
 }
 

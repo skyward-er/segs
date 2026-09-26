@@ -1,4 +1,6 @@
-use egui::{Margin, Rect, Ui, vec2};
+use egui::{
+    Color32, Margin, Painter, Popup, PopupCloseBehavior, Rect, Sense, StrokeKind, Ui, color_picker, pos2, vec2,
+};
 use segs_assets::icons;
 use segs_ui::{
     containers::{RoundedGrid, RoundedGridColumn},
@@ -12,12 +14,14 @@ use segs_ui::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 const VALUE_WIDTH: f32 = 42.;
+const COLOR_WIDTH: f32 = 42.;
 const ACTION_WIDTH: f32 = 24.;
 const CELL_PADDING: f32 = 4.;
 
 /// Shows editable mapping drafts with full-width validation feedback.
 /// Applies row additions and removals without reordering active edits.
-pub fn show(ui: &mut Ui, mappings: &mut Vec<IntegerTextMapping>) {
+/// When `colors` is set, each row also edits its optional background color.
+pub fn show(ui: &mut Ui, mappings: &mut Vec<IntegerTextMapping>, colors: bool) {
     ui.scope(|ui| {
         let row_height = default_singleline_height(ui) + 2.;
         let mut remove = None;
@@ -26,17 +30,20 @@ pub fn show(ui: &mut Ui, mappings: &mut Vec<IntegerTextMapping>) {
         let error_color = ui.app_style().error_fg_color;
 
         // Let the shared container own all table geometry and border rendering
+        let color_column = colors.then_some(RoundedGridColumn::Fixed(COLOR_WIDTH));
+        let color_title = colors.then_some("Color");
         RoundedGrid::new("table")
-            .columns([
-                RoundedGridColumn::Fixed(VALUE_WIDTH),
-                RoundedGridColumn::Remainder,
-                RoundedGridColumn::Fixed(ACTION_WIDTH),
-            ])
+            .columns(
+                [RoundedGridColumn::Fixed(VALUE_WIDTH), RoundedGridColumn::Remainder]
+                    .into_iter()
+                    .chain(color_column)
+                    .chain([RoundedGridColumn::Fixed(ACTION_WIDTH)]),
+            )
             .min_row_height(row_height)
             .cell_padding(vec2(1., 1.))
             .header_rows(1)
             .show(ui, |grid| {
-                for title in ["Value", "Text", ""] {
+                for title in ["Value", "Text"].into_iter().chain(color_title).chain([""]) {
                     grid.cell(|ui| {
                         ui.add_space(CELL_PADDING - 1.);
                         ui.label(title);
@@ -60,6 +67,9 @@ pub fn show(ui: &mut Ui, mappings: &mut Vec<IntegerTextMapping>) {
                         edit_cell(ui, &mut mapping.value);
                     });
                     grid.cell(|ui| edit_cell(ui, &mut mapping.text));
+                    if colors {
+                        grid.cell(|ui| edit_color_cell(ui, &mut mapping.color));
+                    }
                     grid.cell(|ui| {
                         let rect = ui.max_rect();
                         let size = 18_f32.min((rect.height() - 2.).max(0.)).min(rect.width());
@@ -101,6 +111,7 @@ pub fn show(ui: &mut Ui, mappings: &mut Vec<IntegerTextMapping>) {
             mappings.push(IntegerTextMapping {
                 value: String::new(),
                 text: String::new(),
+                color: None,
             });
         }
     });
@@ -117,6 +128,78 @@ fn edit_cell(ui: &mut Ui, text: &mut String) {
             .desired_width((ui.available_width() - 8.).max(0.))
             .clip_text(true),
     );
+}
+
+/// Edits one optional row background through a swatch centered in its cell.
+/// `None` keeps the widget's own background and is shown as transparency checkers.
+fn edit_color_cell(ui: &mut Ui, color: &mut Option<Color32>) {
+    // Keep background colors opaque even when loading a manually edited layout
+    if let Some(color) = color {
+        *color = color.to_opaque();
+    }
+
+    // Draw the swatch like egui's color button, with theme checkers standing in for transparency
+    let rect = ui.max_rect();
+    let size = vec2((rect.width() - 8.).max(0.), (rect.height() - 6.).max(0.));
+    let swatch_rect = Rect::from_center_size(rect.center(), size);
+    let popup_id = ui.id().with("color_popup");
+    let response = ui
+        .interact(swatch_rect, ui.id().with("color_swatch"), Sense::click())
+        .on_hover_text(if color.is_some() {
+            "Background color"
+        } else {
+            "No color"
+        });
+    let visuals = if Popup::is_id_open(ui.ctx(), popup_id) {
+        &ui.visuals().widgets.open
+    } else {
+        ui.style().interact(&response)
+    };
+    let background = ui.app_style().main_panels_fill;
+    let painter = ui.painter();
+    match color {
+        Some(color) => {
+            painter.rect_filled(swatch_rect.shrink(1.), 0., *color);
+        }
+        None => paint_checkers(painter, swatch_rect.shrink(1.), background, ui.visuals().text_color()),
+    }
+    painter.rect_stroke(swatch_rect, 2., (1., visuals.bg_fill), StrokeKind::Inside);
+
+    // Offer the no-color default above a picker that starts from the widget background
+    Popup::menu(&response)
+        .id(popup_id)
+        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            if ui.selectable_label(color.is_none(), "No Color").clicked() {
+                *color = None;
+                ui.close();
+            }
+            ui.spacing_mut().slider_width = 275.;
+            let mut picked = color.unwrap_or(background);
+            if color_picker::color_picker_color32(ui, &mut picked, color_picker::Alpha::Opaque) {
+                *color = Some(picked);
+            }
+        });
+}
+
+/// Paints checkers in the widget background tones to mark a transparent swatch.
+/// Unlike egui's fixed dark checkers, they follow the active light or dark theme.
+fn paint_checkers(painter: &Painter, rect: Rect, background: Color32, foreground: Color32) {
+    if !rect.is_positive() {
+        return; // Nothing to paint in a collapsed cell
+    }
+
+    // Alternate square-ish tiles between the background and a faint foreground tint
+    painter.rect_filled(rect, 0., background);
+    let checker = background.lerp_to_gamma(foreground, 0.25);
+    let tile_height = rect.height() / 2.;
+    let columns = (rect.width() / tile_height).round().max(1.);
+    let tile_width = rect.width() / columns;
+    for column in 0..columns as u32 {
+        let top = if column % 2 == 0 { rect.top() } else { rect.center().y };
+        let min = pos2(rect.left() + tile_width * column as f32, top);
+        painter.rect_filled(Rect::from_min_size(min, vec2(tile_width, tile_height)), 0., checker);
+    }
 }
 
 /// Removes invalid or duplicate rows and canonicalizes keys in numeric order.
@@ -167,6 +250,10 @@ pub struct IntegerTextMapping {
     pub value: String,
     /// Text displayed when `value` is the latest stream value.
     pub text: String,
+    /// Opaque background shown behind `text`, or `None` to keep the widget's own
+    /// background. Always `None` in tables that do not edit colors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<Color32>,
 }
 
 impl IntegerTextMapping {
@@ -235,6 +322,7 @@ mod tests {
         .map(|(value, text)| IntegerTextMapping {
             value: value.to_owned(),
             text: text.to_owned(),
+            color: None,
         })
         .collect();
 

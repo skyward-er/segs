@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use egui::{FontFamily, FontId, Ui, Vec2, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Ui, Vec2, pos2, vec2};
 use segs_memory::MemoryExt;
 use segs_ui::style::CtxStyleExt;
 
@@ -26,12 +26,16 @@ const AUTO_SIZE_CACHE_ID: &str = "centered_value_auto_size";
 ///
 /// `sizing_value` controls automatic width independently from the currently
 /// displayed `value`, allowing callers to keep sizing stable across changes.
+/// `fill` paints an opaque background over the whole container and switches
+/// both lines to black or white, whichever contrasts more with it.
 /// `reserve_empty_label` preserves the label line when `label` is empty.
+#[expect(clippy::too_many_arguments)]
 pub fn show(
     ui: &Ui,
     label: &str,
     value: &str,
     sizing_value: &str,
+    fill: Option<Color32>,
     auto_size: bool,
     text_size: i64,
     reserve_empty_label: bool,
@@ -46,11 +50,20 @@ pub fn show(
         text_size as f32
     };
 
+    // Paint the optional background and keep both lines legible against it
+    let painter = ui.painter();
+    let (label_color, value_color) = match fill {
+        Some(fill) => {
+            let fill = fill.to_opaque();
+            painter.rect_filled(container, 0., fill);
+            let foreground = contrasting_text(fill);
+            (foreground.gamma_multiply(0.8), foreground)
+        }
+        None => (ui.visuals().weak_text_color(), ui.visuals().text_color()),
+    };
+
     // Lay out only the visible lines so an empty label consumes no height
     let app_style = ui.app_style();
-    let painter = ui.painter();
-    let label_color = ui.visuals().weak_text_color();
-    let value_color = ui.visuals().text_color();
     let label_galley = has_label.then(|| {
         painter.layout_no_wrap(
             label.to_owned(),
@@ -73,6 +86,24 @@ pub fn show(
         top + label_height + spacing,
     );
     painter.galley(value_pos, value_galley, value_color);
+}
+
+/// Returns black or white text with the higher contrast against an opaque fill.
+pub fn contrasting_text(fill: Color32) -> Color32 {
+    let linear = |channel: u8| {
+        let value = f32::from(channel) / 255.;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * linear(fill.r()) + 0.7152 * linear(fill.g()) + 0.0722 * linear(fill.b());
+    if luminance > 0.179 {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
 }
 
 /// Returns the rendered monospace width in logical points at the reference size.
