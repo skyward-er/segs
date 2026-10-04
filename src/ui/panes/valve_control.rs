@@ -16,8 +16,10 @@ use egui::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
+    hydra::{
+        ACK_TM_DATA, GSE_TM_DATA, MOTOR_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA,
+    },
     mavlink::{MavHeader, MessageData},
-    hydra::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -195,7 +197,7 @@ impl PaneBehavior for ValveControlPane {
 
     #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID];
+        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID, MOTOR_TM_DATA::ID];
         if self.needs_refresh() {
             // TODO
             // subscriptions.push();
@@ -678,7 +680,7 @@ struct SafetyVentingWatcher {
 impl Default for SafetyVentingWatcher {
     fn default() -> Self {
         let last_valve_state = Valve::iter().map(|v| (v, 0)).collect::<HashMap<_, _>>();
-        let reset_valves = Valve::iter().map(|v| (v, false)).collect::<HashMap<_, _>>();
+        let reset_valves = Valve::iter().map(|v| (v, true)).collect::<HashMap<_, _>>();
         let timeout = Duration::from_secs(300); // Default 5 minutes
         Self {
             last_valve_state,
