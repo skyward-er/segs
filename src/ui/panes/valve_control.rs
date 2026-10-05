@@ -42,7 +42,7 @@ use ui::{ValveControlView, map_key_to_shortcut};
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
-const SYMBOL_LIST: &str = "0123456789-/.";
+const SYMBOL_LIST: &str = "0123456789.";
 
 fn map_symbol_to_key(symbol: char) -> Key {
     match symbol {
@@ -264,12 +264,13 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
-                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
-                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
+                    update_valve_state!(main_fuel_valve_state, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_state, Valve::MainOx);
                     update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
                     update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
                     update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
+                    update_valve_state!(fuel_dumping_valve_state, Valve::FuelDumping);
                 }
                 MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
                     for cmd in self.commands.iter_mut() {
@@ -447,6 +448,9 @@ impl ValveControlPane {
             });
             safety_venting.update_timeout(emergency_venting_secs);
             ui.label("Reset the timeout on actuation of the following:");
+            for valve in Valve::iter() {
+                safety_venting.reset_valves.entry(valve).or_insert(true);
+            }
             for (valve, active) in safety_venting
                 .reset_valves
                 .iter_mut()
@@ -622,7 +626,12 @@ impl ValveControlPane {
             let mut actions = Vec::new();
             if s.is_operation_mode() && !s.is_command_switch_active {
                 // No window is open, so we can map the keys to open the valve control windows
-                for (&valve, &key) in self.valve_key_map.iter() {
+                for (valve, symbol) in Valve::iter().zip(SYMBOL_LIST.chars()) {
+                    let key = self
+                        .valve_key_map
+                        .get(&valve)
+                        .copied()
+                        .unwrap_or_else(|| map_symbol_to_key(symbol));
                     #[cfg(not(feature = "conrig"))]
                     let modifier = Modifiers::ALT;
                     #[cfg(feature = "conrig")]
@@ -697,11 +706,10 @@ impl SafetyVentingWatcher {
     }
 
     fn update_valve_state(&mut self, valve: Valve, state: u8) {
-        if let Some(last_state) = self.last_valve_state.get_mut(&valve)
-            && *last_state != state
-        {
+        let last_state = self.last_valve_state.entry(valve).or_insert(0);
+        if *last_state != state {
             *last_state = state;
-            if self.reset_valves[&valve] {
+            if self.reset_valves.get(&valve).copied().unwrap_or(true) {
                 self.last_reset = Some(Instant::now());
             }
         }
