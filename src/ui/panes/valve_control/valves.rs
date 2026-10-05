@@ -90,14 +90,15 @@ impl ValveStateManager {
 pub enum Valve {
     OxFilling,
     OxRelease,
-    OxVenting,
-    FuelVenting,
     PrzFilling,
     PrzRelease,
-    MainFuel,
-    MainOx,
-    PrzFuel,
+    OxVenting,
+    FuelVenting,
+    FuelDumping,
     PrzOx,
+    PrzFuel,
+    MainOx,
+    MainFuel,
 }
 
 impl From<Valve> for Servoslist {
@@ -105,14 +106,15 @@ impl From<Valve> for Servoslist {
         match valve {
             Valve::OxFilling => Servoslist::OX_FILLING_VALVE,
             Valve::OxRelease => Servoslist::OX_RELEASE_VALVE,
-            Valve::OxVenting => Servoslist::OX_VENTING_VALVE,
-            Valve::FuelVenting => Servoslist::FUEL_VENTING_VALVE,
             Valve::PrzFilling => Servoslist::PRZ_FILLING_VALVE,
             Valve::PrzRelease => Servoslist::PRZ_RELEASE_VALVE,
-            Valve::MainFuel => Servoslist::MAIN_FUEL_VALVE,
-            Valve::MainOx => Servoslist::MAIN_OX_VALVE,
-            Valve::PrzFuel => Servoslist::PRZ_FUEL_VALVE,
+            Valve::OxVenting => Servoslist::OX_VENTING_VALVE,
+            Valve::FuelVenting => Servoslist::FUEL_VENTING_VALVE,
+            Valve::FuelDumping => Servoslist::FUEL_DUMPING_VALVE,
             Valve::PrzOx => Servoslist::PRZ_OX_VALVE,
+            Valve::PrzFuel => Servoslist::PRZ_FUEL_VALVE,
+            Valve::MainOx => Servoslist::MAIN_OX_VALVE,
+            Valve::MainFuel => Servoslist::MAIN_FUEL_VALVE,
         }
     }
 }
@@ -124,14 +126,15 @@ impl TryFrom<Servoslist> for Valve {
         match value {
             Servoslist::OX_FILLING_VALVE => Ok(Valve::OxFilling),
             Servoslist::OX_RELEASE_VALVE => Ok(Valve::OxRelease),
+            Servoslist::PRZ_RELEASE_VALVE => Ok(Valve::PrzRelease),
+            Servoslist::PRZ_FILLING_VALVE => Ok(Valve::PrzFilling),
             Servoslist::OX_VENTING_VALVE => Ok(Valve::OxVenting),
             Servoslist::FUEL_VENTING_VALVE => Ok(Valve::FuelVenting),
-            Servoslist::PRZ_FILLING_VALVE => Ok(Valve::PrzFilling),
-            Servoslist::PRZ_RELEASE_VALVE => Ok(Valve::PrzRelease),
-            Servoslist::MAIN_FUEL_VALVE => Ok(Valve::MainFuel),
-            Servoslist::MAIN_OX_VALVE => Ok(Valve::MainOx),
-            Servoslist::PRZ_FUEL_VALVE => Ok(Valve::PrzFuel),
+            Servoslist::FUEL_DUMPING_VALVE => Ok(Valve::FuelDumping),
             Servoslist::PRZ_OX_VALVE => Ok(Valve::PrzOx),
+            Servoslist::PRZ_FUEL_VALVE => Ok(Valve::PrzFuel),
+            Servoslist::MAIN_OX_VALVE => Ok(Valve::MainOx),
+            Servoslist::MAIN_FUEL_VALVE => Ok(Valve::MainFuel),
             _ => Err(()),
         }
     }
@@ -148,14 +151,15 @@ impl Display for Valve {
         match self {
             Valve::OxFilling => write!(f, "OX Filling"),
             Valve::OxRelease => write!(f, "OX Release"),
-            Valve::OxVenting => write!(f, "OX Venting"),
-            Valve::FuelVenting => write!(f, "Fuel Venting"),
             Valve::PrzFilling => write!(f, "PRZ Filling"),
             Valve::PrzRelease => write!(f, "PRZ Release"),
-            Valve::MainFuel => write!(f, "Main Fuel"),
-            Valve::MainOx => write!(f, "Main OX"),
-            Valve::PrzFuel => write!(f, "PRZ Fuel"),
+            Valve::OxVenting => write!(f, "OX Venting"),
+            Valve::FuelVenting => write!(f, "Fuel Venting"),
+            Valve::FuelDumping => write!(f, "Fuel Dumping"),
             Valve::PrzOx => write!(f, "PRZ OX"),
+            Valve::PrzFuel => write!(f, "PRZ Fuel"),
+            Valve::MainOx => write!(f, "Main OX"),
+            Valve::MainFuel => write!(f, "Main Fuel"),
         }
     }
 }
