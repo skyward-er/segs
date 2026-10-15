@@ -16,8 +16,10 @@ use egui::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
+    hydra::{
+        ACK_TM_DATA, GSE_TM_DATA, MOTOR_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA,
+    },
     mavlink::{MavHeader, MessageData},
-    orion::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -40,10 +42,11 @@ use ui::{ValveControlView, map_key_to_shortcut};
 use valves::{Valve, ValveStateManager};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
-const SYMBOL_LIST: &str = "123456789-/.";
+const SYMBOL_LIST: &str = "0123456789.";
 
 fn map_symbol_to_key(symbol: char) -> Key {
     match symbol {
+        '0' => Key::Num0,
         '1' => Key::Num1,
         '2' => Key::Num2,
         '3' => Key::Num3,
@@ -194,7 +197,7 @@ impl PaneBehavior for ValveControlPane {
 
     #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID];
+        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID, MOTOR_TM_DATA::ID];
         if self.needs_refresh() {
             // TODO
             // subscriptions.push();
@@ -245,14 +248,29 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
-                    update_valve_state!(main_valve_state, Valve::Main);
-                    update_valve_state!(nitrogen_valve_state, Valve::Nitrogen);
-                    update_valve_state!(n2_filling_valve_state, Valve::N2Filling);
-                    update_valve_state!(n2_quenching_valve_state, Valve::N2Quenching);
-                    update_valve_state!(n2_release_valve_state, Valve::N2Release);
+                    update_valve_state!(prz_filling_valve_state, Valve::PrzFilling);
+                    update_valve_state!(prz_release_valve_state, Valve::PrzRelease);
                     update_valve_state!(ox_filling_valve_state, Valve::OxFilling);
                     update_valve_state!(ox_release_valve_state, Valve::OxRelease);
+                }
+                MavMessage::MOTOR_TM(motor_data) => {
+                    macro_rules! update_valve_state {
+                        ($field:ident, $valve:expr) => {
+                            if motor_data.$field == 0 {
+                                self.valve_times_to_close.remove(&$valve);
+                            }
+                            self.safety_venting
+                                .update_valve_state($valve, motor_data.$field);
+                        };
+                    }
+
+                    update_valve_state!(main_fuel_valve_state, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_state, Valve::MainOx);
+                    update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
+                    update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
+                    update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
+                    update_valve_state!(fuel_dumping_valve_state, Valve::FuelDumping);
                 }
                 MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
                     for cmd in self.commands.iter_mut() {
@@ -430,6 +448,9 @@ impl ValveControlPane {
             });
             safety_venting.update_timeout(emergency_venting_secs);
             ui.label("Reset the timeout on actuation of the following:");
+            for valve in Valve::iter() {
+                safety_venting.reset_valves.entry(valve).or_insert(true);
+            }
             for (valve, active) in safety_venting
                 .reset_valves
                 .iter_mut()
@@ -605,7 +626,12 @@ impl ValveControlPane {
             let mut actions = Vec::new();
             if s.is_operation_mode() && !s.is_command_switch_active {
                 // No window is open, so we can map the keys to open the valve control windows
-                for (&valve, &key) in self.valve_key_map.iter() {
+                for (valve, symbol) in Valve::iter().zip(SYMBOL_LIST.chars()) {
+                    let key = self
+                        .valve_key_map
+                        .get(&valve)
+                        .copied()
+                        .unwrap_or_else(|| map_symbol_to_key(symbol));
                     #[cfg(not(feature = "conrig"))]
                     let modifier = Modifiers::ALT;
                     #[cfg(feature = "conrig")]
@@ -663,7 +689,7 @@ struct SafetyVentingWatcher {
 impl Default for SafetyVentingWatcher {
     fn default() -> Self {
         let last_valve_state = Valve::iter().map(|v| (v, 0)).collect::<HashMap<_, _>>();
-        let reset_valves = Valve::iter().map(|v| (v, false)).collect::<HashMap<_, _>>();
+        let reset_valves = Valve::iter().map(|v| (v, true)).collect::<HashMap<_, _>>();
         let timeout = Duration::from_secs(300); // Default 5 minutes
         Self {
             last_valve_state,
@@ -680,11 +706,10 @@ impl SafetyVentingWatcher {
     }
 
     fn update_valve_state(&mut self, valve: Valve, state: u8) {
-        if let Some(last_state) = self.last_valve_state.get_mut(&valve)
-            && *last_state != state
-        {
+        let last_state = self.last_valve_state.entry(valve).or_insert(0);
+        if *last_state != state {
             *last_state = state;
-            if self.reset_valves[&valve] {
+            if self.reset_valves.get(&valve).copied().unwrap_or(true) {
                 self.last_reset = Some(Instant::now());
             }
         }
