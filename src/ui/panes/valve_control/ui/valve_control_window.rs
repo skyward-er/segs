@@ -248,12 +248,12 @@ impl ValveControlView {
                 ui: &mut Ui,
             ) -> Response {
                 let res = match state {
-                    ValveViewState::Open => {
+                    ValveViewState::Open
+                    | ValveViewState::ApertureFocused
+                    | ValveViewState::Closed
+                    | ValveViewState::TimingFocused => {
                         Some(add_infinite_parameter_btn(ui, INFINITE_TIME_KEY, false))
                     }
-                    ValveViewState::ApertureFocused
-                    | ValveViewState::Closed
-                    | ValveViewState::TimingFocused => None,
                 };
                 if let Some(res) = &res
                     && res.clicked()
@@ -858,6 +858,11 @@ impl ValveControlView {
                         // The timing field is focused, so we can map the keys to control the timing
                         actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
                         actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                        actions.push((
+                            Modifiers::NONE,
+                            INFINITE_TIME_KEY,
+                            WindowAction::SetInfiniteTime,
+                        ));
                     }
                     ValveViewState::ApertureFocused => {
                         // The aperture field is focused, so we can map the keys to control the aperture
