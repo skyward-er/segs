@@ -21,6 +21,7 @@ use super::{
 
 const WIGGLE_KEY: Key = Key::Minus;
 const REFRESH_KEY: Key = Key::Num3;
+const INFINITE_TIME_KEY: Key = Key::Num4;
 /// Key used to focus on the aperture field
 const FOCUS_APERTURE_KEY: Key = Key::Num1;
 /// Key used to focus on the timing field
@@ -128,7 +129,7 @@ impl ValveControlView {
                         visuals = ui.visuals().widgets.active;
                     }
 
-                    let shortcut_card = shortcut_ui(ui, &key, &ui.response());
+                    let shortcut_card: ShortcutCard = shortcut_ui(ui, &key, &ui.response());
 
                     Frame::canvas(ui.style())
                         .inner_margin(Margin::symmetric(4, 2))
@@ -143,6 +144,46 @@ impl ValveControlView {
                                 ui.add_space(1.);
                                 Label::new(
                                     RichText::new("SET").size(16.).color(visuals.text_color()),
+                                )
+                                .selectable(false)
+                                .ui(ui);
+                                shortcut_card.ui(ui);
+                            });
+                        });
+                })
+                .response
+            }
+
+            fn add_infinite_parameter_btn(
+                ui: &mut Ui,
+                key: Key,
+                action_override: bool,
+            ) -> Response {
+                ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
+                    let mut visuals = *ui.style().interact(&ui.response());
+
+                    // override the visuals if the button is pressed
+                    if action_override {
+                        visuals = ui.visuals().widgets.active;
+                    }
+
+                    let shortcut_card: ShortcutCard = shortcut_ui(ui, &key, &ui.response());
+
+                    Frame::canvas(ui.style())
+                        .inner_margin(Margin::symmetric(4, 2))
+                        .outer_margin(0)
+                        .corner_radius(ui.visuals().noninteractive().corner_radius)
+                        .fill(visuals.bg_fill)
+                        .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                        .show(ui, |ui| {
+                            ui.set_height(ui.available_height());
+                            ui.horizontal_centered(|ui| {
+                                ui.set_height(21.);
+                                ui.add_space(1.);
+                                Label::new(
+                                    RichText::new("INFINITE TIME")
+                                        .size(16.)
+                                        .color(visuals.text_color()),
                                 )
                                 .selectable(false)
                                 .ui(ui);
@@ -197,6 +238,28 @@ impl ValveControlView {
                 {
                     // set the focus on the aperture field
                     action.replace(WindowAction::SetTiming);
+                }
+                res.unwrap_or_else(|| ui.response())
+            }
+
+            fn set_infinite_btn(
+                state: &ValveViewState,
+                action: &mut Option<WindowAction>,
+                ui: &mut Ui,
+            ) -> Response {
+                let res = match state {
+                    ValveViewState::Open => {
+                        Some(add_infinite_parameter_btn(ui, INFINITE_TIME_KEY, false))
+                    }
+                    ValveViewState::ApertureFocused
+                    | ValveViewState::Closed
+                    | ValveViewState::TimingFocused => None,
+                };
+                if let Some(res) = &res
+                    && res.clicked()
+                {
+                    // set the focus on the aperture field
+                    action.replace(WindowAction::SetInfiniteTime);
                 }
                 res.unwrap_or_else(|| ui.response())
             }
@@ -345,6 +408,57 @@ impl ValveControlView {
                 }
             }
 
+            fn set_infinite_time(ui: &mut Ui, action: &mut Option<WindowAction>) {
+                let res = ui
+                    .scope_builder(
+                        UiBuilder::new().id_salt(REFRESH_KEY).sense(Sense::click()),
+                        |ui| {
+                            let mut visuals = *ui.style().interact(&ui.response());
+
+                            // override the visuals if the button is pressed
+                            if let Some(WindowAction::SetTiming) = action.as_ref() {
+                                visuals = ui.visuals().widgets.active;
+                            }
+
+                            let shortcut_card = shortcut_ui(ui, &INFINITE_TIME_KEY, &ui.response());
+
+                            Frame::canvas(ui.style())
+                                .inner_margin(Margin::symmetric(4, 2))
+                                .outer_margin(0)
+                                .corner_radius(ui.visuals().noninteractive().corner_radius)
+                                .fill(visuals.bg_fill)
+                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                                .show(ui, |ui| {
+                                    ui.set_height(ui.available_height());
+                                    ui.horizontal_centered(|ui| {
+                                        ui.set_height(21.);
+                                        ui.add_space(1.);
+                                        Label::new(
+                                            RichText::new("SET INFINITE TIME")
+                                                .size(16.)
+                                                .color(visuals.text_color()),
+                                        )
+                                        .selectable(false)
+                                        .ui(ui);
+                                        ui.add(
+                                            Icon::Wiggle
+                                                .as_image(ui.ctx().theme())
+                                                .fit_to_exact_size(Vec2::splat(22.)),
+                                        );
+                                        shortcut_card.ui(ui);
+                                    });
+                                });
+                        },
+                    )
+                    .response;
+
+                if res.clicked() {
+                    // set the focus on the aperture field
+
+                    action.replace(WindowAction::SetInfiniteTime);
+                }
+            }
+
             fn show_parameter_label(ui: &mut Ui, label: &str, fill_color: Color32) {
                 Frame::canvas(ui.style())
                     .outer_margin(0)
@@ -397,6 +511,7 @@ impl ValveControlView {
                                     });
                                     strip.cell(|ui| wiggle_btn(ui, action));
                                     strip.cell(|ui| refresh_btn(ui, action));
+                                    // strip.cell(|ui| set_infinite_time(ui, action));
                                     strip.cell(|ui| back_btn(ui, action));
                                 });
                         });
@@ -626,6 +741,9 @@ impl ValveControlView {
                                     strip.cell(|ui| {
                                         show_timing_btn(&self.state, action, ui);
                                     });
+                                    strip.cell(|ui| {
+                                        set_infinite_btn(&self.state, action, ui);
+                                    });
                                 });
                         });
                     });
@@ -657,6 +775,10 @@ impl ValveControlView {
             Some(WindowAction::Refresh) => {
                 info!("Issued command to Refresh valve: {:?}", self.valve);
                 Some(Command::refresh(self.valve))
+            }
+            Some(WindowAction::SetInfiniteTime) => {
+                info!("Issued command to Refresh valve: {:?}", self.valve);
+                Some(Command::set_atomic_valve_timing(self.valve, 10000000))
             }
             Some(WindowAction::SetTiming) => {
                 info!(
@@ -768,6 +890,7 @@ enum WindowAction {
     Refresh,
     SetTiming,
     SetAperture,
+    SetInfiniteTime,
     // UI focus
     FocusOnTiming,
     FocusOnAperture,
