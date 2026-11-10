@@ -853,16 +853,16 @@ impl ValveControlView {
                         ));
                         actions.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
                         actions.push((Modifiers::NONE, Key::Backspace, WindowAction::CloseWindow));
-                    }
-                    ValveViewState::TimingFocused => {
-                        // The timing field is focused, so we can map the keys to control the timing
-                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
-                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
                         actions.push((
                             Modifiers::NONE,
                             INFINITE_TIME_KEY,
                             WindowAction::SetInfiniteTime,
                         ));
+                    }
+                    ValveViewState::TimingFocused => {
+                        // The timing field is focused, so we can map the keys to control the timing
+                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
+                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
                     }
                     ValveViewState::ApertureFocused => {
                         // The aperture field is focused, so we can map the keys to control the aperture
