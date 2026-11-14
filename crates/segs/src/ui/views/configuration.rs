@@ -1,5 +1,5 @@
 mod gallery;
-mod settings;
+pub mod settings;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -106,7 +106,12 @@ impl ViewTrait for ConfigurationView {
         show_widget_drag(ui, appctx, &grid);
 
         if let Some(layout) = appctx.layouts.active_mut() {
-            PidEditor::show(ui, &mut layout.widgets, &appctx.data_store);
+            PidEditor::show(
+                ui,
+                &mut layout.widgets,
+                &appctx.data_store,
+                appctx.data_adapter.as_ref(),
+            );
         }
     }
 }

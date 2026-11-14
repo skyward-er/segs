@@ -1,4 +1,4 @@
-mod stream_selector;
+pub mod stream_selector;
 
 use std::ops::RangeInclusive;
 

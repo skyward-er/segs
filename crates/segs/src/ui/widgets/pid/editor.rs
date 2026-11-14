@@ -3,9 +3,9 @@
 use egui::{Button, Context, CornerRadius, Id, Pos2, Rect, ScrollArea, Sense, Ui, UiBuilder, Vec2, pos2, vec2};
 use segs_ui::containers::Modal;
 
-use super::{Element, IconKind, MotorValveKind, PidWidget, Symbol, paint};
+use super::{Element, IconKind, MotorValveKind, PidWidget, Symbol, canvas::Canvas, properties};
 use crate::{
-    dataflow::store::DataStore,
+    dataflow::{adapter::DataAdapterInstance, store::DataStore},
     ui::widgets::{WidgetData, WidgetVariant},
 };
 
@@ -13,8 +13,10 @@ const EDITOR_ID: &str = "pid_editor";
 /// Share of the window covered by the editor.
 const SCREEN_FRACTION: f32 = 0.85;
 const PALETTE_WIDTH: f32 = 170.;
+const PROPERTIES_WIDTH: f32 = 260.;
+/// Gap between the canvas and the side panels.
+const PANEL_GAP: f32 = 8.;
 const TOOLBAR_HEIGHT: f32 = 28.;
-const CANVAS_PADDING: f32 = 12.;
 /// Horizontal gap between a newly added element and the rest of the diagram, in diagram units.
 const NEW_ELEMENT_GAP: f32 = 4.0;
 
@@ -29,6 +31,8 @@ pub struct PidEditor {
     draft: PidWidget,
     /// Whether cancelling is waiting for the user to confirm losing changes.
     confirm_discard: bool,
+    /// View, selection and drag state of the diagram area.
+    canvas: Canvas,
 }
 
 /// What the user asked the editor to do this frame.
@@ -46,6 +50,7 @@ impl PidEditor {
             original: widget.clone(),
             draft: widget.clone(),
             confirm_discard: false,
+            canvas: Canvas::default(),
         };
         ctx.data_mut(|data| data.insert_temp(Id::new(EDITOR_ID), editor));
     }
@@ -53,7 +58,12 @@ impl PidEditor {
     /// Shows the open editor, if any, and applies a save to the matching widget in `widgets`.
     ///
     /// The session ends on save, on discard, or when its widget is no longer in `widgets`.
-    pub fn show(ui: &mut Ui, widgets: &mut [WidgetData], data_store: &DataStore) {
+    pub fn show(
+        ui: &mut Ui,
+        widgets: &mut [WidgetData],
+        data_store: &DataStore,
+        adapter: Option<&DataAdapterInstance>,
+    ) {
         let id = Id::new(EDITOR_ID);
         let Some(mut editor) = ui.ctx().data_mut(|data| data.get_temp::<Self>(id)) else {
             return;
@@ -63,9 +73,9 @@ impl PidEditor {
             return;
         };
 
-        // Treat the close button and Escape like Cancel
+        // Treat the close button and Escape like Cancel, and a second Cancel like Discard
         let response =
-            Modal::new(id.with("modal"), "Edit diagram").show(ui.ctx(), |ui| editor.contents(ui, data_store));
+            Modal::new(id.with("modal"), "Edit diagram").show(ui.ctx(), |ui| editor.contents(ui, data_store, adapter));
         let closed = response.should_close();
         let action = response.inner.or(closed.then_some(EditorAction::Cancel));
 
@@ -75,7 +85,7 @@ impl PidEditor {
                 target.variant = WidgetVariant::Pid(editor.draft.clone());
                 true
             }
-            Some(EditorAction::Cancel) if editor.draft != editor.original => {
+            Some(EditorAction::Cancel) if editor.draft != editor.original && !editor.confirm_discard => {
                 editor.confirm_discard = true;
                 false
             }
@@ -92,48 +102,82 @@ impl PidEditor {
     }
 
     /// Lays out the toolbar, symbol palette and diagram, returning the action chosen this frame.
-    fn contents(&mut self, ui: &mut Ui, data_store: &DataStore) -> Option<EditorAction> {
+    fn contents(
+        &mut self,
+        ui: &mut Ui,
+        data_store: &DataStore,
+        adapter: Option<&DataAdapterInstance>,
+    ) -> Option<EditorAction> {
         let size = ui.ctx().content_rect().size() * SCREEN_FRACTION;
-        let action = ui
-            .allocate_ui(vec2(size.x, TOOLBAR_HEIGHT), |ui| self.toolbar(ui))
-            .inner;
 
-        // Split the remaining area into the palette and the canvas
+        // Lay the toolbar out in a fixed rect that cannot grow the modal, whatever its contents
+        let (toolbar_rect, _) = ui.allocate_exact_size(vec2(size.x, TOOLBAR_HEIGHT), Sense::hover());
+        let mut toolbar = ui.new_child(
+            UiBuilder::new()
+                .max_rect(toolbar_rect)
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
+        toolbar.set_clip_rect(toolbar_rect);
+        let action = self.toolbar(&mut toolbar);
+
+        // Split the remaining area into the palette, the canvas and the properties panel
         let (body, _) = ui.allocate_exact_size(vec2(size.x, size.y - TOOLBAR_HEIGHT), Sense::hover());
-        let (palette, canvas) = body.split_left_right_at_x(body.left() + PALETTE_WIDTH);
+        let (palette, rest) = body.split_left_right_at_x(body.left() + PALETTE_WIDTH);
+        let (canvas, properties) = rest.split_left_right_at_x(rest.right() - PROPERTIES_WIDTH);
+        let canvas = canvas.shrink2(vec2(PANEL_GAP / 2., 0.));
         ui.scope_builder(UiBuilder::new().max_rect(palette.shrink2(vec2(0., 4.))), |ui| {
             self.palette(ui)
         });
         ui.painter()
             .rect_filled(canvas, CornerRadius::same(4), ui.visuals().extreme_bg_color);
-        ui.scope_builder(UiBuilder::new().max_rect(canvas.shrink(CANVAS_PADDING)), |ui| {
-            paint::show(&self.draft, ui, data_store);
-        });
+        self.canvas.show(ui, canvas, &mut self.draft, data_store);
+
+        // Show the selected symbol's settings, deleting it on request
+        let delete = ui
+            .scope_builder(
+                UiBuilder::new().max_rect(properties.shrink2(vec2(PANEL_GAP, 4.))),
+                |ui| {
+                    ScrollArea::vertical()
+                        .id_salt("pid_properties")
+                        .show(ui, |ui| {
+                            properties::show(ui, &mut self.draft, self.canvas.selected_element(), adapter)
+                        })
+                        .inner
+                },
+            )
+            .inner;
+        if delete && let Some(id) = self.canvas.selected_element() {
+            self.draft.remove_element(id);
+            self.canvas.clear_selection();
+        }
 
         action
     }
 
     /// Shows Save and Cancel, or the discard confirmation while it is pending.
+    /// Expects a right-to-left `ui`, so the first button added is the rightmost.
     fn toolbar(&mut self, ui: &mut Ui) -> Option<EditorAction> {
         let mut action = None;
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if self.confirm_discard {
-                if ui.button("Discard").clicked() {
-                    action = Some(EditorAction::Discard);
-                }
-                if ui.button("Keep editing").clicked() {
-                    self.confirm_discard = false;
-                }
-                ui.label("Discard unsaved changes?");
-            } else {
-                if ui.button("Save").clicked() {
-                    action = Some(EditorAction::Save);
-                }
-                if ui.button("Cancel").clicked() {
-                    action = Some(EditorAction::Cancel);
-                }
+        if self.confirm_discard {
+            if ui.button("Discard").clicked() {
+                action = Some(EditorAction::Discard);
             }
-        });
+            if ui.button("Keep editing").clicked() {
+                self.confirm_discard = false;
+            }
+            ui.label("Discard changes?");
+        } else {
+            if ui.button("Save").clicked() {
+                action = Some(EditorAction::Save);
+            }
+            if ui.button("Cancel").clicked() {
+                action = Some(EditorAction::Cancel);
+            }
+        }
+        ui.add_space(16.);
+        if ui.button("Fit view").clicked() {
+            self.canvas.fit();
+        }
         action
     }
 
@@ -144,8 +188,13 @@ impl PidEditor {
             for (name, symbol) in palette_entries() {
                 let button = Button::new(name).min_size(vec2(ui.available_width(), 0.));
                 if ui.add(button).clicked() {
-                    let pos = placement(&self.draft, symbol.size());
-                    self.draft.add_element(pos, symbol);
+                    // Place at the view center so the new element is visible, then select it
+                    let pos = self
+                        .canvas
+                        .center()
+                        .unwrap_or_else(|| placement(&self.draft, symbol.size()));
+                    let id = self.draft.add_element(pos, symbol);
+                    self.canvas.select_element(id);
                 }
             }
         });

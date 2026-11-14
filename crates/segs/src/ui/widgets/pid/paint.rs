@@ -1,4 +1,4 @@
-//! Read-only rendering of a P&ID scaled to fit the widget.
+//! Rendering of a P&ID, either fitted to the widget or through an editor view.
 
 use std::f32::consts::PI;
 
@@ -21,7 +21,6 @@ const ARC_SEGMENTS: usize = 16;
 pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
-    let line_color = ui.visuals().text_color();
 
     // Fit the bounding box of every element and bend point into the widget
     let Some(bounds) = diagram_bounds(widget) else {
@@ -36,6 +35,12 @@ pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
         return;
     };
     let view = View::fit(bounds, rect.shrink(rect.size().min_elem() * MARGIN_RATIO));
+    paint_diagram(widget, ui, &painter, &view, data_store);
+}
+
+/// Paints pipes and symbols through `view`, with live state taken from the data store.
+pub(super) fn paint_diagram(widget: &PidWidget, ui: &Ui, painter: &Painter, view: &View, data_store: &DataStore) {
+    let line_color = ui.visuals().text_color();
 
     // Draw pipes first so symbols paint over their ends
     let pipe_stroke = Stroke::new(view.stroke_width(STROKE_WIDTH), line_color);
@@ -54,9 +59,9 @@ pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
     // Draw each symbol with live state taken from the data store
     for element in &widget.elements {
         let pen = Pen {
-            painter: &painter,
+            painter,
             element,
-            view: &view,
+            view,
             color: line_color,
         };
         match &element.symbol {
@@ -75,7 +80,7 @@ pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
                 let text = value_text(*stream, unit, data_store);
                 paint_fitted_text(
                     ui,
-                    &painter,
+                    painter,
                     view.rect_to_screen(element.bounds()),
                     &text,
                     line_color,
@@ -85,7 +90,7 @@ pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
             Symbol::Label { text, .. } => {
                 paint_fitted_text(
                     ui,
-                    &painter,
+                    painter,
                     view.rect_to_screen(element.bounds()),
                     text,
                     line_color,
@@ -97,18 +102,18 @@ pub fn show(widget: &PidWidget, ui: &Ui, data_store: &DataStore) {
 }
 
 /// Mapping from diagram space to screen space with a uniform scale.
-struct View {
+pub(super) struct View {
     /// Screen points per diagram unit.
-    scale: f32,
+    pub(super) scale: f32,
     /// Diagram point drawn at the center of `target`.
-    diagram_center: Pos2,
-    /// Screen area the diagram is fitted into.
-    target: Rect,
+    pub(super) diagram_center: Pos2,
+    /// Screen area the diagram is drawn into.
+    pub(super) target: Rect,
 }
 
 impl View {
     /// Returns the largest uniform scale that keeps `bounds` inside `target`, centered.
-    fn fit(bounds: Rect, target: Rect) -> Self {
+    pub(super) fn fit(bounds: Rect, target: Rect) -> Self {
         let size = bounds.size().max(Vec2::splat(f32::EPSILON));
         Self {
             scale: (target.width() / size.x).min(target.height() / size.y),
@@ -117,11 +122,16 @@ impl View {
         }
     }
 
-    fn to_screen(&self, point: Pos2) -> Pos2 {
+    pub(super) fn to_screen(&self, point: Pos2) -> Pos2 {
         self.target.center() + (point - self.diagram_center) * self.scale
     }
 
-    fn rect_to_screen(&self, rect: Rect) -> Rect {
+    /// Inverse of [`Self::to_screen`].
+    pub(super) fn to_diagram(&self, point: Pos2) -> Pos2 {
+        self.diagram_center + (point - self.target.center()) / self.scale
+    }
+
+    pub(super) fn rect_to_screen(&self, rect: Rect) -> Rect {
         Rect::from_min_max(self.to_screen(rect.min), self.to_screen(rect.max))
     }
 
@@ -383,7 +393,7 @@ fn paint_fitted_text(ui: &Ui, painter: &Painter, rect: Rect, text: &str, color: 
 }
 
 /// Returns the area covering every element and bend point, or `None` for an empty diagram.
-fn diagram_bounds(widget: &PidWidget) -> Option<Rect> {
+pub(super) fn diagram_bounds(widget: &PidWidget) -> Option<Rect> {
     let elements = widget.elements.iter().map(Element::bounds);
     let waypoints = widget
         .connections

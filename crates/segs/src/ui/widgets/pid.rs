@@ -1,5 +1,7 @@
+mod canvas;
 mod editor;
 mod paint;
+mod properties;
 
 pub use editor::PidEditor;
 
