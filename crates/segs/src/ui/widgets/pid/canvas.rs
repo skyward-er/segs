@@ -8,7 +8,7 @@ use egui::{
 use segs_ui::style::CtxStyleExt;
 
 use super::{
-    AnchorRef, Connection, ElementId, PidWidget,
+    AnchorRef, Connection, ElementId, PidWidget, Symbol,
     paint::{self, View},
 };
 use crate::dataflow::store::DataStore;
@@ -41,8 +41,10 @@ const HANDLE_HIT_RADIUS: f32 = 8.0;
 const BEND_HANDLE_HALF_SIZE: f32 = 4.0;
 /// How close the pointer must be to a pipe to select it, in points.
 const PIPE_HIT_DISTANCE: f32 = 6.0;
-const HINT: &str = "Drag a symbol to move it · drag from a dot to connect · drag a pipe to bend it · \
-                    R / Shift+R rotate · Del delete · right-click for more · scroll to zoom";
+/// Offset of a duplicated element from the original, in diagram units.
+const DUPLICATE_OFFSET: f32 = 2.0;
+const HINT: &str = "Drag a symbol to move it · drag from a dot to connect · drag a pipe to bend it · drop a pipe on a pipe to branch it · drag a selected pipe's end to move it · \
+                    R / Shift+R rotate · Ctrl+D duplicate · Del delete · Ctrl+Z undo · right-click for more · scroll to zoom";
 
 /// Editor-only canvas state, never saved with the widget.
 #[derive(Clone, Default)]
@@ -77,10 +79,19 @@ enum Drag {
     Element { id: ElementId, grab: Vec2 },
     /// Moving bend point `index` of pipe `connection`.
     BendPoint { connection: usize, index: usize },
+    /// Moving one end of pipe `connection` to another anchor, applied where the drag is released.
+    PipeEnd { connection: usize, end: PipeEnd },
     /// Drawing a pipe out of `from`, to be connected where the drag is released.
     Connect { from: AnchorRef },
     /// Moving the view.
     Pan,
+}
+
+/// Which end of a pipe.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PipeEnd {
+    Start,
+    End,
 }
 
 /// Edit applied to the selection.
@@ -88,6 +99,7 @@ enum Drag {
 enum Command {
     RotateClockwise,
     RotateCounterClockwise,
+    Duplicate,
     RemoveBendPoints,
     Delete,
 }
@@ -209,12 +221,31 @@ impl Canvas {
             }
         }
 
-        // Finish a pipe on another element's anchor, ignoring duplicates
+        // Reattach a dragged pipe end to the anchor it is dropped on
+        if response.drag_stopped()
+            && let Some(Drag::PipeEnd { connection, end }) = self.drag
+            && let Some(target) = response
+                .interact_pointer_pos()
+                .and_then(|p| hit_anchor(diagram, &view, p))
+        {
+            reattach(diagram, connection, end, target);
+        }
+
+        // Finish a pipe on another element's anchor, or branch an existing pipe where it is
+        // dropped, ignoring duplicates
         if response.drag_stopped() {
             if let Some(Drag::Connect { from }) = self.drag
-                && let Some(to) = response
-                    .interact_pointer_pos()
-                    .and_then(|p| hit_anchor(diagram, &view, p))
+                && let Some(pointer) = response.interact_pointer_pos()
+                && let Some(to) = hit_anchor(diagram, &view, pointer).or_else(|| {
+                    let (connection, segment) = hit_connection(diagram, &view, pointer)?;
+                    self.selection = None;
+                    Some(split_with_junction(
+                        diagram,
+                        connection,
+                        segment,
+                        snap(view.to_diagram(pointer)),
+                    ))
+                })
                 && to.element != from.element
                 && !diagram.connections.iter().any(|connection| {
                     (connection.start, connection.end) == (from, to) || (connection.start, connection.end) == (to, from)
@@ -251,7 +282,7 @@ impl Canvas {
         let over_pipe = pointer.is_some_and(|p| hit_connection(diagram, &view, p).is_some());
         let cursor = match self.drag {
             Some(Drag::Element { .. } | Drag::BendPoint { .. }) => Some(CursorIcon::Grabbing),
-            Some(Drag::Connect { .. }) => Some(CursorIcon::Crosshair),
+            Some(Drag::Connect { .. } | Drag::PipeEnd { .. }) => Some(CursorIcon::Crosshair),
             Some(Drag::Pan) => Some(CursorIcon::AllScroll),
             None if over_handle => Some(CursorIcon::Crosshair),
             None if over_element || over_pipe => Some(CursorIcon::Grab),
@@ -264,14 +295,29 @@ impl Canvas {
 
     /// Returns the drag starting at `origin`, updating the selection to what it grabs.
     fn start_drag(&mut self, diagram: &mut PidWidget, view: &View, origin: Pos2) -> Drag {
-        // Anchors win over everything so pipes can start at any symbol edge
-        if let Some(from) = hit_anchor(diagram, view, origin) {
-            return Drag::Connect { from };
+        // The ends of the selected pipe sit on anchors, so they are checked before anchors
+        if let Some((connection, end)) = self.hit_pipe_end(diagram, view, origin) {
+            return Drag::PipeEnd { connection, end };
+        }
+
+        // Anchors win over everything so pipes can start at any symbol edge, except junctions,
+        // which are moved by dragging and receive pipes dropped onto them instead
+        let in_diagram = view.to_diagram(origin);
+        if let Some(anchor) = hit_anchor(diagram, view, origin) {
+            match diagram.element(anchor.element) {
+                Some(junction) if junction.symbol == Symbol::Junction => {
+                    self.selection = Some(Selection::Element(anchor.element));
+                    return Drag::Element {
+                        id: anchor.element,
+                        grab: junction.pos - in_diagram,
+                    };
+                }
+                _ => return Drag::Connect { from: anchor },
+            }
         }
         if let Some((connection, index)) = self.hit_bend_point(diagram, view, origin) {
             return Drag::BendPoint { connection, index };
         }
-        let in_diagram = view.to_diagram(origin);
         if let Some((id, center)) = hit(diagram, in_diagram) {
             self.selection = Some(Selection::Element(id));
             return Drag::Element {
@@ -294,6 +340,22 @@ impl Canvas {
         Drag::Pan
     }
 
+    /// Returns the end of the selected pipe within grabbing distance of `screen_point`.
+    fn hit_pipe_end(&self, diagram: &PidWidget, view: &View, screen_point: Pos2) -> Option<(usize, PipeEnd)> {
+        let Some(Selection::Connection(index)) = self.selection else {
+            return None;
+        };
+        let connection = diagram.connections.get(index)?;
+        [(connection.start, PipeEnd::Start), (connection.end, PipeEnd::End)]
+            .into_iter()
+            .find(|(anchor, _)| {
+                diagram
+                    .anchor_pos(*anchor)
+                    .is_some_and(|pos| view.to_screen(pos).distance(screen_point) <= HANDLE_HIT_RADIUS)
+            })
+            .map(|(_, end)| (index, end))
+    }
+
     /// Returns the bend point of the selected pipe within grabbing distance of `screen_point`,
     /// as (connection index, waypoint index).
     fn hit_bend_point(&self, diagram: &PidWidget, view: &View, screen_point: Pos2) -> Option<(usize, usize)> {
@@ -311,11 +373,13 @@ impl Canvas {
 
     /// Reads rotate and delete shortcuts for the selection, unless a text field has focus.
     fn keyboard_command(&self, ui: &Ui) -> Option<Command> {
-        if self.selection.is_none() || ui.ctx().memory(|memory| memory.focused().is_some()) {
+        if self.selection.is_none() || ui.ctx().text_edit_focused() {
             return None;
         }
         ui.input_mut(|input| {
-            if input.consume_key(Modifiers::SHIFT, Key::R) {
+            if input.consume_key(Modifiers::COMMAND, Key::D) {
+                Some(Command::Duplicate)
+            } else if input.consume_key(Modifiers::SHIFT, Key::R) {
                 Some(Command::RotateCounterClockwise)
             } else if input.consume_key(Modifiers::NONE, Key::R) {
                 Some(Command::RotateClockwise)
@@ -337,6 +401,7 @@ impl Canvas {
                 Some(Selection::Element(_)) => &[
                     ("Rotate clockwise\tR", Command::RotateClockwise),
                     ("Rotate counter-clockwise\tShift+R", Command::RotateCounterClockwise),
+                    ("Duplicate\tCtrl+D", Command::Duplicate),
                     ("Delete\tDel", Command::Delete),
                 ],
                 Some(Selection::Connection(_)) => &[
@@ -374,6 +439,18 @@ impl Canvas {
                     };
                 }
             }
+            (Some(Selection::Element(id)), Command::Duplicate) => {
+                // Copy the symbol and orientation next to the original, and select the copy
+                let Some(original) = diagram.element(id).cloned() else {
+                    return;
+                };
+                let offset = Vec2::splat(DUPLICATE_OFFSET);
+                let copy = diagram.add_element(snap(original.pos + offset), original.symbol);
+                if let Some(element) = diagram.elements.iter_mut().find(|element| element.id == copy) {
+                    element.rotation = original.rotation;
+                }
+                self.selection = Some(Selection::Element(copy));
+            }
             (Some(Selection::Connection(index)), Command::Delete) => {
                 if index < diagram.connections.len() {
                     diagram.connections.remove(index);
@@ -407,11 +484,14 @@ impl Canvas {
                     return;
                 };
 
-                // Highlight the pipe under its bend point handles
+                // Highlight the pipe under its end and bend point handles
                 painter.add(Shape::line(
                     points.clone(),
                     Stroke::new(3.0, accent.gamma_multiply(0.6)),
                 ));
+                for end in [points[0], points[points.len() - 1]] {
+                    painter.circle_filled(end, ANCHOR_RADIUS + 1.0, accent);
+                }
                 for point in &points[1..points.len() - 1] {
                     let handle = Rect::from_center_size(*point, Vec2::splat(BEND_HANDLE_HALF_SIZE * 2.0));
                     painter.rect(
@@ -444,7 +524,7 @@ impl Canvas {
             .and_then(|p| hit(diagram, view.to_diagram(p)))
             .map(|(id, _)| id)
             .or(target.map(|anchor| anchor.element));
-        let connecting = matches!(self.drag, Some(Drag::Connect { .. }));
+        let connecting = matches!(self.drag, Some(Drag::Connect { .. } | Drag::PipeEnd { .. }));
         let selected = self.selected_element();
 
         // Dot every anchor that can be used right now, highlighting the one under the pointer
@@ -461,11 +541,28 @@ impl Canvas {
             painter.circle(view.to_screen(pos), ANCHOR_RADIUS, fill, Stroke::new(1.5, accent));
         }
 
-        // Preview the pipe from its starting anchor to the pointer
-        if let Some(Drag::Connect { from }) = self.drag
-            && let (Some(start), Some(end)) = (diagram.anchor_pos(from), pointer)
-        {
-            painter.line_segment([view.to_screen(start), end], Stroke::new(2.0, accent));
+        // Preview the pipe from its fixed side to the pointer
+        let fixed = match self.drag {
+            Some(Drag::Connect { from }) => diagram.anchor_pos(from),
+            Some(Drag::PipeEnd { connection, end }) => diagram.connections.get(connection).and_then(|connection| {
+                // The moving end connects to its nearest bend point, or to the other end
+                match end {
+                    PipeEnd::Start => connection
+                        .waypoints
+                        .first()
+                        .copied()
+                        .or_else(|| diagram.anchor_pos(connection.end)),
+                    PipeEnd::End => connection
+                        .waypoints
+                        .last()
+                        .copied()
+                        .or_else(|| diagram.anchor_pos(connection.start)),
+                }
+            }),
+            _ => None,
+        };
+        if let (Some(fixed), Some(pointer)) = (fixed, pointer) {
+            painter.line_segment([view.to_screen(fixed), pointer], Stroke::new(2.0, accent));
         }
     }
 
@@ -556,6 +653,52 @@ fn hit_connection(diagram: &PidWidget, view: &View, screen_point: Pos2) -> Optio
         .filter(|&(_, _, distance)| distance <= PIPE_HIT_DISTANCE)
         .min_by(|a, b| a.2.total_cmp(&b.2))
         .map(|(index, segment, _)| (index, segment))
+}
+
+/// Moves `end` of pipe `connection` onto `target`, unless that would join an element to itself
+/// or duplicate another pipe.
+fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: AnchorRef) {
+    let Some(pipe) = diagram.connections.get(connection) else {
+        return;
+    };
+    let (start, finish) = match end {
+        PipeEnd::Start => (target, pipe.end),
+        PipeEnd::End => (pipe.start, target),
+    };
+    let duplicate = diagram.connections.iter().enumerate().any(|(index, other)| {
+        index != connection
+            && ((other.start, other.end) == (start, finish) || (other.start, other.end) == (finish, start))
+    });
+    if start.element == finish.element || duplicate {
+        return;
+    }
+    let pipe = &mut diagram.connections[connection];
+    pipe.start = start;
+    pipe.end = finish;
+}
+
+/// Splits pipe `connection` at `point` on its segment `segment` with a new junction, keeping
+/// each half's bend points.
+///
+/// Returns the junction's anchor, ready for another pipe to connect to.
+fn split_with_junction(diagram: &mut PidWidget, connection: usize, segment: usize, point: Pos2) -> AnchorRef {
+    let junction = AnchorRef {
+        element: diagram.add_element(point, Symbol::Junction),
+        anchor: 0,
+    };
+    let original = diagram.connections.remove(connection);
+    let (before, after) = original.waypoints.split_at(segment);
+    diagram.connections.push(Connection {
+        start: original.start,
+        end: junction,
+        waypoints: before.to_vec(),
+    });
+    diagram.connections.push(Connection {
+        start: junction,
+        end: original.end,
+        waypoints: after.to_vec(),
+    });
+    junction
 }
 
 /// Returns a pipe's screen points from its start anchor through its bend points to its end

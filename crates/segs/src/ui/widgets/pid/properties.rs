@@ -1,6 +1,6 @@
 //! Side panel of the P&ID editor showing the selected element's settings.
 
-use egui::{DragValue, Grid, Ui};
+use egui::{DragValue, Grid, Ui, color_picker};
 
 use super::{ElementId, IconKind, MotorValveKind, PidWidget, Symbol};
 use crate::{
@@ -11,6 +11,8 @@ use crate::{
 /// Size limits for labels and value displays, in diagram units.
 const MIN_BOX_SIZE: f32 = 1.0;
 const MAX_BOX_SIZE: f32 = 200.0;
+/// Most digits after the decimal point a value display can be set to show.
+const MAX_DECIMALS: u8 = 6;
 
 /// Shows the settings of the element `selected`, applying edits to `diagram`.
 ///
@@ -57,7 +59,7 @@ fn show_element(ui: &mut Ui, diagram: &mut PidWidget, id: ElementId, adapter: Op
     // Edit the symbol's own fields, collecting a kind change that alters its anchors
     let mut replacement = None;
     match &mut element.symbol {
-        Symbol::Icon(_) => {
+        Symbol::Icon(_) | Symbol::Junction => {
             ui.weak("This symbol has no settings.");
         }
         Symbol::MotorValve { kind, stream } => {
@@ -82,7 +84,13 @@ fn show_element(ui: &mut Ui, diagram: &mut PidWidget, id: ElementId, adapter: Op
                 });
             }
         }
-        Symbol::ValueDisplay { stream, unit, size } => {
+        Symbol::ValueDisplay {
+            stream,
+            unit,
+            size,
+            color,
+            decimals,
+        } => {
             stream_selector::show(ui, "Stream", stream, None, StreamValueFilter::Any, adapter);
             ui.add_space(4.);
             Grid::new("pid_value_display_settings").num_columns(2).show(ui, |ui| {
@@ -90,6 +98,14 @@ fn show_element(ui: &mut Ui, diagram: &mut PidWidget, id: ElementId, adapter: Op
                 ui.text_edit_singleline(unit);
                 ui.end_row();
                 size_rows(ui, size);
+
+                // Optional overrides, each enabled by a checkbox
+                optional_row(ui, "Color", color, ui.visuals().text_color(), |ui, color| {
+                    color_picker::color_edit_button_srgba(ui, color, color_picker::Alpha::Opaque);
+                });
+                optional_row(ui, "Decimals", decimals, 2, |ui, decimals| {
+                    ui.add(DragValue::new(decimals).range(0..=MAX_DECIMALS));
+                });
             });
         }
         Symbol::Label { text, size } => {
@@ -109,6 +125,28 @@ fn show_element(ui: &mut Ui, diagram: &mut PidWidget, id: ElementId, adapter: Op
 
     ui.add_space(12.);
     ui.button("Delete symbol").clicked()
+}
+
+/// Adds a grid row with a checkbox that switches `value` between `None` and a value edited by
+/// `edit`, starting from `initial` when first enabled.
+fn optional_row<T: Copy>(
+    ui: &mut Ui,
+    label: &str,
+    value: &mut Option<T>,
+    initial: T,
+    edit: impl FnOnce(&mut Ui, &mut T),
+) {
+    let mut enabled = value.is_some();
+    ui.checkbox(&mut enabled, label);
+    match (enabled, value.as_mut()) {
+        (true, Some(current)) => edit(ui, current),
+        (true, None) => *value = Some(initial),
+        (false, _) => {
+            *value = None;
+            ui.weak("Automatic");
+        }
+    }
+    ui.end_row();
 }
 
 /// Adds width and height rows for a text box size, in diagram units.
@@ -146,5 +184,6 @@ fn symbol_name(symbol: &Symbol) -> &'static str {
         } => "Three-way valve",
         Symbol::ValueDisplay { .. } => "Value display",
         Symbol::Label { .. } => "Label",
+        Symbol::Junction => "Junction",
     }
 }

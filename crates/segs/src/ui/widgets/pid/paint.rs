@@ -14,6 +14,8 @@ const MARGIN_RATIO: f32 = 0.05;
 const STROKE_WIDTH: f32 = 0.2;
 /// Line width of the bold strokes in the v1 artwork, in diagram units.
 const THICK_STROKE_WIDTH: f32 = 0.4;
+/// Radius of the dot marking a pipe junction, in diagram units.
+const JUNCTION_RADIUS: f32 = 0.4;
 /// Segments used to approximate a half circle.
 const ARC_SEGMENTS: usize = 16;
 
@@ -76,14 +78,20 @@ pub(super) fn paint_diagram(widget: &PidWidget, ui: &Ui, painter: &Painter, view
                     ui.app_style().error_fill,
                 );
             }
-            Symbol::ValueDisplay { stream, unit, .. } => {
-                let text = value_text(*stream, unit, data_store);
+            Symbol::ValueDisplay {
+                stream,
+                unit,
+                color,
+                decimals,
+                ..
+            } => {
+                let text = value_text(*stream, unit, *decimals, data_store);
                 paint_fitted_text(
                     ui,
                     painter,
                     view.rect_to_screen(element.bounds()),
                     &text,
-                    line_color,
+                    color.unwrap_or(line_color),
                     true,
                 );
             }
@@ -97,6 +105,7 @@ pub(super) fn paint_diagram(widget: &PidWidget, ui: &Ui, painter: &Painter, view
                     false,
                 );
             }
+            Symbol::Junction => pen.circle(pos2(0.5, 0.5), JUNCTION_RADIUS, true),
         }
     }
 }

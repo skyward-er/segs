@@ -1,17 +1,23 @@
 mod canvas;
 mod editor;
+mod file;
+mod history;
+mod import_v1;
 mod paint;
 mod properties;
 
 pub use editor::PidEditor;
 
-use egui::{Pos2, Rect, Ui, Vec2, pos2, vec2};
+use egui::{Color32, Pos2, Rect, Ui, Vec2, pos2, vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     dataflow::{DataValue, StreamKey, preview::PreviewContext, store::DataStore},
     ui::{widget_settings::WidgetDataSetting, widgets::WidgetTrait},
 };
+
+/// Gap left between an existing diagram and one appended to it, in diagram units.
+const APPEND_GAP: f32 = 10.0;
 
 /// Piping and instrumentation diagram showing live valve states and values.
 ///
@@ -116,6 +122,47 @@ impl PidWidget {
         true
     }
 
+    /// Adds everything in `other` to the right of this diagram so nothing overlaps, giving its
+    /// elements new ids and keeping its pipes, rotations and settings.
+    fn append(&mut self, other: PidWidget) {
+        let offset = match (paint::diagram_bounds(self), paint::diagram_bounds(&other)) {
+            (Some(existing), Some(incoming)) => vec2(
+                existing.max.x + APPEND_GAP - incoming.min.x,
+                existing.center().y - incoming.center().y,
+            ),
+            _ => Vec2::ZERO,
+        };
+
+        // Copy the elements under fresh ids, then rewire the pipes to them
+        let mut new_ids = std::collections::HashMap::new();
+        for element in other.elements {
+            let id = self.add_element(element.pos + offset, element.symbol);
+            if let Some(added) = self.elements.last_mut() {
+                added.rotation = element.rotation;
+            }
+            new_ids.insert(element.id, id);
+        }
+        for connection in other.connections {
+            let (Some(&start), Some(&end)) = (
+                new_ids.get(&connection.start.element),
+                new_ids.get(&connection.end.element),
+            ) else {
+                continue;
+            };
+            self.connections.push(Connection {
+                start: AnchorRef {
+                    element: start,
+                    anchor: connection.start.anchor,
+                },
+                end: AnchorRef {
+                    element: end,
+                    anchor: connection.end.anchor,
+                },
+                waypoints: connection.waypoints.iter().map(|&point| point + offset).collect(),
+            });
+        }
+    }
+
     /// Returns the element with the given id, or `None` if it is not in the diagram.
     fn element(&self, id: ElementId) -> Option<&Element> {
         self.elements.iter().find(|element| element.id == id)
@@ -152,6 +199,8 @@ impl PidWidget {
                 stream: Some(pressure_stream),
                 unit: "bar".to_owned(),
                 size: vec2(10.0, 4.0),
+                color: None,
+                decimals: Some(1),
             },
         );
         diagram.add_element(
@@ -260,12 +309,21 @@ pub enum Symbol {
         unit: String,
         /// Box the text is fitted into, in diagram units.
         size: Vec2,
+        /// Text color, or `None` for the theme's text color.
+        #[serde(default)]
+        color: Option<Color32>,
+        /// Digits after the decimal point for floating-point values, or `None` for the
+        /// app's adaptive formatting. Integer values are never padded.
+        #[serde(default)]
+        decimals: Option<u8>,
     },
     Label {
         text: String,
         /// Box the text is fitted into, in diagram units.
         size: Vec2,
     },
+    /// Point where several pipes meet, with one anchor shared by all of them.
+    Junction,
 }
 
 impl Symbol {
@@ -285,6 +343,7 @@ impl Symbol {
             },
             Self::MotorValve { .. } => vec2(10.0, 8.0),
             Self::ValueDisplay { size, .. } | Self::Label { size, .. } => *size,
+            Self::Junction => vec2(1.0, 1.0),
         }
     }
 
@@ -312,6 +371,7 @@ impl Symbol {
                 ..
             } => vec![pos2(0.0, 3.0), pos2(10.0, 3.0), pos2(5.0, 8.0)],
             Self::ValueDisplay { .. } | Self::Label { .. } => vec![],
+            Self::Junction => vec![pos2(0.5, 0.5)],
         }
     }
 }
@@ -371,17 +431,22 @@ impl MotorValveKind {
     }
 }
 
-/// Returns the text shown by a value display: the latest value followed by `unit`,
+/// Returns the text shown by a value display: the latest value, rounded to `decimals` if set,
+/// followed by `unit`,
 /// or "No stream" / "No data" when there is nothing to show.
-fn value_text(stream: Option<StreamKey>, unit: &str, data_store: &DataStore) -> String {
+fn value_text(stream: Option<StreamKey>, unit: &str, decimals: Option<u8>, data_store: &DataStore) -> String {
     let Some(stream) = stream else {
         return "No stream".to_owned();
     };
     let Some((_, value)) = data_store.latest(stream) else {
         return "No data".to_owned();
     };
+    let value = match decimals {
+        Some(decimals) => format!("{value:.*}", usize::from(decimals)),
+        None => value.to_string(),
+    };
     if unit.is_empty() {
-        value.to_string()
+        value
     } else {
         format!("{value} {unit}")
     }

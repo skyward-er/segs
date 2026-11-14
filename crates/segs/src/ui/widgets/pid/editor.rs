@@ -1,9 +1,13 @@
 //! Modal editor that changes a copy of a P&ID and writes it back to the layout on save.
 
-use egui::{Button, Context, CornerRadius, Id, Pos2, Rect, ScrollArea, Sense, Ui, UiBuilder, Vec2, pos2, vec2};
+use egui::{
+    Button, Context, CornerRadius, Id, Key, Modifiers, Pos2, Rect, ScrollArea, Sense, Ui, UiBuilder, Vec2, pos2, vec2,
+};
 use segs_ui::containers::Modal;
 
-use super::{Element, IconKind, MotorValveKind, PidWidget, Symbol, canvas::Canvas, properties};
+use super::{
+    Element, IconKind, MotorValveKind, PidWidget, Symbol, canvas::Canvas, file, history::History, import_v1, properties,
+};
 use crate::{
     dataflow::{adapter::DataAdapterInstance, store::DataStore},
     ui::widgets::{WidgetData, WidgetVariant},
@@ -33,6 +37,12 @@ pub struct PidEditor {
     confirm_discard: bool,
     /// View, selection and drag state of the diagram area.
     canvas: Canvas,
+    /// Undo and redo steps of the draft.
+    history: History,
+    /// Path typed into the file field.
+    file_path: String,
+    /// Outcome of the last export or import, and whether it failed.
+    file_status: Option<(String, bool)>,
 }
 
 /// What the user asked the editor to do this frame.
@@ -51,6 +61,9 @@ impl PidEditor {
             draft: widget.clone(),
             confirm_discard: false,
             canvas: Canvas::default(),
+            history: History::new(widget),
+            file_path: String::new(),
+            file_status: None,
         };
         ctx.data_mut(|data| data.insert_temp(Id::new(EDITOR_ID), editor));
     }
@@ -119,6 +132,7 @@ impl PidEditor {
         );
         toolbar.set_clip_rect(toolbar_rect);
         let action = self.toolbar(&mut toolbar);
+        self.handle_history_keys(ui);
 
         // Split the remaining area into the palette, the canvas and the properties panel
         let (body, _) = ui.allocate_exact_size(vec2(size.x, size.y - TOOLBAR_HEIGHT), Sense::hover());
@@ -151,7 +165,43 @@ impl PidEditor {
             self.canvas.clear_selection();
         }
 
+        // Record finished edits only, so a whole drag or a typed value is one undo step
+        if !edit_in_progress(ui.ctx()) {
+            self.history.record(&self.draft);
+        }
+
         action
+    }
+
+    /// Handles Ctrl+Z for undo, and Ctrl+Y or Ctrl+Shift+Z for redo, unless a text field
+    /// has focus and needs those keys for its own editing.
+    fn handle_history_keys(&mut self, ui: &Ui) {
+        if ui.ctx().text_edit_focused() {
+            return;
+        }
+        let (undo, redo) = ui.input_mut(|input| {
+            let redo = input.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)
+                || input.consume_key(Modifiers::COMMAND, Key::Y);
+            let undo = input.consume_key(Modifiers::COMMAND, Key::Z);
+            (undo, redo)
+        });
+        if undo {
+            self.undo();
+        } else if redo {
+            self.redo();
+        }
+    }
+
+    fn undo(&mut self) {
+        if self.history.undo(&mut self.draft) {
+            self.canvas.clear_selection();
+        }
+    }
+
+    fn redo(&mut self) {
+        if self.history.redo(&mut self.draft) {
+            self.canvas.clear_selection();
+        }
     }
 
     /// Shows Save and Cancel, or the discard confirmation while it is pending.
@@ -178,11 +228,29 @@ impl PidEditor {
         if ui.button("Fit view").clicked() {
             self.canvas.fit();
         }
+        let can_redo = self.history.can_redo(&self.draft);
+        if ui
+            .add_enabled(can_redo, Button::new("Redo"))
+            .on_hover_text("Ctrl+Y")
+            .clicked()
+        {
+            self.redo();
+        }
+        let can_undo = self.history.can_undo(&self.draft);
+        if ui
+            .add_enabled(can_undo, Button::new("Undo"))
+            .on_hover_text("Ctrl+Z")
+            .clicked()
+        {
+            self.undo();
+        }
         action
     }
 
     /// Lists the symbols that can be added, adding one to the draft when clicked.
     fn palette(&mut self, ui: &mut Ui) {
+        self.file_section(ui);
+        ui.add_space(4.);
         ui.weak("Click to add");
         ScrollArea::vertical().show(ui, |ui| {
             for (name, symbol) in palette_entries() {
@@ -199,6 +267,112 @@ impl PidEditor {
             }
         });
     }
+}
+
+impl PidEditor {
+    /// Shows the file controls: a path, Export, Import and Import v1 buttons, and the last outcome.
+    fn file_section(&mut self, ui: &mut Ui) {
+        egui::CollapsingHeader::new("File").show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.file_path)
+                    .hint_text("Path to a .json file")
+                    .desired_width(f32::INFINITY),
+            );
+            let has_path = !self.file_path.trim().is_empty();
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(has_path, Button::new("Export"))
+                    .on_hover_text("Save this diagram to the file")
+                    .clicked()
+                {
+                    self.export();
+                }
+                if ui
+                    .add_enabled(has_path, Button::new("Import"))
+                    .on_hover_text("Add a diagram saved with Export")
+                    .clicked()
+                {
+                    self.import();
+                }
+                if ui
+                    .add_enabled(has_path, Button::new("Import v1"))
+                    .on_hover_text("Add a schematic saved by SEGS v1")
+                    .clicked()
+                {
+                    self.import_v1();
+                }
+            });
+            if let Some((message, failed)) = &self.file_status {
+                if *failed {
+                    ui.colored_label(ui.visuals().error_fg_color, message);
+                } else {
+                    ui.weak(message);
+                }
+            }
+        });
+    }
+
+    /// Writes the draft to `file_path`, adding a `.json` extension when there is none.
+    fn export(&mut self) {
+        let mut path = expand_home(self.file_path.trim());
+        if path.extension().is_none() {
+            path.set_extension("json");
+        }
+        self.file_status = Some(match file::export(&path, &self.draft) {
+            Ok(()) => (format!("Saved to {}.", path.display()), false),
+            Err(error) => (error, true),
+        });
+    }
+
+    /// Appends the diagram exported at `file_path` to the draft and reports the outcome.
+    fn import(&mut self) {
+        let path = expand_home(self.file_path.trim());
+        self.file_status = Some(match file::import(&path, &mut self.draft) {
+            Ok(elements) => {
+                self.after_import();
+                (format!("Imported {elements} symbols."), false)
+            }
+            Err(error) => (error, true),
+        });
+    }
+
+    /// Appends the v1 schematic at `file_path` to the draft and reports the outcome.
+    fn import_v1(&mut self) {
+        let path = expand_home(self.file_path.trim());
+        self.file_status = Some(match import_v1::import(&path, &mut self.draft) {
+            Ok(report) => {
+                self.after_import();
+                let mut message = format!("Imported {} symbols and {} pipes.", report.elements, report.connections);
+                if report.skipped_connections > 0 {
+                    message += &format!(" Skipped {} broken pipes.", report.skipped_connections);
+                }
+                if report.unbound > 0 {
+                    message += &format!(" Bind streams again on {} valves and displays.", report.unbound);
+                }
+                (message, false)
+            }
+            Err(error) => (error, true),
+        });
+    }
+
+    /// Shows the whole diagram after something was added to it from a file.
+    fn after_import(&mut self) {
+        self.canvas.clear_selection();
+        self.canvas.fit();
+    }
+}
+
+/// Expands a leading `~/` to the home directory, as a shell would.
+fn expand_home(path: &str) -> std::path::PathBuf {
+    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
+        (Some(rest), Some(home)) => std::path::Path::new(&home).join(rest),
+        _ => path.into(),
+    }
+}
+
+/// Returns whether the user is in the middle of an edit: dragging anything or typing in a field.
+fn edit_in_progress(ctx: &Context) -> bool {
+    ctx.dragged_id().is_some() || ctx.text_edit_focused()
 }
 
 /// Returns the palette in display order, each with the symbol it adds.
@@ -236,6 +410,8 @@ fn palette_entries() -> Vec<(&'static str, Symbol)> {
                 stream: None,
                 unit: String::new(),
                 size: vec2(10.0, 4.0),
+                color: None,
+                decimals: None,
             },
         ),
         (
@@ -245,6 +421,7 @@ fn palette_entries() -> Vec<(&'static str, Symbol)> {
                 size: vec2(8.0, 3.0),
             },
         ),
+        ("Junction", Symbol::Junction),
     ]
 }
 
