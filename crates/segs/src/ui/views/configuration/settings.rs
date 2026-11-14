@@ -17,7 +17,7 @@ use crate::{
     dataflow::adapter::DataAdapterInstance,
     ui::{
         widget_settings::{WidgetDataSetting, WidgetSetting},
-        widgets::{WidgetData, WidgetTrait},
+        widgets::{PidEditor, WidgetData, WidgetTrait, WidgetVariant},
     },
 };
 
@@ -30,6 +30,15 @@ pub fn show(ui: &mut Ui, widget: Option<&mut WidgetData>, adapter: Option<&DataA
         ui.weak("Select a widget to edit its settings.");
         return;
     };
+
+    // P&ID diagrams are edited in their own modal instead of the settings list
+    if let WidgetVariant::Pid(pid) = &widget.variant {
+        if ui.button("Edit diagram").clicked() {
+            PidEditor::open(ui.ctx(), widget.id, pid);
+        }
+        ui.weak("You can also double-click the widget.");
+        return;
+    }
 
     let widget_id = widget.id;
     ui.push_id(widget_id.with("_settings"), |ui| {

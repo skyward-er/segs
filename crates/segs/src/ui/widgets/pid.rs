@@ -1,4 +1,7 @@
+mod editor;
 mod paint;
+
+pub use editor::PidEditor;
 
 use egui::{Pos2, Rect, Ui, Vec2, pos2, vec2};
 use serde::{Deserialize, Serialize};

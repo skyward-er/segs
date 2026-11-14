@@ -8,7 +8,7 @@ mod value_display;
 use enum_dispatch::enum_dispatch;
 pub use mapped_value::MappedValueWidget;
 pub use message_viewer::MessageViewerWidget;
-pub use pid::PidWidget;
+pub use pid::{PidEditor, PidWidget};
 pub use plot::PlotWidget;
 pub use state_machine::StateMachineWidget;
 pub use value_display::ValueDisplayWidget;

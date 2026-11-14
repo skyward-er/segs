@@ -24,7 +24,7 @@ use crate::{
         layout,
         popups::GridSettingsPopup,
         views::ViewTrait,
-        widgets::{WidgetTrait, WidgetVariant},
+        widgets::{PidEditor, WidgetTrait, WidgetVariant},
     },
 };
 
@@ -104,6 +104,10 @@ impl ViewTrait for ConfigurationView {
             .show(ui, |ui| show_layout_editor(ui, appctx, &grid));
 
         show_widget_drag(ui, appctx, &grid);
+
+        if let Some(layout) = appctx.layouts.active_mut() {
+            PidEditor::show(ui, &mut layout.widgets, &appctx.data_store);
+        }
     }
 }
 
@@ -131,6 +135,11 @@ fn show_layout_editor(ui: &mut Ui, appctx: &mut AppContext, grid: &Grid) {
             if response.clicked() {
                 set_selected_widget(ui, Some(widget.id));
                 widget_clicked = true;
+            }
+            if response.double_clicked()
+                && let WidgetVariant::Pid(pid) = &widget.variant
+            {
+                PidEditor::open(ui.ctx(), widget.id, pid);
             }
 
             // Keep the pressed edge active when the pointer leaves the widget
