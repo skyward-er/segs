@@ -45,6 +45,7 @@ pub(super) fn migrate(bytes: &[u8]) -> Result<MigratedLayout, LayoutMigrationErr
             v4::NEXT_SCHEMA_VERSION => v5::migrate(&mut value),
             v5::NEXT_SCHEMA_VERSION => v6::migrate(&mut value),
             v6::NEXT_SCHEMA_VERSION => v7::migrate(&mut value),
+            v7::NEXT_SCHEMA_VERSION => v8::migrate(&mut value),
             _ => return Err(LayoutMigrationError::UnsupportedSchema(header.slug)),
         };
     }
@@ -351,6 +352,26 @@ mod v7 {
     }
 }
 
+mod v8 {
+    use serde_json::Value;
+
+    /// Schema version adding a P&ID widget variant.
+    pub const NEXT_SCHEMA_VERSION: u32 = 9;
+
+    /// Advances the version marker without changing existing widgets.
+    ///
+    /// Returns the next schema version. Earlier layouts cannot contain the new
+    /// variant, so their widgets are already valid.
+    pub(super) fn migrate(layout: &mut Value) -> u32 {
+        // Mark the document ready for current deserialization
+        if let Some(layout) = layout.as_object_mut() {
+            layout.insert("schema_version".to_owned(), NEXT_SCHEMA_VERSION.into());
+        }
+
+        NEXT_SCHEMA_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use egui::{Rect, pos2, vec2};
@@ -453,6 +474,15 @@ mod tests {
         let mut expected = previous;
         expected["schema_version"] = CURRENT_LAYOUT_SCHEMA.into();
         assert_eq!(upgraded.persisted_schema_version, 7);
+        assert_eq!(serde_json::to_value(upgraded.layout).unwrap(), expected);
+
+        // Verify previous layouts advance unchanged when the P&ID variant is added
+        let mut previous = migrated_value.clone();
+        previous["schema_version"] = 8.into();
+        let upgraded = migrate(&serde_json::to_vec(&previous).unwrap()).unwrap();
+        let mut expected = previous;
+        expected["schema_version"] = CURRENT_LAYOUT_SCHEMA.into();
+        assert_eq!(upgraded.persisted_schema_version, 8);
         assert_eq!(serde_json::to_value(upgraded.layout).unwrap(), expected);
     }
 }

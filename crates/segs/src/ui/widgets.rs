@@ -1,5 +1,6 @@
 mod mapped_value;
 mod message_viewer;
+mod pid;
 mod plot;
 mod state_machine;
 mod value_display;
@@ -7,6 +8,7 @@ mod value_display;
 use enum_dispatch::enum_dispatch;
 pub use mapped_value::MappedValueWidget;
 pub use message_viewer::MessageViewerWidget;
+pub use pid::PidWidget;
 pub use plot::PlotWidget;
 pub use state_machine::StateMachineWidget;
 pub use value_display::ValueDisplayWidget;
@@ -37,6 +39,7 @@ pub struct WidgetData {
 pub enum WidgetVariant {
     MappedValue(MappedValueWidget),
     MessageViewer(MessageViewerWidget),
+    Pid(PidWidget),
     Plot(PlotWidget),
     /// Ordered telemetry states with commands for adjacent transitions.
     StateMachine(StateMachineWidget),
@@ -50,6 +53,7 @@ impl WidgetVariant {
             ValueDisplayWidget::default().into(),
             MappedValueWidget::default().into(),
             StateMachineWidget::default().into(),
+            PidWidget::default().into(),
             PlotWidget::default().into(),
             MessageViewerWidget::default().into(),
         ]
