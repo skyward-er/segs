@@ -79,8 +79,13 @@ impl PidWidget {
     /// Removes an element and every connection attached to it.
     pub fn remove_element(&mut self, id: ElementId) {
         self.elements.retain(|element| element.id != id);
-        self.connections
-            .retain(|connection| connection.start.element != id && connection.end.element != id);
+        self.remove_connections(|_, connection| connection.start.element == id || connection.end.element == id);
+    }
+
+    /// Removes pipe `index`, dissolving a junction it leaves with fewer than three pipes.
+    /// Out-of-range indices are ignored.
+    pub fn remove_connection(&mut self, index: usize) {
+        self.remove_connections(|position, _| position == index);
     }
 
     /// Replaces an element's symbol and removes connections to anchors the new symbol lacks.
@@ -94,12 +99,75 @@ impl PidWidget {
         let anchor_count = symbol.anchors().len();
         element.symbol = symbol;
 
-        // Keep a connection only if its ends on this element are still valid anchors
-        self.connections.retain(|connection| {
+        // Drop a connection if one of its ends on this element is no longer a valid anchor
+        self.remove_connections(|_, connection| {
             [connection.start, connection.end]
                 .iter()
-                .all(|end| end.element != id || end.anchor < anchor_count)
+                .any(|end| end.element == id && end.anchor >= anchor_count)
         });
+    }
+
+    /// Removes the pipes for which `remove` returns `true`, given each pipe's index, then
+    /// dissolves the junctions those pipes were attached to.
+    fn remove_connections(&mut self, mut remove: impl FnMut(usize, &Connection) -> bool) {
+        let mut index = 0;
+        let mut touched = Vec::new();
+        self.connections.retain(|connection| {
+            let removed = remove(index, connection);
+            index += 1;
+            if removed {
+                touched.extend([connection.start.element, connection.end.element]);
+            }
+            !removed
+        });
+        for element in touched {
+            self.dissolve_junction(element);
+        }
+    }
+
+    /// Cleans up junction `id` once fewer than three pipes meet there: with two pipes left they
+    /// are merged into one passing through the junction's position, with one or none the
+    /// junction is removed. Anything that is not a junction is left alone.
+    fn dissolve_junction(&mut self, id: ElementId) {
+        let Some(center) = self
+            .element(id)
+            .filter(|element| element.symbol == Symbol::Junction)
+            .map(|element| element.pos)
+        else {
+            return;
+        };
+        let attached: Vec<usize> = self
+            .connections
+            .iter()
+            .enumerate()
+            .filter(|(_, connection)| connection.start.element == id || connection.end.element == id)
+            .map(|(index, _)| index)
+            .collect();
+
+        // Rejoin two halves into one pipe, keeping the junction's spot as a bend point
+        if let [first, second] = attached[..] {
+            let incoming = self.connections[first].clone().ending_at(id);
+            let outgoing = self.connections[second].clone().ending_at(id).reversed();
+            self.connections.remove(second);
+            self.connections.remove(first);
+            let merged = Connection {
+                start: incoming.start,
+                end: outgoing.end,
+                waypoints: [incoming.waypoints, vec![center], outgoing.waypoints].concat(),
+            };
+            let duplicate = self.connections.iter().any(|connection| {
+                (connection.start, connection.end) == (merged.start, merged.end)
+                    || (connection.start, connection.end) == (merged.end, merged.start)
+            });
+            if merged.start.element != merged.end.element && !duplicate {
+                self.connections.push(merged);
+            }
+        }
+        if attached.len() < 3 {
+            self.elements.retain(|element| element.id != id);
+            self.connections
+                .retain(|connection| connection.start.element != id && connection.end.element != id);
+        }
     }
 
     /// Connects two element anchors with a straight pipe.
@@ -458,6 +526,24 @@ pub struct Connection {
     end: AnchorRef,
     /// Bend points in diagram space, from start to end.
     waypoints: Vec<Pos2>,
+}
+
+impl Connection {
+    /// Returns the same pipe running the other way.
+    fn reversed(mut self) -> Self {
+        std::mem::swap(&mut self.start, &mut self.end);
+        self.waypoints.reverse();
+        self
+    }
+
+    /// Returns the pipe oriented so it ends on `element`, which must be one of its ends.
+    fn ending_at(self, element: ElementId) -> Self {
+        if self.end.element == element {
+            self
+        } else {
+            self.reversed()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

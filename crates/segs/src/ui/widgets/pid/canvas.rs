@@ -260,8 +260,11 @@ impl Canvas {
         if (response.clicked() || response.secondary_clicked())
             && let Some(pointer) = response.interact_pointer_pos()
         {
+            // Junctions are tiny and sit on pipes, so they are picked by their dot before pipes
             self.selection = hit(diagram, view.to_diagram(pointer))
-                .map(|(id, _)| Selection::Element(id))
+                .map(|(id, _)| id)
+                .or_else(|| hit_junction(diagram, &view, pointer))
+                .map(Selection::Element)
                 .or_else(|| hit_connection(diagram, &view, pointer).map(|(index, _)| Selection::Connection(index)));
         }
 
@@ -452,9 +455,7 @@ impl Canvas {
                 self.selection = Some(Selection::Element(copy));
             }
             (Some(Selection::Connection(index)), Command::Delete) => {
-                if index < diagram.connections.len() {
-                    diagram.connections.remove(index);
-                }
+                diagram.remove_connection(index);
                 self.selection = None;
             }
             (Some(Selection::Connection(index)), Command::RemoveBendPoints) => {
@@ -624,6 +625,17 @@ fn hit_anchor(diagram: &PidWidget, view: &View, screen_point: Pos2) -> Option<An
         .map(|(anchor, _)| anchor)
 }
 
+/// Returns the junction whose dot is within grabbing distance of `screen_point`.
+fn hit_junction(diagram: &PidWidget, view: &View, screen_point: Pos2) -> Option<ElementId> {
+    hit_anchor(diagram, view, screen_point)
+        .map(|anchor| anchor.element)
+        .filter(|&id| {
+            diagram
+                .element(id)
+                .is_some_and(|element| element.symbol == Symbol::Junction)
+        })
+}
+
 /// Returns the topmost element containing `point`, with its center.
 fn hit(diagram: &PidWidget, point: Pos2) -> Option<(ElementId, Pos2)> {
     diagram
@@ -673,8 +685,15 @@ fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: An
         return;
     }
     let pipe = &mut diagram.connections[connection];
+    let previous = match end {
+        PipeEnd::Start => pipe.start.element,
+        PipeEnd::End => pipe.end.element,
+    };
     pipe.start = start;
     pipe.end = finish;
+
+    // A junction the pipe left may no longer be needed
+    diagram.dissolve_junction(previous);
 }
 
 /// Splits pipe `connection` at `point` on its segment `segment` with a new junction, keeping
