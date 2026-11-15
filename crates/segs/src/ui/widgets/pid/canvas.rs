@@ -272,9 +272,7 @@ impl Canvas {
                     ))
                 })
                 && to.element != from.element
-                && !diagram.connections.iter().any(|connection| {
-                    (connection.start, connection.end) == (from, to) || (connection.start, connection.end) == (to, from)
-                })
+                && !diagram.has_connection(from, to)
             {
                 diagram.connect(from, to);
             }
@@ -286,16 +284,22 @@ impl Canvas {
             && let Some(pointer) = response.interact_pointer_pos()
         {
             // Junctions are tiny and sit on pipes, so they are picked by their dot before pipes
-            self.selection = hit(diagram, view.to_diagram(pointer))
+            let element = hit(diagram, view.to_diagram(pointer))
                 .map(|(id, _)| id)
-                .or_else(|| hit_junction(diagram, &view, pointer))
+                .or_else(|| hit_junction(diagram, &view, pointer));
+            let pipe = element
+                .is_none()
+                .then(|| hit_connection(diagram, &view, pointer))
+                .flatten();
+            self.selection = element
                 .map(Selection::Element)
-                .or_else(|| hit_connection(diagram, &view, pointer).map(|(index, _)| Selection::Connection(index)));
+                .or(pipe.map(|(index, _)| Selection::Connection(index)));
 
             // Remember where a pipe was right-clicked so the menu can split it there
-            if response.secondary_clicked() && matches!(self.selection, Some(Selection::Connection(_))) {
-                self.split_point = hit_connection(diagram, &view, pointer)
-                    .map(|(_, segment)| (segment, snap(view.to_diagram(pointer))));
+            if response.secondary_clicked()
+                && let Some((_, segment)) = pipe
+            {
+                self.split_point = Some((segment, snap(view.to_diagram(pointer))));
             }
         }
 
@@ -496,10 +500,7 @@ impl Canvas {
                     return;
                 };
                 let offset = Vec2::splat(DUPLICATE_OFFSET);
-                let copy = diagram.add_element(snap(original.pos + offset), original.symbol);
-                if let Some(element) = diagram.elements.iter_mut().find(|element| element.id == copy) {
-                    element.rotation = original.rotation;
-                }
+                let copy = diagram.add_rotated_element(snap(original.pos + offset), original.rotation, original.symbol);
                 self.selection = Some(Selection::Element(copy));
             }
             (Some(Selection::Element(id)), Command::Nudge(offset)) => {
@@ -745,11 +746,8 @@ fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: An
         PipeEnd::Start => (target, pipe.end),
         PipeEnd::End => (pipe.start, target),
     };
-    let duplicate = diagram.connections.iter().enumerate().any(|(index, other)| {
-        index != connection
-            && ((other.start, other.end) == (start, finish) || (other.start, other.end) == (finish, start))
-    });
-    if start.element == finish.element || duplicate {
+    // Dropping the end back where it was also counts as a duplicate, leaving the pipe unchanged
+    if start.element == finish.element || diagram.has_connection(start, finish) {
         return Some(connection);
     }
     let pipe = &mut diagram.connections[connection];
@@ -793,24 +791,14 @@ fn split_with_junction(diagram: &mut PidWidget, connection: usize, segment: usiz
 /// Returns a pipe's screen points from its start anchor through its bend points to its end
 /// anchor, or `None` if either end no longer exists.
 fn connection_points(diagram: &PidWidget, view: &View, connection: &Connection) -> Option<Vec<Pos2>> {
-    let start = diagram.anchor_pos(connection.start)?;
-    let end = diagram.anchor_pos(connection.end)?;
-    Some(
-        std::iter::once(start)
-            .chain(connection.waypoints.iter().copied())
-            .chain(std::iter::once(end))
-            .map(|point| view.to_screen(point))
-            .collect(),
-    )
+    let path = diagram.pipe_path(connection)?;
+    Some(path.map(|point| view.to_screen(point)).collect())
 }
 
 /// Returns the point halfway along a pipe's length, snapped to the grid, with the index of the
 /// segment it lies on, or `None` if either end no longer exists.
 fn pipe_midpoint(diagram: &PidWidget, connection: &Connection) -> Option<(usize, Pos2)> {
-    let points: Vec<Pos2> = std::iter::once(diagram.anchor_pos(connection.start)?)
-        .chain(connection.waypoints.iter().copied())
-        .chain(std::iter::once(diagram.anchor_pos(connection.end)?))
-        .collect();
+    let points: Vec<Pos2> = diagram.pipe_path(connection)?.collect();
 
     // Walk the segments until half the total length is used up
     let mut remaining = points.windows(2).map(|ends| ends[0].distance(ends[1])).sum::<f32>() / 2.0;

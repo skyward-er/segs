@@ -4,8 +4,9 @@
 //! with their bend points. v1 bound symbols to MAVLink message fields, which have no automatic
 //! v2 equivalent, so motor valves and value displays arrive unbound.
 
-use std::{collections::HashMap, f32::consts::FRAC_PI_2, path::Path};
+use std::{f32::consts::FRAC_PI_2, path::Path};
 
+use ahash::{HashMap, HashMapExt};
 use egui::{Color32, Pos2, pos2, vec2};
 use serde::{Deserialize, de::IgnoredAny};
 
@@ -43,15 +44,12 @@ pub(super) fn import(path: &Path, diagram: &mut PidWidget) -> Result<ImportRepor
     // Build the import on its own, remembering which new id each v1 id became
     let mut imported = PidWidget::default();
     let mut unbound = 0;
-    let mut new_ids = HashMap::new();
+    let mut new_ids = HashMap::with_capacity(converted.len());
     for (v1_id, (center, rotation, symbol)) in converted {
         if matches!(symbol, Symbol::MotorValve { .. } | Symbol::ValueDisplay { .. }) {
             unbound += 1;
         }
-        let id = imported.add_element(center, symbol);
-        if let Some(element) = imported.elements.last_mut() {
-            element.rotation = rotation;
-        }
+        let id = imported.add_rotated_element(center, rotation, symbol);
         new_ids.insert(v1_id, id);
     }
 

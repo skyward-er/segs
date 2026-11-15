@@ -1,5 +1,7 @@
 //! Modal editor that changes a copy of a P&ID and writes it back to the layout on save.
 
+use std::sync::{Arc, Mutex, PoisonError};
+
 use egui::{
     Button, Context, CornerRadius, Id, Key, Modifiers, Pos2, Rect, ScrollArea, Sense, Ui, UiBuilder, Vec2, pos2, vec2,
 };
@@ -30,7 +32,8 @@ const TOOLBAR_HEIGHT: f32 = 28.;
 const NEW_ELEMENT_GAP: f32 = 4.0;
 
 /// Editing session for one P&ID widget, kept in egui memory while the modal is open.
-#[derive(Clone)]
+///
+/// Stored behind [`Session`] so reading it each frame does not copy the drafts and history.
 pub struct PidEditor {
     /// Layout widget the draft is written back to.
     widget_id: Id,
@@ -49,6 +52,9 @@ pub struct PidEditor {
     /// Outcome of the last export or import, and whether it failed.
     file_status: Option<(String, bool)>,
 }
+
+/// Shared handle to the open editor, as kept in egui memory.
+type Session = Arc<Mutex<PidEditor>>;
 
 /// What the user asked the editor to do this frame.
 enum EditorAction {
@@ -70,7 +76,8 @@ impl PidEditor {
             file_path: String::new(),
             file_status: None,
         };
-        ctx.data_mut(|data| data.insert_temp(Id::new(EDITOR_ID), editor));
+        let session: Session = Arc::new(Mutex::new(editor));
+        ctx.data_mut(|data| data.insert_temp(Id::new(EDITOR_ID), session));
     }
 
     /// Shows the open editor, if any, and applies a save to the matching widget in `widgets`.
@@ -83,11 +90,12 @@ impl PidEditor {
         adapter: Option<&DataAdapterInstance>,
     ) {
         let id = Id::new(EDITOR_ID);
-        let Some(mut editor) = ui.ctx().data_mut(|data| data.get_temp::<Self>(id)) else {
+        let Some(session) = ui.ctx().data(|data| data.get_temp::<Session>(id)) else {
             return;
         };
+        let mut editor = session.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(target) = widgets.iter_mut().find(|widget| widget.id == editor.widget_id) else {
-            ui.ctx().data_mut(|data| data.remove::<Self>(id));
+            ui.ctx().data_mut(|data| data.remove::<Session>(id));
             return;
         };
 
@@ -110,13 +118,9 @@ impl PidEditor {
             Some(EditorAction::Cancel | EditorAction::Discard) => true,
             None => false,
         };
-        ui.ctx().data_mut(|data| {
-            if close {
-                data.remove::<Self>(id);
-            } else {
-                data.insert_temp(id, editor);
-            }
-        });
+        if close {
+            ui.ctx().data_mut(|data| data.remove::<Session>(id));
+        }
     }
 
     /// Lays out the toolbar, symbol palette and diagram, returning the action chosen this frame.

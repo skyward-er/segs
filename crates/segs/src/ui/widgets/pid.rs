@@ -8,6 +8,7 @@ mod properties;
 
 pub use editor::PidEditor;
 
+use ahash::{HashMap, HashMapExt};
 use egui::{Color32, Pos2, Rect, Ui, Vec2, pos2, vec2};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +27,9 @@ const APPEND_GAP: f32 = 10.0;
 pub struct PidWidget {
     /// Diagram elements in insertion order, which is also the paint order.
     elements: Vec<Element>,
+    /// Pipes between element anchors, painted under the elements.
     connections: Vec<Connection>,
+    /// Id given to the next added element, so ids are never reused within a diagram.
     next_element_id: u32,
 }
 
@@ -61,16 +64,23 @@ impl WidgetTrait for PidWidget {
 }
 
 impl PidWidget {
-    /// Adds a new element to the diagram.
+    /// Adds a new unrotated element centered at `pos`.
     ///
     /// Returns the identifier of the new element, unique within this diagram.
     pub fn add_element(&mut self, pos: Pos2, symbol: Symbol) -> ElementId {
+        self.add_rotated_element(pos, Rotation::default(), symbol)
+    }
+
+    /// Adds a new element centered at `pos` with the given orientation.
+    ///
+    /// Returns the identifier of the new element, unique within this diagram.
+    fn add_rotated_element(&mut self, pos: Pos2, rotation: Rotation, symbol: Symbol) -> ElementId {
         let id = ElementId(self.next_element_id);
         self.next_element_id += 1;
         self.elements.push(Element {
             id,
             pos,
-            rotation: Rotation::default(),
+            rotation,
             symbol,
         });
         id
@@ -156,11 +166,7 @@ impl PidWidget {
                 end: outgoing.end,
                 waypoints: [incoming.waypoints, vec![center], outgoing.waypoints].concat(),
             };
-            let duplicate = self.connections.iter().any(|connection| {
-                (connection.start, connection.end) == (merged.start, merged.end)
-                    || (connection.start, connection.end) == (merged.end, merged.start)
-            });
-            if merged.start.element != merged.end.element && !duplicate {
+            if merged.start.element != merged.end.element && !self.has_connection(merged.start, merged.end) {
                 self.connections.remove(second);
                 self.connections.remove(first);
                 self.connections.push(merged);
@@ -170,6 +176,13 @@ impl PidWidget {
         if remove_junction {
             self.elements.retain(|element| element.id != id);
         }
+    }
+
+    /// Returns whether a pipe already joins anchors `a` and `b`, in either direction.
+    fn has_connection(&self, a: AnchorRef, b: AnchorRef) -> bool {
+        self.connections.iter().any(|connection| {
+            (connection.start, connection.end) == (a, b) || (connection.start, connection.end) == (b, a)
+        })
     }
 
     /// Connects two element anchors with a straight pipe.
@@ -204,12 +217,9 @@ impl PidWidget {
         };
 
         // Copy the elements under fresh ids, then rewire the pipes to them
-        let mut new_ids = std::collections::HashMap::new();
+        let mut new_ids = HashMap::with_capacity(other.elements.len());
         for element in other.elements {
-            let id = self.add_element(element.pos + offset, element.symbol);
-            if let Some(added) = self.elements.last_mut() {
-                added.rotation = element.rotation;
-            }
+            let id = self.add_rotated_element(element.pos + offset, element.rotation, element.symbol);
             new_ids.insert(element.id, id);
         }
         for connection in other.connections {
@@ -236,6 +246,20 @@ impl PidWidget {
     /// Returns the element with the given id, or `None` if it is not in the diagram.
     fn element(&self, id: ElementId) -> Option<&Element> {
         self.elements.iter().find(|element| element.id == id)
+    }
+
+    /// Returns a pipe's diagram-space points from its start anchor through its bend points to
+    /// its end anchor.
+    ///
+    /// `None` means one of its ends no longer exists.
+    fn pipe_path(&self, connection: &Connection) -> Option<impl Iterator<Item = Pos2>> {
+        let start = self.anchor_pos(connection.start)?;
+        let end = self.anchor_pos(connection.end)?;
+        Some(
+            std::iter::once(start)
+                .chain(connection.waypoints.iter().copied())
+                .chain(std::iter::once(end)),
+        )
     }
 
     /// Returns the diagram-space position of a connection end.
@@ -290,15 +314,20 @@ impl PidWidget {
     }
 }
 
+/// Identifier of an element, unique within its diagram and never reused there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ElementId(u32);
 
+/// One placed symbol of the diagram.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Element {
+    /// Identifier pipes use to refer to this element.
     id: ElementId,
     /// Symbol center in diagram space, independent of the dashboard grid.
     pos: Pos2,
+    /// Orientation of the symbol around its center.
     rotation: Rotation,
+    /// What is drawn, with its own settings and anchors.
     symbol: Symbol,
 }
 
@@ -319,10 +348,14 @@ impl Element {
 /// Element orientation in clockwise quarter turns, so rotated anchors stay exactly on the grid.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Rotation {
+    /// Upright, as the artwork is drawn.
     #[default]
     Deg0,
+    /// One quarter turn clockwise.
     Deg90,
+    /// Upside down.
     Deg180,
+    /// Three quarter turns clockwise, or one counter-clockwise.
     Deg270,
 }
 
@@ -366,14 +399,21 @@ impl Rotation {
     }
 }
 
+/// Kind of element and its settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Symbol {
+    /// Static artwork with no settings.
     Icon(IconKind),
+    /// Valve colored by its live position.
     MotorValve {
+        /// Number of ways, which sets the anchors and how the stream is read.
         kind: MotorValveKind,
+        /// Integer stream holding the valve position, or `None` while unbound.
         stream: Option<StreamKey>,
     },
+    /// Latest value of a stream, as text.
     ValueDisplay {
+        /// Stream whose latest value is shown, or `None` while unbound.
         stream: Option<StreamKey>,
         /// Unit appended after the value, empty for none.
         unit: String,
@@ -387,7 +427,9 @@ pub enum Symbol {
         #[serde(default)]
         decimals: Option<u8>,
     },
+    /// Fixed text.
     Label {
+        /// Text shown, on a single line.
         text: String,
         /// Box the text is fitted into, in diagram units.
         size: Vec2,
@@ -446,35 +488,55 @@ impl Symbol {
     }
 }
 
+/// Static symbols, ported from the v1 artwork.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IconKind {
+    /// Flow direction arrow.
     Arrow,
+    /// Rupture disk.
     BurstDisk,
+    /// One-way valve.
     CheckValve,
+    /// Hose between two fittings.
     FlexibleConnection,
+    /// Hand-operated valve.
     ManualValve,
+    /// Analog pressure dial.
     PressureGauge,
+    /// Pressure-reducing valve.
     PressureRegulator,
+    /// Electronic pressure sensor.
     PressureTransducer,
+    /// Quick-disconnect coupling.
     QuickConnector,
+    /// Spring-loaded overpressure valve.
     ReliefValve,
+    /// Tank.
     Vessel,
 }
 
+/// Number of ways of a motor valve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MotorValveKind {
+    /// Open or closed between two ports.
     TwoWay,
+    /// Routes the bottom port to the left or the right outlet.
     ThreeWay {
         /// Swaps which outlet is active for each stream value.
         invert: bool,
     },
 }
 
+/// Live position of a motor valve, derived from its stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValveState {
+    /// Two-way valve letting flow through.
     Open,
+    /// Two-way valve blocking flow.
     Closed,
+    /// Three-way valve routing to its left outlet.
     ActiveLeft,
+    /// Three-way valve routing to its right outlet.
     ActiveRight,
     /// No stream, no data yet, or a value outside the expected range.
     Unknown,
@@ -522,9 +584,12 @@ fn value_text(stream: Option<StreamKey>, unit: &str, decimals: Option<u8>, data_
     }
 }
 
+/// Pipe between two element anchors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Connection {
+    /// Anchor the pipe starts at.
     start: AnchorRef,
+    /// Anchor the pipe ends at.
     end: AnchorRef,
     /// Bend points in diagram space, from start to end.
     waypoints: Vec<Pos2>,
@@ -548,8 +613,10 @@ impl Connection {
     }
 }
 
+/// One anchor of one element, where a pipe attaches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorRef {
+    /// Element the anchor belongs to.
     element: ElementId,
     /// Index into the symbol's anchor list.
     anchor: usize,

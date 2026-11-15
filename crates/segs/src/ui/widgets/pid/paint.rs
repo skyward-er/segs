@@ -47,14 +47,10 @@ pub(super) fn paint_diagram(widget: &PidWidget, ui: &Ui, painter: &Painter, view
     // Draw pipes first so symbols paint over their ends
     let pipe_stroke = Stroke::new(view.stroke_width(STROKE_WIDTH), line_color);
     for connection in &widget.connections {
-        let (Some(start), Some(end)) = (widget.anchor_pos(connection.start), widget.anchor_pos(connection.end)) else {
+        let Some(path) = widget.pipe_path(connection) else {
             continue; // Skip pipes whose element or anchor no longer exists
         };
-        let points = std::iter::once(start)
-            .chain(connection.waypoints.iter().copied())
-            .chain(std::iter::once(end))
-            .map(|point| view.to_screen(point))
-            .collect();
+        let points = path.map(|point| view.to_screen(point)).collect();
         painter.add(Shape::line(points, pipe_stroke));
     }
 
