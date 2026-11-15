@@ -14,24 +14,45 @@ const MAX_BOX_SIZE: f32 = 200.0;
 /// Most digits after the decimal point a value display can be set to show.
 const MAX_DECIMALS: u8 = 6;
 
-/// Shows the settings of the element `selected`, applying edits to `diagram`.
+/// Edit asked for in the side panel that also changes the canvas selection, so the editor
+/// applies it.
+pub(super) enum PanelRequest {
+    /// Remove the selected element.
+    DeleteElement,
+    /// Split the selected pipe with a junction.
+    SplitPipe,
+}
+
+/// Shows the settings of the element `selected`, or the actions for a pipe when
+/// `pipe_selected` is set instead, applying edits to `diagram`.
 ///
-/// Returns `true` when the user asked to delete the element; the caller removes it
-/// so the canvas selection can be cleared at the same time.
+/// Returns the edit the caller must apply, or `None` when nothing was asked for.
 pub(super) fn show(
     ui: &mut Ui,
     diagram: &mut PidWidget,
     selected: Option<ElementId>,
+    pipe_selected: bool,
     adapter: Option<&DataAdapterInstance>,
-) -> bool {
+) -> Option<PanelRequest> {
     let Some(element) = selected.and_then(|id| diagram.elements.iter_mut().find(|element| element.id == id)) else {
-        ui.weak("Select a symbol to edit its settings.");
-        return false;
+        // Pipes have no settings, only the split action
+        if pipe_selected {
+            ui.strong("Pipe");
+            ui.add_space(4.);
+            let split = ui
+                .button("Split pipe")
+                .on_hover_text("Adds a junction halfway along the pipe")
+                .clicked();
+            return split.then_some(PanelRequest::SplitPipe);
+        }
+        ui.weak("Select a symbol or a pipe to edit its settings.");
+        return None;
     };
     let id = element.id;
 
     // Scope widget state per element so selectors do not carry over between selections
-    ui.push_id(id, |ui| show_element(ui, diagram, id, adapter)).inner
+    let delete = ui.push_id(id, |ui| show_element(ui, diagram, id, adapter)).inner;
+    delete.then_some(PanelRequest::DeleteElement)
 }
 
 /// Shows the settings of the element `id`, which must be in `diagram`.

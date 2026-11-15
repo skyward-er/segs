@@ -43,8 +43,8 @@ const BEND_HANDLE_HALF_SIZE: f32 = 4.0;
 const PIPE_HIT_DISTANCE: f32 = 6.0;
 /// Offset of a duplicated element from the original, in diagram units.
 const DUPLICATE_OFFSET: f32 = 2.0;
-const HINT: &str = "Drag a symbol to move it · drag from a dot to connect · drag a pipe to bend it · drop a pipe on a pipe to branch it · drag a selected pipe's end to move it · \
-                    R / Shift+R rotate · Ctrl+D duplicate · Del delete · Ctrl+Z undo · right-click for more · scroll to zoom";
+const HINT: &str = "Drag a symbol to move it · drag from a dot to connect · drag a pipe to bend it · right-click a pipe to split it · drop a pipe on a pipe to branch it · drag a selected pipe's end to move it · \
+                    arrows move · R / Shift+R rotate · Ctrl+D duplicate · Del delete · Ctrl+Z undo · right-click for more · scroll to zoom";
 
 /// Editor-only canvas state, never saved with the widget.
 #[derive(Clone, Default)]
@@ -53,6 +53,9 @@ pub(super) struct Canvas {
     camera: Option<Camera>,
     selection: Option<Selection>,
     drag: Option<Drag>,
+    /// Segment index and snapped diagram point of the last right-clicked pipe, where
+    /// "Split pipe" places its junction.
+    split_point: Option<(usize, Pos2)>,
 }
 
 /// Free view over the diagram.
@@ -101,6 +104,11 @@ enum Command {
     RotateCounterClockwise,
     Duplicate,
     RemoveBendPoints,
+    /// Cut the selected pipe in two, joined by a new junction, at the right-clicked point or
+    /// halfway along it.
+    Split,
+    /// Move the selected element by this offset, in diagram units.
+    Nudge(Vec2),
     Delete,
 }
 
@@ -126,6 +134,21 @@ impl Canvas {
 
     pub(super) fn select_element(&mut self, id: ElementId) {
         self.selection = Some(Selection::Element(id));
+    }
+
+    /// Returns the index of the selected pipe, if the selection is a pipe.
+    pub(super) fn selected_connection(&self) -> Option<usize> {
+        match self.selection {
+            Some(Selection::Connection(index)) => Some(index),
+            _ => None,
+        }
+    }
+
+    /// Splits the selected pipe halfway along its length with a new junction and selects the
+    /// junction. Does nothing unless a pipe is selected.
+    pub(super) fn split_selected_connection(&mut self, diagram: &mut PidWidget) {
+        self.split_point = None;
+        self.apply(Command::Split, diagram);
     }
 
     /// Clears the selection, for when the editor deletes the selected element itself.
@@ -266,6 +289,12 @@ impl Canvas {
                 .or_else(|| hit_junction(diagram, &view, pointer))
                 .map(Selection::Element)
                 .or_else(|| hit_connection(diagram, &view, pointer).map(|(index, _)| Selection::Connection(index)));
+
+            // Remember where a pipe was right-clicked so the menu can split it there
+            if response.secondary_clicked() && matches!(self.selection, Some(Selection::Connection(_))) {
+                self.split_point = hit_connection(diagram, &view, pointer)
+                    .map(|(_, segment)| (segment, snap(view.to_diagram(pointer))));
+            }
         }
 
         // A double click on a bend point removes it
@@ -380,6 +409,20 @@ impl Canvas {
             return None;
         }
         ui.input_mut(|input| {
+            // Arrow keys move the selection one grid step
+            let arrows = [
+                (Key::ArrowLeft, vec2(-GRID_STEP, 0.0)),
+                (Key::ArrowRight, vec2(GRID_STEP, 0.0)),
+                (Key::ArrowUp, vec2(0.0, -GRID_STEP)),
+                (Key::ArrowDown, vec2(0.0, GRID_STEP)),
+            ];
+            if let Some((_, offset)) = arrows
+                .into_iter()
+                .find(|&(key, _)| input.consume_key(Modifiers::NONE, key))
+            {
+                return Some(Command::Nudge(offset));
+            }
+
             if input.consume_key(Modifiers::COMMAND, Key::D) {
                 Some(Command::Duplicate)
             } else if input.consume_key(Modifiers::SHIFT, Key::R) {
@@ -408,6 +451,7 @@ impl Canvas {
                     ("Delete\tDel", Command::Delete),
                 ],
                 Some(Selection::Connection(_)) => &[
+                    ("Split pipe", Command::Split),
                     ("Remove bend points", Command::RemoveBendPoints),
                     ("Delete pipe\tDel", Command::Delete),
                 ],
@@ -454,6 +498,11 @@ impl Canvas {
                 }
                 self.selection = Some(Selection::Element(copy));
             }
+            (Some(Selection::Element(id)), Command::Nudge(offset)) => {
+                if let Some(element) = diagram.elements.iter_mut().find(|element| element.id == id) {
+                    element.pos = snap(element.pos + offset);
+                }
+            }
             (Some(Selection::Connection(index)), Command::Delete) => {
                 diagram.remove_connection(index);
                 self.selection = None;
@@ -462,6 +511,20 @@ impl Canvas {
                 if let Some(connection) = diagram.connections.get_mut(index) {
                     connection.waypoints.clear();
                 }
+            }
+            (Some(Selection::Connection(index)), Command::Split) => {
+                // Split where the menu was opened, or halfway along the pipe, and select the
+                // junction so it can be dragged
+                let clicked = self.split_point.take();
+                let Some((segment, point)) = diagram
+                    .connections
+                    .get(index)
+                    .and_then(|connection| clicked.or_else(|| pipe_midpoint(diagram, connection)))
+                else {
+                    return; // The selected pipe no longer exists
+                };
+                let junction = split_with_junction(diagram, index, segment, point);
+                self.selection = Some(Selection::Element(junction.element));
             }
             _ => {}
         }
@@ -732,6 +795,27 @@ fn connection_points(diagram: &PidWidget, view: &View, connection: &Connection) 
             .map(|point| view.to_screen(point))
             .collect(),
     )
+}
+
+/// Returns the point halfway along a pipe's length, snapped to the grid, with the index of the
+/// segment it lies on, or `None` if either end no longer exists.
+fn pipe_midpoint(diagram: &PidWidget, connection: &Connection) -> Option<(usize, Pos2)> {
+    let points: Vec<Pos2> = std::iter::once(diagram.anchor_pos(connection.start)?)
+        .chain(connection.waypoints.iter().copied())
+        .chain(std::iter::once(diagram.anchor_pos(connection.end)?))
+        .collect();
+
+    // Walk the segments until half the total length is used up
+    let mut remaining = points.windows(2).map(|ends| ends[0].distance(ends[1])).sum::<f32>() / 2.0;
+    for (segment, ends) in points.windows(2).enumerate() {
+        let length = ends[0].distance(ends[1]);
+        if remaining <= length {
+            let t = remaining / length.max(f32::EPSILON);
+            return Some((segment, snap(ends[0].lerp(ends[1], t))));
+        }
+        remaining -= length;
+    }
+    Some((points.len() - 2, snap(points[points.len() - 1]))) // Rounding left a sliver past the end
 }
 
 /// Returns the distance from `point` to the segment between `a` and `b`.

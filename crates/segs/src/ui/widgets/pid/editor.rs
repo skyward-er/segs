@@ -6,7 +6,12 @@ use egui::{
 use segs_ui::containers::Modal;
 
 use super::{
-    Element, IconKind, MotorValveKind, PidWidget, Symbol, canvas::Canvas, file, history::History, import_v1, properties,
+    Element, IconKind, MotorValveKind, PidWidget, Symbol,
+    canvas::Canvas,
+    file,
+    history::History,
+    import_v1,
+    properties::{self, PanelRequest},
 };
 use crate::{
     dataflow::{adapter::DataAdapterInstance, store::DataStore},
@@ -15,9 +20,9 @@ use crate::{
 
 const EDITOR_ID: &str = "pid_editor";
 /// Share of the window covered by the editor.
-const SCREEN_FRACTION: f32 = 0.85;
-const PALETTE_WIDTH: f32 = 170.;
-const PROPERTIES_WIDTH: f32 = 260.;
+const SCREEN_FRACTION: f32 = 0.9;
+const PALETTE_WIDTH: f32 = 140.;
+const PROPERTIES_WIDTH: f32 = 220.;
 /// Gap between the canvas and the side panels.
 const PANEL_GAP: f32 = 8.;
 const TOOLBAR_HEIGHT: f32 = 28.;
@@ -146,23 +151,35 @@ impl PidEditor {
             .rect_filled(canvas, CornerRadius::same(4), ui.visuals().extreme_bg_color);
         self.canvas.show(ui, canvas, &mut self.draft, data_store);
 
-        // Show the selected symbol's settings, deleting it on request
-        let delete = ui
+        // Show the selected symbol's settings or pipe actions, applying the edits they ask for
+        let request = ui
             .scope_builder(
                 UiBuilder::new().max_rect(properties.shrink2(vec2(PANEL_GAP, 4.))),
                 |ui| {
                     ScrollArea::vertical()
                         .id_salt("pid_properties")
                         .show(ui, |ui| {
-                            properties::show(ui, &mut self.draft, self.canvas.selected_element(), adapter)
+                            properties::show(
+                                ui,
+                                &mut self.draft,
+                                self.canvas.selected_element(),
+                                self.canvas.selected_connection().is_some(),
+                                adapter,
+                            )
                         })
                         .inner
                 },
             )
             .inner;
-        if delete && let Some(id) = self.canvas.selected_element() {
-            self.draft.remove_element(id);
-            self.canvas.clear_selection();
+        match request {
+            Some(PanelRequest::DeleteElement) => {
+                if let Some(id) = self.canvas.selected_element() {
+                    self.draft.remove_element(id);
+                    self.canvas.clear_selection();
+                }
+            }
+            Some(PanelRequest::SplitPipe) => self.canvas.split_selected_connection(&mut self.draft),
+            None => {}
         }
 
         // Record finished edits only, so a whole drag or a typed value is one undo step
