@@ -379,10 +379,15 @@ impl PidEditor {
     }
 }
 
-/// Expands a leading `~/` to the home directory, as a shell would.
+/// Expands a leading `~/`, or `~\` on Windows, to the home directory, as a shell would.
+///
+/// Returns the path unchanged when it has no such prefix or the home directory is unknown.
 fn expand_home(path: &str) -> std::path::PathBuf {
-    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => std::path::Path::new(&home).join(rest),
+    let rest = path
+        .strip_prefix("~/")
+        .or_else(|| path.strip_prefix("~\\").filter(|_| cfg!(windows)));
+    match (rest, std::env::home_dir()) {
+        (Some(rest), Some(home)) => home.join(rest),
         _ => path.into(),
     }
 }

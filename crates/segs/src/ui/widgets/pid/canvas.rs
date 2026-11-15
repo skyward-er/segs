@@ -251,7 +251,9 @@ impl Canvas {
                 .interact_pointer_pos()
                 .and_then(|p| hit_anchor(diagram, &view, p))
         {
-            reattach(diagram, connection, end, target);
+            // Merging the junction the pipe left can reorder the pipes, so follow the moved one
+            let moved = reattach(diagram, connection, end, target);
+            self.selection = moved.map(Selection::Connection);
         }
 
         // Finish a pipe on another element's anchor, or branch an existing pipe where it is
@@ -408,17 +410,19 @@ impl Canvas {
         if self.selection.is_none() || ui.ctx().text_edit_focused() {
             return None;
         }
+        let element_selected = self.selected_element().is_some();
         ui.input_mut(|input| {
-            // Arrow keys move the selection one grid step
+            // Arrow keys move a selected element one grid step, and are left alone for pipes
             let arrows = [
                 (Key::ArrowLeft, vec2(-GRID_STEP, 0.0)),
                 (Key::ArrowRight, vec2(GRID_STEP, 0.0)),
                 (Key::ArrowUp, vec2(0.0, -GRID_STEP)),
                 (Key::ArrowDown, vec2(0.0, GRID_STEP)),
             ];
-            if let Some((_, offset)) = arrows
-                .into_iter()
-                .find(|&(key, _)| input.consume_key(Modifiers::NONE, key))
+            if element_selected
+                && let Some((_, offset)) = arrows
+                    .into_iter()
+                    .find(|&(key, _)| input.consume_key(Modifiers::NONE, key))
             {
                 return Some(Command::Nudge(offset));
             }
@@ -732,10 +736,11 @@ fn hit_connection(diagram: &PidWidget, view: &View, screen_point: Pos2) -> Optio
 
 /// Moves `end` of pipe `connection` onto `target`, unless that would join an element to itself
 /// or duplicate another pipe.
-fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: AnchorRef) {
-    let Some(pipe) = diagram.connections.get(connection) else {
-        return;
-    };
+///
+/// Returns the pipe's index afterwards, which changes when the junction it left is merged
+/// away, or `None` if the pipe no longer exists.
+fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: AnchorRef) -> Option<usize> {
+    let pipe = diagram.connections.get(connection)?;
     let (start, finish) = match end {
         PipeEnd::Start => (target, pipe.end),
         PipeEnd::End => (pipe.start, target),
@@ -745,7 +750,7 @@ fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: An
             && ((other.start, other.end) == (start, finish) || (other.start, other.end) == (finish, start))
     });
     if start.element == finish.element || duplicate {
-        return;
+        return Some(connection);
     }
     let pipe = &mut diagram.connections[connection];
     let previous = match end {
@@ -754,9 +759,11 @@ fn reattach(diagram: &mut PidWidget, connection: usize, end: PipeEnd, target: An
     };
     pipe.start = start;
     pipe.end = finish;
+    let moved = pipe.clone();
 
     // A junction the pipe left may no longer be needed
     diagram.dissolve_junction(previous);
+    diagram.connections.iter().position(|pipe| *pipe == moved)
 }
 
 /// Splits pipe `connection` at `point` on its segment `segment` with a new junction, keeping

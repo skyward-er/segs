@@ -126,8 +126,9 @@ impl PidWidget {
     }
 
     /// Cleans up junction `id` once fewer than three pipes meet there: with two pipes left they
-    /// are merged into one passing through the junction's position, with one or none the
-    /// junction is removed. Anything that is not a junction is left alone.
+    /// are merged into one passing through the junction's position, with none the junction is
+    /// removed. A single pipe keeps the junction as its dead end, so removing one half of a
+    /// split pipe never deletes the other. Anything that is not a junction is left alone.
     fn dissolve_junction(&mut self, id: ElementId) {
         let Some(center) = self
             .element(id)
@@ -144,12 +145,12 @@ impl PidWidget {
             .map(|(index, _)| index)
             .collect();
 
-        // Rejoin two halves into one pipe, keeping the junction's spot as a bend point
+        // Rejoin two halves into one pipe, keeping the junction's spot as a bend point, unless
+        // the result would loop back to one element or duplicate a pipe
+        let mut remove_junction = attached.is_empty();
         if let [first, second] = attached[..] {
             let incoming = self.connections[first].clone().ending_at(id);
             let outgoing = self.connections[second].clone().ending_at(id).reversed();
-            self.connections.remove(second);
-            self.connections.remove(first);
             let merged = Connection {
                 start: incoming.start,
                 end: outgoing.end,
@@ -160,13 +161,14 @@ impl PidWidget {
                     || (connection.start, connection.end) == (merged.end, merged.start)
             });
             if merged.start.element != merged.end.element && !duplicate {
+                self.connections.remove(second);
+                self.connections.remove(first);
                 self.connections.push(merged);
+                remove_junction = true;
             }
         }
-        if attached.len() < 3 {
+        if remove_junction {
             self.elements.retain(|element| element.id != id);
-            self.connections
-                .retain(|connection| connection.start.element != id && connection.end.element != id);
         }
     }
 

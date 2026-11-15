@@ -28,9 +28,12 @@ pub(super) fn export(path: &Path, diagram: &PidWidget) -> Result<(), String> {
 
 /// Reads a diagram exported with [`export`] and appends it to `diagram`.
 ///
+/// Files from older layout schemas are read as they are, since the P&ID wire format has not
+/// changed since the widget was added in schema 9. A change to that format must convert older
+/// files here before decoding them.
+///
 /// Returns the number of symbols added, or a readable error when the file cannot be read,
-/// is not a P&ID export, or was written by a version with a different layout schema; on error
-/// `diagram` is unchanged.
+/// is not a P&ID export, or was written by a newer version; on error `diagram` is unchanged.
 pub(super) fn import(path: &Path, diagram: &mut PidWidget) -> Result<usize, String> {
     let text = std::fs::read_to_string(path).map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
 
@@ -39,9 +42,9 @@ pub(super) fn import(path: &Path, diagram: &mut PidWidget) -> Result<usize, Stri
     if header.format != FORMAT {
         return Err("Not a SEGS P&ID file".to_owned());
     }
-    if header.schema_version != CURRENT_LAYOUT_SCHEMA {
+    if header.schema_version > CURRENT_LAYOUT_SCHEMA {
         return Err(format!(
-            "Saved with layout schema {}, this version reads {}",
+            "Saved by a newer version with layout schema {}, this version reads up to {}",
             header.schema_version, CURRENT_LAYOUT_SCHEMA
         ));
     }
