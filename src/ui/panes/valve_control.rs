@@ -17,7 +17,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
     hydra::{
-        ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA,
+        ACK_TM_DATA, GSE_TM_DATA, MOTOR_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA,
         WIGGLE_VALVE_CHECK_TM_DATA,
     },
     mavlink::{MavHeader, MessageData},
@@ -44,8 +44,8 @@ use valves::{Valve, ValveStateManager, WiggleCheckState};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
 /// Maximum time to wait for the `WIGGLE_VALVE_CHECK_TM` after the ACK of the check TC
-const WIGGLE_CHECK_TIMEOUT: Duration = Duration::from_secs(20);
-const SYMBOL_LIST: &str = "0123456789-/.";
+const WIGGLE_CHECK_TIMEOUT: Duration = Duration::from_secs(9);
+const SYMBOL_LIST: &str = "0123456789.";
 
 fn map_symbol_to_key(symbol: char) -> Key {
     match symbol {
@@ -206,6 +206,7 @@ impl PaneBehavior for ValveControlPane {
         let mut subscriptions = vec![
             VALVE_INFO_TM_DATA::ID,
             GSE_TM_DATA::ID,
+            MOTOR_TM_DATA::ID,
             WIGGLE_VALVE_CHECK_TM_DATA::ID,
         ];
         if self.needs_refresh() {
@@ -274,12 +275,13 @@ impl PaneBehavior for ValveControlPane {
                         };
                     }
 
-                    update_valve_state!(main_fuel_valve_position, Valve::MainFuel);
-                    update_valve_state!(main_ox_valve_position, Valve::MainOx);
+                    update_valve_state!(main_fuel_valve_state, Valve::MainFuel);
+                    update_valve_state!(main_ox_valve_state, Valve::MainOx);
                     update_valve_state!(prz_fuel_valve_state, Valve::PrzFuel);
                     update_valve_state!(prz_ox_valve_state, Valve::PrzOx);
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
                     update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
+                    update_valve_state!(fuel_dumping_valve_state, Valve::FuelDumping);
                 }
                 MavMessage::WIGGLE_VALVE_CHECK_TM(check) => {
                     if let Ok(valve) = Valve::try_from(check.servo_id) {
@@ -471,6 +473,9 @@ impl ValveControlPane {
             });
             safety_venting.update_timeout(emergency_venting_secs);
             ui.label("Reset the timeout on actuation of the following:");
+            for valve in Valve::iter() {
+                safety_venting.reset_valves.entry(valve).or_insert(true);
+            }
             for (valve, active) in safety_venting
                 .reset_valves
                 .iter_mut()
@@ -646,7 +651,12 @@ impl ValveControlPane {
             let mut actions = Vec::new();
             if s.is_operation_mode() && !s.is_command_switch_active {
                 // No window is open, so we can map the keys to open the valve control windows
-                for (&valve, &key) in self.valve_key_map.iter() {
+                for (valve, symbol) in Valve::iter().zip(SYMBOL_LIST.chars()) {
+                    let key = self
+                        .valve_key_map
+                        .get(&valve)
+                        .copied()
+                        .unwrap_or_else(|| map_symbol_to_key(symbol));
                     #[cfg(not(feature = "conrig"))]
                     let modifier = Modifiers::ALT;
                     #[cfg(feature = "conrig")]
@@ -704,7 +714,7 @@ struct SafetyVentingWatcher {
 impl Default for SafetyVentingWatcher {
     fn default() -> Self {
         let last_valve_state = Valve::iter().map(|v| (v, 0)).collect::<HashMap<_, _>>();
-        let reset_valves = Valve::iter().map(|v| (v, false)).collect::<HashMap<_, _>>();
+        let reset_valves = Valve::iter().map(|v| (v, true)).collect::<HashMap<_, _>>();
         let timeout = Duration::from_secs(300); // Default 5 minutes
         Self {
             last_valve_state,
@@ -721,11 +731,10 @@ impl SafetyVentingWatcher {
     }
 
     fn update_valve_state(&mut self, valve: Valve, state: u8) {
-        if let Some(last_state) = self.last_valve_state.get_mut(&valve)
-            && *last_state != state
-        {
+        let last_state = self.last_valve_state.entry(valve).or_insert(0);
+        if *last_state != state {
             *last_state = state;
-            if self.reset_valves[&valve] {
+            if self.reset_valves.get(&valve).copied().unwrap_or(true) {
                 self.last_reset = Some(Instant::now());
             }
         }
