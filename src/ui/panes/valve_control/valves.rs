@@ -2,7 +2,7 @@
 //!
 //! NOTE: We assume that no more than one entity will sent messages to control valves at a time.
 
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -14,6 +14,7 @@ use crate::{error::ErrInstrument, mavlink::Servoslist};
 pub struct ValveStateManager {
     timing_settings: Vec<(Valve, ParameterValue<u32, u16>)>,
     aperture_settings: Vec<(Valve, ParameterValue<f32, u16>)>,
+    wiggle_checks: Vec<(Valve, WiggleCheckState)>,
 }
 
 impl Default for ValveStateManager {
@@ -30,9 +31,13 @@ impl ValveStateManager {
         let timing_settings = Valve::iter()
             .map(|valve| (valve, ParameterValue::default()))
             .collect();
+        let wiggle_checks = Valve::iter()
+            .map(|valve| (valve, WiggleCheckState::default()))
+            .collect();
         Self {
             aperture_settings,
             timing_settings,
+            wiggle_checks,
         }
     }
 
@@ -48,6 +53,43 @@ impl ValveStateManager {
                 {
                     *par = parameter;
                 }
+            }
+            ValveParameter::WiggleCheck(state) => self.set_wiggle_check_for(valve, state),
+        }
+    }
+
+    pub fn get_wiggle_check_for(&self, valve: Valve) -> WiggleCheckState {
+        let (_, state) = self
+            .wiggle_checks
+            .iter()
+            .find(|(v, _)| *v == valve)
+            .log_unwrap();
+        *state
+    }
+
+    /// Update the wiggle check state of a valve.
+    ///
+    /// A late ACK (`Running`) never overrides a state other than `Requested`, so that a
+    /// result TM received before the ACK is not hidden.
+    pub fn set_wiggle_check_for(&mut self, valve: Valve, new_state: WiggleCheckState) {
+        if let Some((_, state)) = self.wiggle_checks.iter_mut().find(|(v, _)| *v == valve) {
+            match (*state, new_state) {
+                (WiggleCheckState::Requested, _) | (_, WiggleCheckState::Requested) => {
+                    *state = new_state
+                }
+                (_, WiggleCheckState::Running(_)) => {}
+                _ => *state = new_state,
+            }
+        }
+    }
+
+    /// Mark as timed out all the checks that have been running for longer than `timeout`
+    pub fn expire_wiggle_checks(&mut self, timeout: std::time::Duration) {
+        for (_, state) in self.wiggle_checks.iter_mut() {
+            if let WiggleCheckState::Running(started) = state
+                && started.elapsed() > timeout
+            {
+                *state = WiggleCheckState::Timeout;
             }
         }
     }
@@ -164,6 +206,27 @@ impl Display for Valve {
 pub enum ValveParameter {
     AtomicValveTiming(ParameterValue<u32, u16>),
     ValveMaximumAperture(ParameterValue<f32, u16>),
+    WiggleCheck(WiggleCheckState),
+}
+
+/// State of the wiggle valve check of a single valve
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum WiggleCheckState {
+    /// No check has been requested yet
+    #[default]
+    Idle,
+    /// The TC has been sent, waiting for the ACK
+    Requested,
+    /// The TC has been ACKed, waiting for the result TM
+    Running(Instant),
+    /// The check passed
+    Passed,
+    /// The check failed
+    Failed,
+    /// The TC has been rejected with the given error id
+    Rejected(u16),
+    /// No ACK or no result TM was received in time
+    Timeout,
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]

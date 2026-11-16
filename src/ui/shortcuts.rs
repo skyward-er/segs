@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use egui::{Context, Id, IdMap, Key, KeyboardShortcut, Modifiers, mutex::Mutex};
+use egui::{Context, Event, Id, IdMap, Key, KeyboardShortcut, Modifiers, mutex::Mutex};
 
 /// Contains all keyboard shortcuts added by the UI.
 ///
@@ -64,6 +64,32 @@ impl ShortcutHandler {
             captured_action = captured_action.or(self
                 .ctx
                 .input_mut(|i| i.consume_shortcut(&shortcut).then_some(action)));
+        }
+
+        captured_action
+    }
+
+    /// Like [`Self::capture_actions`], but for characters that have no egui [`Key`]
+    /// (e.g. `*` from the numpad). Matches and consumes the [`Event::Text`] events.
+    pub fn capture_text_actions<A>(
+        &mut self,
+        id: impl Into<Id>,
+        lease: Box<dyn ShortcutLease>,
+        function: impl FnOnce(&ShortcutAppState) -> Vec<(&'static str, A)>,
+    ) -> Option<A> {
+        self.active_leases
+            .insert(id.into(), (self.current_term, lease));
+        let mut captured_action: Option<A> = None;
+        let actions = function(&self.shortcut_state);
+        for (text, action) in actions {
+            captured_action = captured_action.or(self.ctx.input_mut(|i| {
+                let pos = i
+                    .events
+                    .iter()
+                    .position(|e| matches!(e, Event::Text(t) if t == text))?;
+                i.events.remove(pos);
+                Some(action)
+            }));
         }
 
         captured_action

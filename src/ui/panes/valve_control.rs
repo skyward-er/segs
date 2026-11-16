@@ -16,8 +16,11 @@ use egui::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use skyward_mavlink::{
+    hydra::{
+        ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA,
+        WIGGLE_VALVE_CHECK_TM_DATA,
+    },
     mavlink::{MavHeader, MessageData},
-    hydra::{ACK_TM_DATA, GSE_TM_DATA, NACK_TM_DATA, VALVE_INFO_TM_DATA, WACK_TM_DATA},
 };
 use strum::IntoEnumIterator;
 use tracing::{debug, info};
@@ -37,9 +40,11 @@ use super::PaneBehavior;
 use commands::CommandSM;
 use icons::Icon;
 use ui::{ValveControlView, map_key_to_shortcut};
-use valves::{Valve, ValveStateManager};
+use valves::{Valve, ValveStateManager, WiggleCheckState};
 
 const DEFAULT_AUTO_REFRESH_RATE: Duration = Duration::from_secs(1);
+/// Maximum time to wait for the `WIGGLE_VALVE_CHECK_TM` after the ACK of the check TC
+const WIGGLE_CHECK_TIMEOUT: Duration = Duration::from_secs(20);
 const SYMBOL_LIST: &str = "0123456789-/.";
 
 fn map_symbol_to_key(symbol: char) -> Key {
@@ -133,6 +138,9 @@ impl PaneBehavior for ValveControlPane {
             // A unique ID must be assigned to avoid breaking unique ID management in egui of text edit
             ui.scope_builder(UiBuilder::new().id_salt(valve_view.id()), |ui| {
                 if let Some(command) = valve_view.ui(ui, &self.valves_state) {
+                    if let Some((valve, parameter)) = command.pending_parameter() {
+                        self.valves_state.set_parameter_of(valve, parameter);
+                    }
                     self.commands.push(command.into());
                 }
             });
@@ -195,7 +203,11 @@ impl PaneBehavior for ValveControlPane {
 
     #[profiling::function]
     fn get_message_subscriptions(&self) -> Box<dyn Iterator<Item = u32>> {
-        let mut subscriptions = vec![VALVE_INFO_TM_DATA::ID, GSE_TM_DATA::ID];
+        let mut subscriptions = vec![
+            VALVE_INFO_TM_DATA::ID,
+            GSE_TM_DATA::ID,
+            WIGGLE_VALVE_CHECK_TM_DATA::ID,
+        ];
         if self.needs_refresh() {
             // TODO
             // subscriptions.push();
@@ -269,6 +281,17 @@ impl PaneBehavior for ValveControlPane {
                     update_valve_state!(ox_venting_valve_state, Valve::OxVenting);
                     update_valve_state!(fuel_venting_valve_state, Valve::FuelVenting);
                 }
+                MavMessage::WIGGLE_VALVE_CHECK_TM(check) => {
+                    if let Ok(valve) = Valve::try_from(check.servo_id) {
+                        let state = if check.success == 1 {
+                            WiggleCheckState::Passed
+                        } else {
+                            WiggleCheckState::Failed
+                        };
+                        info!("Wiggle valve check result for {:?}: {:?}", valve, state);
+                        self.valves_state.set_wiggle_check_for(valve, state);
+                    }
+                }
                 MavMessage::ACK_TM(_) | MavMessage::NACK_TM(_) | MavMessage::WACK_TM(_) => {
                     for cmd in self.commands.iter_mut() {
                         // intercept all ACK/NACK/WACK messages
@@ -319,6 +342,9 @@ impl ValveControlPane {
 
         // Remove consumed commands
         self.commands.retain(|cmd| !cmd.is_consumed());
+
+        // Time out the wiggle checks whose result never arrived
+        self.valves_state.expire_wiggle_checks(WIGGLE_CHECK_TIMEOUT);
     }
 }
 

@@ -4,7 +4,8 @@ use egui::{
 };
 
 pub struct ShortcutCard {
-    shortcut: KeyboardShortcut,
+    /// Formatted shortcut shown in the card
+    text: String,
     text_size: f32,
     margin: Margin,
     text_color: Option<Color32>,
@@ -13,18 +14,12 @@ pub struct ShortcutCard {
 
 impl Widget for ShortcutCard {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        #[cfg(target_os = "macos")]
-        let is_mac = true;
-        #[cfg(not(target_os = "macos"))]
-        let is_mac = false;
-
-        let shortcut_fmt = self.shortcut.format(&ModifierNames::SYMBOLS, is_mac);
         let default_style: &egui::style::WidgetVisuals = ui.style().noninteractive();
         let text_color = self.text_color.unwrap_or(default_style.text_color());
         let fill_color = self.fill_color.unwrap_or(default_style.bg_fill);
         let corner_radius = default_style.corner_radius;
 
-        let number = RichText::new(shortcut_fmt)
+        let number = RichText::new(self.text)
             .color(text_color)
             .font(FontId::monospace(self.text_size));
 
@@ -42,8 +37,19 @@ impl Widget for ShortcutCard {
 
 impl ShortcutCard {
     pub fn new(shortcut: KeyboardShortcut) -> Self {
+        #[cfg(target_os = "macos")]
+        let is_mac = true;
+        #[cfg(not(target_os = "macos"))]
+        let is_mac = false;
+
+        Self::from_text(shortcut.format(&ModifierNames::SYMBOLS, is_mac))
+    }
+
+    /// Card showing an arbitrary text, for shortcuts that are not an egui [`egui::Key`]
+    /// (e.g. `*`, see [`crate::ui::shortcuts::ShortcutHandler::capture_text_actions`])
+    pub fn from_text(text: impl Into<String>) -> Self {
         Self {
-            shortcut,
+            text: text.into(),
             text_size: 20.,
             margin: Margin::same(5),
             text_color: None,

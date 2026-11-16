@@ -1,13 +1,15 @@
 use std::time::{Duration, Instant};
 
-use skyward_mavlink::hydra::{GET_VALVE_INFO_TC_DATA, WIGGLE_SERVO_TC_DATA};
+use skyward_mavlink::hydra::{
+    GET_VALVE_INFO_TC_DATA, WIGGLE_SERVO_TC_DATA, WIGGLE_VALVE_CHECK_TC_DATA,
+};
 
 use crate::mavlink::{
     ACK_TM_DATA, MavMessage, MessageData, NACK_TM_DATA, SET_ATOMIC_VALVE_TIMING_TC_DATA,
     SET_VALVE_MAXIMUM_APERTURE_TC_DATA, WACK_TM_DATA,
 };
 
-use super::valves::{ParameterValue, Valve, ValveParameter};
+use super::valves::{ParameterValue, Valve, ValveParameter, WiggleCheckState};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CommandSM {
@@ -128,6 +130,24 @@ impl Command {
         }
     }
 
+    pub fn wiggle_valve_check(valve: Valve) -> Self {
+        Self {
+            kind: CommandKind::WiggleValveCheck,
+            valve,
+        }
+    }
+
+    /// Parameter to set as soon as the command is issued, before any response
+    pub fn pending_parameter(&self) -> Option<(Valve, ValveParameter)> {
+        match self.kind {
+            CommandKind::WiggleValveCheck => Some((
+                self.valve,
+                ValveParameter::WiggleCheck(WiggleCheckState::Requested),
+            )),
+            _ => None,
+        }
+    }
+
     pub fn set_atomic_valve_timing(valve: Valve, timing: u32) -> Self {
         valve.set_atomic_valve_timing(timing)
     }
@@ -146,6 +166,11 @@ impl From<Command> for MavMessage {
             CommandKind::Refresh => Self::GET_VALVE_INFO_TC(GET_VALVE_INFO_TC_DATA {
                 servo_id: value.valve.into(),
             }),
+            CommandKind::WiggleValveCheck => {
+                Self::WIGGLE_VALVE_CHECK_TC(WIGGLE_VALVE_CHECK_TC_DATA {
+                    servo_id: value.valve.into(),
+                })
+            }
             CommandKind::SetAtomicValveTiming(timing) => {
                 Self::SET_ATOMIC_VALVE_TIMING_TC(SET_ATOMIC_VALVE_TIMING_TC_DATA {
                     servo_id: value.valve.into(),
@@ -166,6 +191,7 @@ impl From<Command> for MavMessage {
 enum CommandKind {
     Wiggle,
     Refresh,
+    WiggleValveCheck,
     SetAtomicValveTiming(u32),
     SetValveMaximumAperture(f32),
 }
@@ -175,18 +201,26 @@ impl CommandKind {
         match self {
             Self::Wiggle => WIGGLE_SERVO_TC_DATA::ID,
             Self::Refresh => GET_VALVE_INFO_TC_DATA::ID,
+            Self::WiggleValveCheck => WIGGLE_VALVE_CHECK_TC_DATA::ID,
             Self::SetAtomicValveTiming(_) => SET_ATOMIC_VALVE_TIMING_TC_DATA::ID,
             Self::SetValveMaximumAperture(_) => SET_VALVE_MAXIMUM_APERTURE_TC_DATA::ID,
         }
     }
 
     fn to_valid_parameter(self) -> Option<ValveParameter> {
-        self.try_into().ok()
+        match self {
+            // ACK received: the check is running, wait for the result TM
+            Self::WiggleValveCheck => Some(ValveParameter::WiggleCheck(WiggleCheckState::Running(
+                Instant::now(),
+            ))),
+            _ => self.try_into().ok(),
+        }
     }
 
     fn to_missing_parameter(self) -> Option<ValveParameter> {
         match self {
             Self::Wiggle | Self::Refresh => None,
+            Self::WiggleValveCheck => Some(ValveParameter::WiggleCheck(WiggleCheckState::Timeout)),
             Self::SetAtomicValveTiming(_) => {
                 Some(ValveParameter::AtomicValveTiming(ParameterValue::Missing))
             }
@@ -199,6 +233,9 @@ impl CommandKind {
     fn to_invalid_parameter(self, error: u16) -> Option<ValveParameter> {
         match self {
             Self::Wiggle | Self::Refresh => None,
+            Self::WiggleValveCheck => Some(ValveParameter::WiggleCheck(
+                WiggleCheckState::Rejected(error),
+            )),
             Self::SetAtomicValveTiming(_) => Some(ValveParameter::AtomicValveTiming(
                 ParameterValue::Invalid(error),
             )),
@@ -214,7 +251,7 @@ impl TryFrom<CommandKind> for ValveParameter {
 
     fn try_from(value: CommandKind) -> Result<Self, Self::Error> {
         match value {
-            CommandKind::Wiggle | CommandKind::Refresh => Err(()),
+            CommandKind::Wiggle | CommandKind::Refresh | CommandKind::WiggleValveCheck => Err(()),
             CommandKind::SetAtomicValveTiming(timing) => {
                 Ok(Self::AtomicValveTiming(ParameterValue::Valid(timing)))
             }

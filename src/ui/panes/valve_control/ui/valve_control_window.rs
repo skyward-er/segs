@@ -16,12 +16,14 @@ use super::{
     commands::Command,
     icons::Icon,
     map_key_to_shortcut,
-    valves::{ParameterValue, Valve, ValveStateManager},
+    valves::{ParameterValue, Valve, ValveStateManager, WiggleCheckState},
 };
 
 const WIGGLE_KEY: Key = Key::Minus;
 const REFRESH_KEY: Key = Key::Num3;
 const INFINITE_TIME_KEY: Key = Key::Num4;
+/// Shortcut of the wiggle valve check: `*` has no egui [`Key`], so it is matched as text
+const WIGGLE_CHECK_TEXT: &str = "*";
 /// Key used to focus on the aperture field
 const FOCUS_APERTURE_KEY: Key = Key::Num1;
 /// Key used to focus on the timing field
@@ -111,10 +113,21 @@ impl ValveControlView {
                 .lerp_to_gamma(Color32::RED, 0.3);
 
             fn shortcut_ui(ui: &Ui, key: &Key, upper_response: &Response) -> ShortcutCard {
+                style_shortcut_card(
+                    ui,
+                    ShortcutCard::new(map_key_to_shortcut(*key)),
+                    upper_response,
+                )
+            }
+
+            fn style_shortcut_card(
+                ui: &Ui,
+                card: ShortcutCard,
+                upper_response: &Response,
+            ) -> ShortcutCard {
                 let vis = ui.visuals();
                 let uvis = ui.style().interact(upper_response);
-                ShortcutCard::new(map_key_to_shortcut(*key))
-                    .text_color(vis.strong_text_color())
+                card.text_color(vis.strong_text_color())
                     .fill_color(vis.gray_out(uvis.bg_fill))
                     .margin(Margin::symmetric(5, 2))
                     .text_size(12.)
@@ -154,43 +167,58 @@ impl ValveControlView {
                 .response
             }
 
-            fn add_infinite_parameter_btn(
+            /// Shortcut shown on a labeled button
+            enum BtnShortcut {
+                Key(Key),
+                Text(&'static str),
+            }
+
+            fn add_labeled_btn(
                 ui: &mut Ui,
-                key: Key,
+                shortcut: BtnShortcut,
+                label: &str,
                 action_override: bool,
             ) -> Response {
-                ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
-                    let mut visuals = *ui.style().interact(&ui.response());
+                ui.scope_builder(
+                    UiBuilder::new().id_salt(label).sense(Sense::click()),
+                    |ui| {
+                        let mut visuals = *ui.style().interact(&ui.response());
 
-                    // override the visuals if the button is pressed
-                    if action_override {
-                        visuals = ui.visuals().widgets.active;
-                    }
+                        // override the visuals if the button is pressed
+                        if action_override {
+                            visuals = ui.visuals().widgets.active;
+                        }
 
-                    let shortcut_card: ShortcutCard = shortcut_ui(ui, &key, &ui.response());
+                        let shortcut_card = match shortcut {
+                            BtnShortcut::Key(key) => shortcut_ui(ui, &key, &ui.response()),
+                            BtnShortcut::Text(text) => style_shortcut_card(
+                                ui,
+                                ShortcutCard::from_text(text),
+                                &ui.response(),
+                            ),
+                        };
 
-                    Frame::canvas(ui.style())
-                        .inner_margin(Margin::symmetric(4, 2))
-                        .outer_margin(0)
-                        .corner_radius(ui.visuals().noninteractive().corner_radius)
-                        .fill(visuals.bg_fill)
-                        .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                        .show(ui, |ui| {
-                            ui.set_height(ui.available_height());
-                            ui.horizontal_centered(|ui| {
-                                ui.set_height(21.);
-                                ui.add_space(1.);
-                                Label::new(
-                                    RichText::new("INFINITE TIME")
-                                        .size(16.)
-                                        .color(visuals.text_color()),
-                                )
-                                .selectable(false)
-                                .ui(ui);
-                                shortcut_card.ui(ui);
+                        Frame::canvas(ui.style())
+                            .inner_margin(Margin::symmetric(4, 2))
+                            .outer_margin(0)
+                            .corner_radius(ui.visuals().noninteractive().corner_radius)
+                            .fill(visuals.bg_fill)
+                            .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                            .show(ui, |ui| {
+                                ui.set_height(ui.available_height());
+                                ui.horizontal_centered(|ui| {
+                                    ui.set_height(21.);
+                                    ui.add_space(1.);
+                                    Label::new(
+                                        RichText::new(label).size(16.).color(visuals.text_color()),
+                                    )
+                                    .selectable(false)
+                                    .ui(ui);
+                                    shortcut_card.ui(ui);
+                                });
                             });
-                        });
-                })
+                    },
+                )
                 .response
             }
 
@@ -251,9 +279,12 @@ impl ValveControlView {
                     ValveViewState::Open
                     | ValveViewState::ApertureFocused
                     | ValveViewState::Closed
-                    | ValveViewState::TimingFocused => {
-                        Some(add_infinite_parameter_btn(ui, INFINITE_TIME_KEY, false))
-                    }
+                    | ValveViewState::TimingFocused => Some(add_labeled_btn(
+                        ui,
+                        BtnShortcut::Key(INFINITE_TIME_KEY),
+                        "INFINITE TIME",
+                        false,
+                    )),
                 };
                 if let Some(res) = &res
                     && res.clicked()
@@ -262,6 +293,19 @@ impl ValveControlView {
                     action.replace(WindowAction::SetInfiniteTime);
                 }
                 res.unwrap_or_else(|| ui.response())
+            }
+
+            fn wiggle_valve_check_btn(action: &mut Option<WindowAction>, ui: &mut Ui) {
+                let pressed = action.is_some_and(|a| a == WindowAction::WiggleValveCheck);
+                let res = add_labeled_btn(
+                    ui,
+                    BtnShortcut::Text(WIGGLE_CHECK_TEXT),
+                    "WIGGLE CHECK",
+                    pressed,
+                );
+                if res.clicked() {
+                    action.replace(WindowAction::WiggleValveCheck);
+                }
             }
 
             // back button with shortcut
@@ -408,57 +452,6 @@ impl ValveControlView {
                 }
             }
 
-            fn set_infinite_time(ui: &mut Ui, action: &mut Option<WindowAction>) {
-                let res = ui
-                    .scope_builder(
-                        UiBuilder::new().id_salt(REFRESH_KEY).sense(Sense::click()),
-                        |ui| {
-                            let mut visuals = *ui.style().interact(&ui.response());
-
-                            // override the visuals if the button is pressed
-                            if let Some(WindowAction::SetTiming) = action.as_ref() {
-                                visuals = ui.visuals().widgets.active;
-                            }
-
-                            let shortcut_card = shortcut_ui(ui, &INFINITE_TIME_KEY, &ui.response());
-
-                            Frame::canvas(ui.style())
-                                .inner_margin(Margin::symmetric(4, 2))
-                                .outer_margin(0)
-                                .corner_radius(ui.visuals().noninteractive().corner_radius)
-                                .fill(visuals.bg_fill)
-                                .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                                .show(ui, |ui| {
-                                    ui.set_height(ui.available_height());
-                                    ui.horizontal_centered(|ui| {
-                                        ui.set_height(21.);
-                                        ui.add_space(1.);
-                                        Label::new(
-                                            RichText::new("SET INFINITE TIME")
-                                                .size(16.)
-                                                .color(visuals.text_color()),
-                                        )
-                                        .selectable(false)
-                                        .ui(ui);
-                                        ui.add(
-                                            Icon::Wiggle
-                                                .as_image(ui.ctx().theme())
-                                                .fit_to_exact_size(Vec2::splat(22.)),
-                                        );
-                                        shortcut_card.ui(ui);
-                                    });
-                                });
-                        },
-                    )
-                    .response;
-
-                if res.clicked() {
-                    // set the focus on the aperture field
-
-                    action.replace(WindowAction::SetInfiniteTime);
-                }
-            }
-
             fn show_parameter_label(ui: &mut Ui, label: &str, fill_color: Color32) {
                 Frame::canvas(ui.style())
                     .outer_margin(0)
@@ -488,7 +481,7 @@ impl ValveControlView {
                 ui.set_min_height(50.);
                 StripBuilder::new(ui)
                     .size(Size::exact(5.))
-                    .sizes(Size::initial(5.), 3)
+                    .sizes(Size::initial(5.), 4)
                     .vertical(|mut strip| {
                         strip.empty();
                         strip.strip(|builder| {
@@ -511,7 +504,6 @@ impl ValveControlView {
                                     });
                                     strip.cell(|ui| wiggle_btn(ui, action));
                                     strip.cell(|ui| refresh_btn(ui, action));
-                                    // strip.cell(|ui| set_infinite_time(ui, action));
                                     strip.cell(|ui| back_btn(ui, action));
                                 });
                         });
@@ -626,7 +618,12 @@ impl ValveControlView {
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        show_aperture_btn(&self.state, action, ui);
+                                        // SET and WIGGLE CHECK share the same cell so that
+                                        // they are spaced by the standard item spacing
+                                        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                            show_aperture_btn(&self.state, action, ui);
+                                            wiggle_valve_check_btn(action, ui);
+                                        });
                                     });
                                 });
                         });
@@ -739,10 +736,67 @@ impl ValveControlView {
                                             });
                                     });
                                     strip.cell(|ui| {
-                                        show_timing_btn(&self.state, action, ui);
+                                        // SET and INFINITE TIME share the same cell so that
+                                        // they are spaced by the standard item spacing
+                                        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                            show_timing_btn(&self.state, action, ui);
+                                            set_infinite_btn(&self.state, action, ui);
+                                        });
+                                    });
+                                });
+                        });
+                        strip.strip(|builder| {
+                            builder
+                                .size(Size::initial(100.))
+                                .size(Size::initial(100.))
+                                .horizontal(|mut strip| {
+                                    strip.strip(|builder| {
+                                        builder
+                                            .size(Size::remainder())
+                                            .size(Size::initial(10.))
+                                            .size(Size::remainder())
+                                            .vertical(|mut strip| {
+                                                strip.empty();
+                                                strip.cell(|ui| {
+                                                    ui.with_layout(
+                                                        Layout::right_to_left(Align::Min),
+                                                        |ui| {
+                                                            Label::new(
+                                                                RichText::new("CHECK:").size(16.),
+                                                            )
+                                                            .selectable(false)
+                                                            .ui(ui);
+                                                        },
+                                                    );
+                                                });
+                                                strip.empty();
+                                            });
                                     });
                                     strip.cell(|ui| {
-                                        set_infinite_btn(&self.state, action, ui);
+                                        let check = valve_state.get_wiggle_check_for(self.valve);
+                                        let idle_fill = ui.visuals().widgets.inactive.bg_fill;
+                                        let (label, fill_color) = match check {
+                                            WiggleCheckState::Idle => ("-".to_owned(), idle_fill),
+                                            WiggleCheckState::Requested => {
+                                                ("SENT".to_owned(), missing_fill)
+                                            }
+                                            WiggleCheckState::Running(_) => {
+                                                ("WIGGLING".to_owned(), missing_fill)
+                                            }
+                                            WiggleCheckState::Passed => {
+                                                ("OK".to_owned(), valid_fill)
+                                            }
+                                            WiggleCheckState::Failed => {
+                                                ("FAIL".to_owned(), invalid_fill)
+                                            }
+                                            WiggleCheckState::Rejected(err) => {
+                                                (format!("REJECTED (err {err})"), invalid_fill)
+                                            }
+                                            WiggleCheckState::Timeout => {
+                                                ("TIMEOUT".to_owned(), missing_fill)
+                                            }
+                                        };
+                                        show_parameter_label(ui, &label, fill_color);
                                     });
                                 });
                         });
@@ -777,8 +831,18 @@ impl ValveControlView {
                 Some(Command::refresh(self.valve))
             }
             Some(WindowAction::SetInfiniteTime) => {
-                info!("Issued command to Refresh valve: {:?}", self.valve);
+                info!(
+                    "Issued command to Set Infinite Time for valve: {:?}",
+                    self.valve
+                );
                 Some(Command::set_atomic_valve_timing(self.valve, 10000000))
+            }
+            Some(WindowAction::WiggleValveCheck) => {
+                info!(
+                    "Issued command to Wiggle Valve Check for valve: {:?}",
+                    self.valve
+                );
+                Some(Command::wiggle_valve_check(self.valve))
             }
             Some(WindowAction::SetTiming) => {
                 info!(
@@ -827,53 +891,71 @@ impl ValveControlView {
         id: Id,
         shortcut_handler: &mut ShortcutHandler,
     ) -> Option<WindowAction> {
-        shortcut_handler.capture_actions(id, Box::new(()), |s| {
-            let mut actions = Vec::new();
-            if s.is_operation_mode() && !s.is_command_switch_active {
-                match self.state {
-                    ValveViewState::Open => {
-                        // A window is open, so we can map the keys to control the valve
-                        actions.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
-                        actions.push((Modifiers::NONE, REFRESH_KEY, WindowAction::Refresh));
-                        actions.push((
-                            #[cfg(not(feature = "conrig"))]
-                            Modifiers::ALT,
-                            #[cfg(feature = "conrig")]
-                            Modifiers::NONE,
-                            FOCUS_TIMING_KEY,
-                            WindowAction::FocusOnTiming,
-                        ));
-                        actions.push((
-                            #[cfg(not(feature = "conrig"))]
-                            Modifiers::ALT,
-                            #[cfg(feature = "conrig")]
-                            Modifiers::NONE,
-                            FOCUS_APERTURE_KEY,
-                            WindowAction::FocusOnAperture,
-                        ));
-                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
-                        actions.push((Modifiers::NONE, Key::Backspace, WindowAction::CloseWindow));
-                        actions.push((
-                            Modifiers::NONE,
-                            INFINITE_TIME_KEY,
-                            WindowAction::SetInfiniteTime,
-                        ));
+        shortcut_handler
+            .capture_actions(id, Box::new(()), |s| {
+                let mut actions = Vec::new();
+                if s.is_operation_mode() && !s.is_command_switch_active {
+                    match self.state {
+                        ValveViewState::Open => {
+                            // A window is open, so we can map the keys to control the valve
+                            actions.push((Modifiers::NONE, WIGGLE_KEY, WindowAction::Wiggle));
+                            actions.push((Modifiers::NONE, REFRESH_KEY, WindowAction::Refresh));
+                            actions.push((
+                                #[cfg(not(feature = "conrig"))]
+                                Modifiers::ALT,
+                                #[cfg(feature = "conrig")]
+                                Modifiers::NONE,
+                                FOCUS_TIMING_KEY,
+                                WindowAction::FocusOnTiming,
+                            ));
+                            actions.push((
+                                #[cfg(not(feature = "conrig"))]
+                                Modifiers::ALT,
+                                #[cfg(feature = "conrig")]
+                                Modifiers::NONE,
+                                FOCUS_APERTURE_KEY,
+                                WindowAction::FocusOnAperture,
+                            ));
+                            actions.push((Modifiers::NONE, Key::Escape, WindowAction::CloseWindow));
+                            actions.push((
+                                Modifiers::NONE,
+                                Key::Backspace,
+                                WindowAction::CloseWindow,
+                            ));
+                            actions.push((
+                                Modifiers::NONE,
+                                INFINITE_TIME_KEY,
+                                WindowAction::SetInfiniteTime,
+                            ));
+                        }
+                        ValveViewState::TimingFocused => {
+                            // The timing field is focused, so we can map the keys to control the timing
+                            actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
+                            actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                        }
+                        ValveViewState::ApertureFocused => {
+                            // The aperture field is focused, so we can map the keys to control the aperture
+                            actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetAperture));
+                            actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                        }
+                        ValveViewState::Closed => {}
                     }
-                    ValveViewState::TimingFocused => {
-                        // The timing field is focused, so we can map the keys to control the timing
-                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetTiming));
-                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
+                };
+                actions
+            })
+            .or_else(|| {
+                // Shortcuts on characters that have no egui `Key`
+                shortcut_handler.capture_text_actions(id.with("text"), Box::new(()), |s| {
+                    let mut actions = Vec::new();
+                    if s.is_operation_mode()
+                        && !s.is_command_switch_active
+                        && self.state == ValveViewState::Open
+                    {
+                        actions.push((WIGGLE_CHECK_TEXT, WindowAction::WiggleValveCheck));
                     }
-                    ValveViewState::ApertureFocused => {
-                        // The aperture field is focused, so we can map the keys to control the aperture
-                        actions.push((Modifiers::NONE, SET_PAR_KEY, WindowAction::SetAperture));
-                        actions.push((Modifiers::NONE, Key::Escape, WindowAction::LooseFocus));
-                    }
-                    ValveViewState::Closed => {}
-                }
-            };
-            actions
-        })
+                    actions
+                })
+            })
     }
 }
 
@@ -896,6 +978,7 @@ enum WindowAction {
     SetTiming,
     SetAperture,
     SetInfiniteTime,
+    WiggleValveCheck,
     // UI focus
     FocusOnTiming,
     FocusOnAperture,
