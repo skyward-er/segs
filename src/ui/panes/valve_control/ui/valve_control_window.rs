@@ -790,7 +790,7 @@ impl ValveControlView {
                                                 ("FAIL".to_owned(), invalid_fill)
                                             }
                                             WiggleCheckState::Rejected(err) => {
-                                                (format!("REJECTED (err {err})"), invalid_fill)
+                                                (format!("ERROR ({err})"), invalid_fill)
                                             }
                                             WiggleCheckState::Timeout => {
                                                 ("TIMEOUT".to_owned(), missing_fill)

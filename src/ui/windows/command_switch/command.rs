@@ -1,13 +1,52 @@
 use std::time::Instant;
 
 use crate::mavlink::reflection::MessageMap;
-use egui::{Key, KeyboardShortcut, Modifiers, RichText, Ui};
+use egui::{Key, RichText, Ui};
 use serde::{Deserialize, Serialize};
 
 use super::{
     configurable::{self},
     direct::{self},
 };
+
+/// Symbols used as shortcut of the commands (after `/`): the command with id `n`
+/// uses the `n`-th symbol. Append new symbols at the end, so that the shortcuts
+/// of the commands already saved in the layouts do not change.
+const SHORTCUT_SYMBOLS: &str = "1234567890.-+*";
+
+/// Maximum number of commands, one for each shortcut symbol
+pub const MAX_COMMANDS: usize = SHORTCUT_SYMBOLS.len();
+
+/// Shortcut of a command
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandShortcut {
+    /// Shortcut on an egui [`Key`]
+    Key(Key),
+    /// Shortcut on a character that has no egui [`Key`] (e.g. `*` from the numpad)
+    Text(&'static str),
+}
+
+impl CommandShortcut {
+    fn from_symbol(symbol: char) -> Self {
+        match symbol {
+            '0' => Self::Key(Key::Num0),
+            '1' => Self::Key(Key::Num1),
+            '2' => Self::Key(Key::Num2),
+            '3' => Self::Key(Key::Num3),
+            '4' => Self::Key(Key::Num4),
+            '5' => Self::Key(Key::Num5),
+            '6' => Self::Key(Key::Num6),
+            '7' => Self::Key(Key::Num7),
+            '8' => Self::Key(Key::Num8),
+            '9' => Self::Key(Key::Num9),
+            '.' => Self::Key(Key::Period),
+            '-' => Self::Key(Key::Minus),
+            '+' => Self::Key(Key::Plus),
+            '*' => Self::Text("*"),
+            _ => unreachable!("Invalid shortcut symbol: {}", symbol),
+        }
+    }
+}
 
 /// Command Base on which all commands are built upon, containing common fields
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -39,28 +78,17 @@ impl BaseCommand {
         }
     }
 
-    pub fn shortcut_keys(&self) -> Vec<Key> {
-        let key = match self.id {
-            0 => Key::Num0,
-            1 => Key::Num1,
-            2 => Key::Num2,
-            3 => Key::Num3,
-            4 => Key::Num4,
-            5 => Key::Num5,
-            6 => Key::Num6,
-            7 => Key::Num7,
-            8 => Key::Num8,
-            9 => Key::Num9,
-            _ => panic!("Command ID must be between 0 and 9"),
-        };
-        vec![Key::Slash, key]
+    /// Symbol of the shortcut that invokes the command once the command switch
+    /// is open, `None` if the id has no shortcut
+    pub fn shortcut_symbol(&self) -> Option<char> {
+        self.id
+            .checked_sub(1)
+            .and_then(|index| SHORTCUT_SYMBOLS.chars().nth(index))
     }
 
-    pub fn shortcut_comb(&self) -> Vec<KeyboardShortcut> {
-        self.shortcut_keys()
-            .into_iter()
-            .map(|k| KeyboardShortcut::new(Modifiers::NONE, k))
-            .collect()
+    /// Shortcut that invokes the command once the command switch is open
+    pub fn shortcut(&self) -> Option<CommandShortcut> {
+        self.shortcut_symbol().map(CommandShortcut::from_symbol)
     }
 }
 

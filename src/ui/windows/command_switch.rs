@@ -9,8 +9,8 @@ use std::{
 };
 
 use egui::{
-    Color32, Frame, Key, Label, Margin, ModifierNames, Modifiers, Response, RichText, Sense,
-    Stroke, Ui, UiBuilder, Vec2, Widget, response::Flags,
+    Color32, Frame, Key, Label, Margin, Modifiers, Response, RichText, Sense, Stroke, Ui,
+    UiBuilder, Vec2, Widget, response::Flags,
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-use command::{BaseCommand, Command};
+use command::{BaseCommand, Command, CommandShortcut, MAX_COMMANDS};
 
 const MAXIMUM_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -211,99 +211,129 @@ fn show_switch_list(
 }
 
 fn command_btn(ui: &mut Ui, cmd: &Command) -> Response {
-    let shortcut = cmd.base().shortcut_comb()[1];
-    let key = shortcut.logical_key;
-    let shortcut_detected = ui
-        .ctx()
-        .shortcuts()
-        .lock()
-        .capture_actions(
-            ui.id().with("shortcut_lease"),
-            Box::new(CommandSwitchLease),
-            |s| {
-                if s.is_operation_mode() && cmd.base().reply_state.is_enabled() {
-                    vec![(Modifiers::NONE, key, true)]
-                } else {
-                    vec![]
-                }
-            },
-        )
-        .unwrap_or_default();
+    let shortcut = cmd.base().shortcut();
+    let shortcut_detected = {
+        let shortcuts = ui.ctx().shortcuts();
+        let mut handler = shortcuts.lock();
+        let lease_id = ui.id().with("shortcut_lease");
+        let enabled =
+            |s: &ShortcutAppState| s.is_operation_mode() && cmd.base().reply_state.is_enabled();
+        match shortcut {
+            Some(CommandShortcut::Key(key)) => handler
+                .capture_actions(lease_id, Box::new(CommandSwitchLease), |s| {
+                    if enabled(s) {
+                        vec![(Modifiers::NONE, key, true)]
+                    } else {
+                        vec![]
+                    }
+                })
+                .unwrap_or_default(),
+            Some(CommandShortcut::Text(text)) => handler
+                .capture_text_actions(lease_id, Box::new(CommandSwitchLease), |s| {
+                    if enabled(s) {
+                        vec![(text, true)]
+                    } else {
+                        vec![]
+                    }
+                })
+                .unwrap_or_default(),
+            // No shortcut, but the lease must still be taken to keep the
+            // command switch state active
+            None => handler
+                .capture_actions(lease_id, Box::new(CommandSwitchLease), |_| {
+                    Vec::<(Modifiers, Key, bool)>::new()
+                })
+                .unwrap_or_default(),
+        }
+    };
     let mut res = ui
         .add_enabled_ui(cmd.base().reply_state.is_enabled(), |ui| {
-            ui.scope_builder(UiBuilder::new().id_salt(key).sense(Sense::click()), |ui| {
-                let mut visuals = *ui.style().interact(&ui.response());
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt(cmd.base().id)
+                    .sense(Sense::click()),
+                |ui| {
+                    let mut visuals = *ui.style().interact(&ui.response());
 
-                // override the visuals if the button is pressed
-                if shortcut_detected {
-                    visuals = ui.visuals().widgets.active;
-                }
-                let vis = ui.visuals();
-                let uvis = ui.style().interact(&ui.response());
+                    // override the visuals if the button is pressed
+                    if shortcut_detected {
+                        visuals = ui.visuals().widgets.active;
+                    }
+                    let vis = ui.visuals();
+                    let uvis = ui.style().interact(&ui.response());
 
-                let valid_fill = uvis.bg_fill.lerp_to_gamma(Color32::GREEN, 0.3);
-                let missing_fill = uvis.bg_fill.lerp_to_gamma(Color32::YELLOW, 0.3);
-                let invalid_fill = uvis.bg_fill.lerp_to_gamma(Color32::RED, 0.3);
-                let bg_fill = match cmd.base().reply_state {
-                    ReplyState::ReadyForInvocation | ReplyState::WaitingForReply(_) => uvis.bg_fill,
-                    ReplyState::ExplicitAck => valid_fill,
-                    ReplyState::ExplicitNack => invalid_fill,
-                    ReplyState::TimeoutNack => missing_fill,
-                };
+                    let valid_fill = uvis.bg_fill.lerp_to_gamma(Color32::GREEN, 0.3);
+                    let missing_fill = uvis.bg_fill.lerp_to_gamma(Color32::YELLOW, 0.3);
+                    let invalid_fill = uvis.bg_fill.lerp_to_gamma(Color32::RED, 0.3);
+                    let bg_fill = match cmd.base().reply_state {
+                        ReplyState::ReadyForInvocation | ReplyState::WaitingForReply(_) => {
+                            uvis.bg_fill
+                        }
+                        ReplyState::ExplicitAck => valid_fill,
+                        ReplyState::ExplicitNack => invalid_fill,
+                        ReplyState::TimeoutNack => missing_fill,
+                    };
 
-                let shortcut_card = ShortcutCard::new(shortcut)
+                    let shortcut_card = ShortcutCard::from_text(
+                        cmd.base()
+                            .shortcut_symbol()
+                            .map(String::from)
+                            .unwrap_or_default(),
+                    )
                     .text_color(vis.strong_text_color())
                     .fill_color(vis.gray_out(bg_fill))
                     .margin(Margin::symmetric(5, 0))
                     .text_size(12.);
-                let reply_tag = Frame::canvas(ui.style())
-                    .fill(vis.gray_out(bg_fill))
-                    .stroke(Stroke::NONE)
-                    .inner_margin(Margin::symmetric(5, 0))
-                    .corner_radius(ui.style().noninteractive().corner_radius);
-                let reply_tag_text = match cmd.base().reply_state {
-                    ReplyState::ReadyForInvocation => "",
-                    ReplyState::WaitingForReply(_) => "WAITING",
-                    ReplyState::ExplicitAck => "ACK",
-                    ReplyState::TimeoutNack => "TIMEOUT",
-                    ReplyState::ExplicitNack => "NACK",
-                };
+                    let reply_tag = Frame::canvas(ui.style())
+                        .fill(vis.gray_out(bg_fill))
+                        .stroke(Stroke::NONE)
+                        .inner_margin(Margin::symmetric(5, 0))
+                        .corner_radius(ui.style().noninteractive().corner_radius);
+                    let reply_tag_text = match cmd.base().reply_state {
+                        ReplyState::ReadyForInvocation => "",
+                        ReplyState::WaitingForReply(_) => "WAITING",
+                        ReplyState::ExplicitAck => "ACK",
+                        ReplyState::TimeoutNack => "TIMEOUT",
+                        ReplyState::ExplicitNack => "NACK",
+                    };
 
-                Frame::canvas(ui.style())
-                    .inner_margin(Margin::symmetric(4, 2))
-                    .outer_margin(0)
-                    .corner_radius(ui.visuals().noninteractive().corner_radius)
-                    .fill(bg_fill)
-                    .stroke(Stroke::new(1., Color32::TRANSPARENT))
-                    .show(ui, |ui| {
-                        ui.set_height(20.);
-                        ui.set_width(300.);
-                        ui.horizontal_centered(|ui| {
+                    Frame::canvas(ui.style())
+                        .inner_margin(Margin::symmetric(4, 2))
+                        .outer_margin(0)
+                        .corner_radius(ui.visuals().noninteractive().corner_radius)
+                        .fill(bg_fill)
+                        .stroke(Stroke::new(1., Color32::TRANSPARENT))
+                        .show(ui, |ui| {
                             ui.set_height(20.);
-                            shortcut_card.ui(ui);
-                            ui.add_space(1.);
-                            Label::new(
-                                RichText::new(&cmd.base().name)
-                                    .size(14.)
-                                    .color(visuals.text_color()),
-                            )
-                            .selectable(false)
-                            .ui(ui);
-                            ui.add_space(1.);
-                            if !matches!(cmd.base().reply_state, ReplyState::ReadyForInvocation) {
-                                reply_tag.show(ui, |ui| {
-                                    Label::new(
-                                        RichText::new(reply_tag_text)
-                                            .color(visuals.text_color())
-                                            .size(12.),
-                                    )
-                                    .selectable(false)
-                                    .ui(ui);
-                                });
-                            }
+                            ui.set_width(300.);
+                            ui.horizontal_centered(|ui| {
+                                ui.set_height(20.);
+                                shortcut_card.ui(ui);
+                                ui.add_space(1.);
+                                Label::new(
+                                    RichText::new(&cmd.base().name)
+                                        .size(14.)
+                                        .color(visuals.text_color()),
+                                )
+                                .selectable(false)
+                                .ui(ui);
+                                ui.add_space(1.);
+                                if !matches!(cmd.base().reply_state, ReplyState::ReadyForInvocation)
+                                {
+                                    reply_tag.show(ui, |ui| {
+                                        Label::new(
+                                            RichText::new(reply_tag_text)
+                                                .color(visuals.text_color())
+                                                .size(12.),
+                                        )
+                                        .selectable(false)
+                                        .ui(ui);
+                                    });
+                                }
+                            });
                         });
-                    });
-            })
+                },
+            )
             .response
         })
         .inner;
@@ -346,23 +376,18 @@ fn show_command_catalog(ui: &mut Ui, window: &mut CommandSwitchWindow) {
 
 fn show_catalog_list(ui: &mut Ui, commands: &mut Vec<Command>) {
     for cmd in commands.iter_mut() {
-        #[cfg(target_os = "macos")]
-        let is_mac = true;
-        #[cfg(not(target_os = "macos"))]
-        let is_mac = false;
         let shortcut_text = cmd
             .base()
-            .shortcut_comb()
-            .into_iter()
-            .map(|s| s.format(&ModifierNames::SYMBOLS, is_mac))
-            .join(" ");
+            .shortcut_symbol()
+            .map(|symbol| format!("/ {symbol}"))
+            .unwrap_or_default();
         let text = RichText::new(format!("[{}] {}", shortcut_text, &cmd.base().name)).size(17.0);
         let cmd_btn = ui.add_sized(Vec2::new(300.0, 10.0), egui::Button::new(text));
         if cmd_btn.clicked() {
             cmd.base_mut().settings_window_visible = true;
         }
     }
-    if commands.len() < 9 {
+    if commands.len() < MAX_COMMANDS {
         let plus_btn = ui.add_sized(
             Vec2::new(300.0, 10.0),
             egui::Button::new(RichText::new("+").size(17.0)),
