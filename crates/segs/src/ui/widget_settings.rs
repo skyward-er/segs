@@ -50,6 +50,15 @@ pub enum WidgetSetting<'a> {
         /// Persisted directed command drafts.
         transitions: &'a mut Vec<crate::ui::components::state_transitions::StateTransition>,
     },
+    /// A single command configuration shown as a full-width section.
+    Command {
+        /// Stable settings identity.
+        id: &'static str,
+        /// Full-width section heading.
+        label: &'static str,
+        /// Persisted command draft edited in place.
+        command: &'a mut crate::ui::components::state_transitions::CommandPreset,
+    },
     /// A boolean setting rendered as a checkbox.
     Checkbox {
         /// Stable interaction identifier.
@@ -137,6 +146,17 @@ impl<'a> WidgetSetting<'a> {
     /// Returns a setting that edits `value` directly.
     pub fn checkbox(id: &'static str, label: &'static str, value: &'a mut bool) -> Self {
         Self::Checkbox { id, label, value }
+    }
+
+    /// Creates a full-width command editor setting.
+    ///
+    /// Returns a setting that edits `command` directly.
+    pub fn command(
+        id: &'static str,
+        label: &'static str,
+        command: &'a mut crate::ui::components::state_transitions::CommandPreset,
+    ) -> Self {
+        Self::Command { id, label, command }
     }
 
     /// Creates a fixed-option string setting.
@@ -260,6 +280,7 @@ impl<'a> WidgetSetting<'a> {
         match self {
             Self::Checkbox { id, .. }
             | Self::StateTransitions { id, .. }
+            | Self::Command { id, .. }
             | Self::ComboBox { id, .. }
             | Self::TextBox { id, .. }
             | Self::Color { id, .. }

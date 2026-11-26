@@ -1,3 +1,4 @@
+mod button;
 mod mapped_value;
 mod message_viewer;
 mod pid;
@@ -5,6 +6,7 @@ mod plot;
 mod state_machine;
 mod value_display;
 
+pub use button::ButtonWidget;
 use enum_dispatch::enum_dispatch;
 pub use mapped_value::MappedValueWidget;
 pub use message_viewer::MessageViewerWidget;
@@ -37,6 +39,8 @@ pub struct WidgetData {
 #[enum_dispatch(WidgetTrait)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WidgetVariant {
+    /// Clickable button sending one configured command.
+    Button(ButtonWidget),
     MappedValue(MappedValueWidget),
     MessageViewer(MessageViewerWidget),
     Pid(PidWidget),
@@ -53,6 +57,7 @@ impl WidgetVariant {
             ValueDisplayWidget::default().into(),
             MappedValueWidget::default().into(),
             StateMachineWidget::default().into(),
+            ButtonWidget::default().into(),
             PidWidget::default().into(),
             PlotWidget::default().into(),
             MessageViewerWidget::default().into(),

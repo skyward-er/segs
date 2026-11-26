@@ -121,6 +121,21 @@ fn show_widget_settings(ui: &mut Ui, settings: Vec<WidgetSetting<'_>>, adapter: 
             }
             continue;
         }
+        if let WidgetSetting::Command { id, label, command } = setting {
+            ui.push_id(id, |ui| {
+                ui.label(RichText::new(label).strong());
+                // Preserve the command when no adapter is available to describe its fields
+                if let Some(adapter) = adapter {
+                    ui.push_id(adapter.token(), |ui| command.show(ui, adapter));
+                } else {
+                    ui.weak("Connect a data source to edit this command.");
+                }
+            });
+            if index + 1 < setting_count {
+                ui.add_space(additional_row_spacing);
+            }
+            continue;
+        }
         if let WidgetSetting::IntegerTextMappings {
             id,
             label,
@@ -209,7 +224,9 @@ fn show_widget_setting(ui: &mut Ui, setting: WidgetSetting<'_>) {
         } => {
             show_float_setting(ui, setting_id, value, range, step, desired_width);
         }
-        WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. } => {
+        WidgetSetting::IntegerTextMappings { .. }
+        | WidgetSetting::StateTransitions { .. }
+        | WidgetSetting::Command { .. } => {
             unreachable!("mapping settings are rendered as full-width sections")
         }
     }
@@ -224,7 +241,9 @@ fn settings_label_width(ui: &Ui, settings: &[WidgetSetting<'_>]) -> f32 {
         .filter(|setting| {
             !matches!(
                 setting,
-                WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. }
+                WidgetSetting::IntegerTextMappings { .. }
+                    | WidgetSetting::StateTransitions { .. }
+                    | WidgetSetting::Command { .. }
             )
         })
         .fold(0., |width, setting| {
@@ -238,6 +257,7 @@ fn setting_label(setting: &WidgetSetting<'_>) -> &'static str {
     match setting {
         WidgetSetting::Checkbox { label, .. }
         | WidgetSetting::StateTransitions { label, .. }
+        | WidgetSetting::Command { label, .. }
         | WidgetSetting::ComboBox { label, .. }
         | WidgetSetting::TextBox { label, .. }
         | WidgetSetting::Color { label, .. }
@@ -256,7 +276,9 @@ fn setting_control_height(ui: &Ui, setting: &WidgetSetting<'_>) -> f32 {
         WidgetSetting::Checkbox { .. } | WidgetSetting::ComboBox { .. } | WidgetSetting::Color { .. } => {
             ui.spacing().interact_size.y
         }
-        WidgetSetting::IntegerTextMappings { .. } | WidgetSetting::StateTransitions { .. } => 0.,
+        WidgetSetting::IntegerTextMappings { .. }
+        | WidgetSetting::StateTransitions { .. }
+        | WidgetSetting::Command { .. } => 0.,
     }
 }
 

@@ -132,7 +132,7 @@ impl CommandPreset {
     }
 
     /// Edits a preset without sending it, preserving incomplete values across saves.
-    fn show(&mut self, ui: &mut Ui, adapter: &DataAdapterInstance) {
+    pub fn show(&mut self, ui: &mut Ui, adapter: &DataAdapterInstance) {
         // Reuse searchable selectors and descriptor-driven field editors
         let protocol = adapter.describe_protocol();
         let choices = command_editor::protocol_choices(ui.ctx(), adapter);
